@@ -32,11 +32,12 @@ const authenticate = async (req, res, next) => {
       });
     }
 
-    // Attach user data to request
+    // Attach user data to request - MIT EMAIL!
     req.user = {
       id: decoded.user_id,
       role: decoded.role,
-      organisation_id: decoded.organisation_id
+      organisation_id: decoded.organisation_id,
+      email: decoded.email
     };
 
     next();

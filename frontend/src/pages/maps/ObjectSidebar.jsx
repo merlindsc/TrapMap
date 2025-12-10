@@ -1,57 +1,80 @@
 /* ============================================================
-   TRAPMAP — OBJECT SIDEBAR
-   Alle Objekte + Boxen beim Klick
+   TRAPMAP - OBJECT SIDEBAR
+   Rechte Sidebar (350px) mit Boxliste & History
    ============================================================ */
 
-import { useState } from "react";
-import { X, Edit, Plus, ChevronDown, ChevronRight, Building2, MapPin } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, Edit, Plus, History } from "lucide-react";
+
+const API = import.meta.env.VITE_API_URL;
 
 export default function ObjectSidebar({
-  objects,
-  selectedObject,
-  boxes,
+  object,
+  boxes = [],
   onClose,
-  onSelectObject,
   onBoxClick,
   onEditObject,
   onCreateBox,
 }) {
-  const [expandedObjectId, setExpandedObjectId] = useState(selectedObject?.id || null);
+  const token = localStorage.getItem("trapmap_token");
+  const [history, setHistory] = useState([]);
+
+  // Load history for this object (last 90 days)
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const ninetyDaysAgo = new Date();
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+        const res = await fetch(
+          `${API}/scans?object_id=${object.id}&after=${ninetyDaysAgo.toISOString()}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        const json = await res.json();
+        const scans = Array.isArray(json) ? json : Array.isArray(json.data) ? json.data : [];
+
+        console.log("B Loaded history:", scans.length);
+        setHistory(scans.slice(0, 10)); // Top 10
+      } catch (e) {
+        console.error("- Error loading history:", e);
+      }
+    };
+
+    if (object) {
+      loadHistory();
+    }
+  }, [object, token]);
 
   // Get icon based on box type
   const getBoxIcon = (box) => {
     const typeName = (box.box_type_name || "").toLowerCase();
 
-    if (typeName.includes("schlag") || typeName.includes("trap")) return "🪤";
-    if (typeName.includes("gift") || typeName.includes("bait") || typeName.includes("köder")) return "🐭";
-    if (typeName.includes("monitoring") && (typeName.includes("maus") || typeName.includes("ratte"))) return "🧀";
-    if (typeName.includes("insekt") || typeName.includes("insect")) return "🦟";
-    if (typeName.includes("uv") || typeName.includes("licht")) return "💡";
+    if (typeName.includes("schlag") || typeName.includes("trap")) return "T";
+    if (typeName.includes("gift") || typeName.includes("bait") || typeName.includes("rodent") || typeName.includes("nager")) return "R";
+    if (typeName.includes("insekt") || typeName.includes("insect")) return "I";
+    if (typeName.includes("uv") || typeName.includes("licht")) return "L";
 
-    return "📦";
+    return "B";
   };
 
   // Get status color
   const getStatusColor = (status) => {
-    switch ((status || "").toLowerCase()) {
-      case "green": case "ok": return "green";
-      case "yellow": return "yellow";
-      case "red": return "red";
-      default: return "gray";
-    }
-  };
+    const statusMap = {
+      green: "green",
+      ok: "green",
+      yellow: "yellow",
+      "geringe aufnahme": "yellow",
+      orange: "orange",
+      "auffÃ¤llig": "orange",
+      red: "red",
+      "starker befall": "red",
+    };
 
-  // Handle object click
-  const handleObjectClick = (obj) => {
-    if (expandedObjectId === obj.id) {
-      // Schon offen - zuklappen
-      setExpandedObjectId(null);
-      onSelectObject(null);
-    } else {
-      // Aufklappen
-      setExpandedObjectId(obj.id);
-      onSelectObject(obj);
-    }
+    const normalized = (status || "").toLowerCase();
+    return statusMap[normalized] || "gray";
   };
 
   return (
@@ -59,8 +82,11 @@ export default function ObjectSidebar({
       {/* Header */}
       <div className="sidebar-header-v6">
         <div className="sidebar-title-v6">
-          <h2>🏢 Objekte</h2>
-          <p>{objects.length} Objekte</p>
+          <h2>{object.name}</h2>
+          <p>
+            {object.address}
+            {object.city && `, ${object.zip} ${object.city}`}
+          </p>
         </div>
         <button className="sidebar-close-v6" onClick={onClose}>
           <X size={20} />
@@ -68,106 +94,76 @@ export default function ObjectSidebar({
       </div>
 
       {/* Content */}
-      <div className="sidebar-content-v6" style={{ padding: 0 }}>
-        
-        {objects.length === 0 ? (
-          <p style={{ color: "#9ca3af", fontSize: "13px", textAlign: "center", padding: "40px 20px" }}>
-            Keine Objekte vorhanden
-          </p>
-        ) : (
-          <div className="object-list-v6">
-            {objects.map((obj) => {
-              const isExpanded = expandedObjectId === obj.id;
-              const isSelected = selectedObject?.id === obj.id;
-              
-              return (
-                <div key={obj.id} className="object-group-v6">
-                  {/* Object Header */}
-                  <div
-                    className={`object-item-v6 ${isSelected ? "selected" : ""}`}
-                    onClick={() => handleObjectClick(obj)}
-                  >
-                    <div className="object-expand-icon">
-                      {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                    </div>
-                    
-                    <div className="object-icon-v6">
-                      <Building2 size={20} />
-                    </div>
-                    
-                    <div className="object-info-v6">
-                      <h4>{obj.name}</h4>
-                      <p>
-                        <MapPin size={12} style={{ display: "inline", marginRight: "4px" }} />
-                        {obj.address}{obj.city && `, ${obj.city}`}
-                      </p>
-                    </div>
+      <div className="sidebar-content-v6">
+        {/* Action Buttons */}
+        <div className="sidebar-actions-v6">
+          <button className="sidebar-btn-v6" onClick={onEditObject}>
+            <Edit size={16} />
+            Bearbeiten
+          </button>
+          <button className="sidebar-btn-v6 secondary" onClick={onCreateBox}>
+            <Plus size={16} />
+            Box
+          </button>
+        </div>
+
+        {/* Box List */}
+        <div className="sidebar-section-v6">
+          <h3>Boxen ({(boxes || []).length})</h3>
+
+          {(!boxes || boxes.length === 0) ? (
+            <p style={{ color: "#9ca3af", fontSize: "13px", textAlign: "center", padding: "20px 0" }}>
+              Keine Boxen vorhanden
+            </p>
+          ) : (
+            <div className="box-list-v6">
+              {boxes.map((box) => (
+                <div
+                  key={box.id}
+                  className="box-item-v6"
+                  onClick={() => onBoxClick(box)}
+                >
+                  <span className="box-icon-v6">{getBoxIcon(box)}</span>
+                  <div className="box-info-v6">
+                    <h4>{box.box_name || `Box #${box.id}`}</h4>
+                    <p>{box.box_type_name}</p>
                   </div>
-
-                  {/* Expanded Content - Buttons + Boxes */}
-                  {isExpanded && isSelected && (
-                    <div className="object-expanded-v6">
-                      {/* Action Buttons */}
-                      <div className="sidebar-actions-v6" style={{ padding: "8px 12px" }}>
-                        <button 
-                          className="sidebar-btn-v6 small" 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onEditObject();
-                          }}
-                        >
-                          <Edit size={14} />
-                          Bearbeiten
-                        </button>
-                        <button 
-                          className="sidebar-btn-v6 secondary small" 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onCreateBox();
-                          }}
-                        >
-                          <Plus size={14} />
-                          Box
-                        </button>
-                      </div>
-
-                      {/* Box List */}
-                      {boxes.length === 0 ? (
-                        <p style={{ 
-                          color: "#6b7280", 
-                          fontSize: "12px", 
-                          textAlign: "center", 
-                          padding: "12px",
-                          background: "#0a0a0a"
-                        }}>
-                          Keine Boxen
-                        </p>
-                      ) : (
-                        <div className="box-list-v6 nested">
-                          {boxes.map((box) => (
-                            <div
-                              key={box.id}
-                              className="box-item-v6 small"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onBoxClick(box);
-                              }}
-                            >
-                              <span className="box-icon-v6">{getBoxIcon(box)}</span>
-                              <div className="box-info-v6">
-                                <h4>{box.number || box.box_name || `Box #${box.id}`}</h4>
-                                <p>{box.box_type_name}</p>
-                              </div>
-                              <span className={`box-status-v6 ${getStatusColor(box.current_status || box.status)}`} />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <span
+                    className={`box-status-v6 ${getStatusColor(
+                      box.current_status || box.status
+                    )}`}
+                  />
                 </div>
-              );
-            })}
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* History */}
+        {history.length > 0 && (
+          <div className="sidebar-section-v6">
+            <h3>
+              <History size={16} style={{ display: "inline", marginRight: "6px" }} />
+              Letzte 90 Tage
+            </h3>
+
+            <div className="history-list-v6">
+              {history.map((scan) => (
+                <div key={scan.id} className="history-item-v6">
+                  <span
+                    className={`box-status-v6 ${getStatusColor(scan.status)}`}
+                  />
+                  <span className="history-date-v6">
+                    {(scan.scanned_at || scan.created_at) 
+                      ? new Date(scan.scanned_at || scan.created_at).toLocaleDateString("de-DE") 
+                      : "-"}
+                  </span>
+                  <span className="history-user-v6">
+                    {scan.users?.first_name || scan.users?.email || "Unbekannt"}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

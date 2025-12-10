@@ -1,12 +1,12 @@
 // ============================================
 // BOXES SERVICE - KOMPLETT
-// Alle CRUD Operationen + GPS + Scans
+// Alle CRUD Operationen + GPS + Scans + Lageplan
 // ============================================
 
 const { supabase } = require("../config/supabase");
 
 // ============================================
-// GET ALL BOXES (MIT TYPE-MAPPING)
+// GET ALL BOXES
 // ============================================
 exports.getAll = async (organisationId, objectId = null) => {
   let query = supabase
@@ -31,7 +31,7 @@ exports.getAll = async (organisationId, objectId = null) => {
 
   const now = new Date();
 
-  const enriched = (data || []).map((box) => {
+  const enriched = data.map((box) => {
     const interval = box.control_interval_days || 30;
     const lastScan = box.last_scan
       ? new Date(box.last_scan)
@@ -60,7 +60,7 @@ exports.getAll = async (organisationId, objectId = null) => {
 };
 
 // ============================================
-// GET ONE BOX (MIT TYPE-MAPPING)
+// GET ONE BOX
 // ============================================
 exports.getOne = async (id, organisationId) => {
   const { data, error } = await supabase
@@ -96,125 +96,114 @@ exports.getOne = async (id, organisationId) => {
 };
 
 // ============================================
-// CREATE BOX (MIT AUTO-NUMMER)
+// CREATE BOX
 // ============================================
-exports.create = async (organisationId, boxData) => {
-  // Auto-Nummer: Höchste Nummer für dieses Object finden
-  let nextNumber = 1;
-  
-  if (boxData.object_id) {
-    const { data: existingBoxes } = await supabase
+exports.create = async (organisationId, payload) => {
+  try {
+    console.log("📦 Creating box:", payload);
+
+    const boxData = {
+      organisation_id: organisationId,
+      object_id: parseInt(payload.object_id),
+      number: payload.number,
+      notes: payload.notes || null,
+      box_type_id: payload.box_type_id ? parseInt(payload.box_type_id) : (payload.boxtype_id ? parseInt(payload.boxtype_id) : null),
+      current_status: payload.current_status || "green",
+      active: payload.active !== false,
+      // Lageplan-Position
+      floor_plan_id: payload.floor_plan_id ? parseInt(payload.floor_plan_id) : null,
+      pos_x: payload.pos_x || null,
+      pos_y: payload.pos_y || null,
+      // GPS-Position
+      lat: payload.lat || null,
+      lng: payload.lng || null,
+      // Intervall
+      control_interval_days: payload.control_interval_days || 30,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
       .from("boxes")
-      .select("number")
-      .eq("organisation_id", organisationId)
-      .eq("object_id", boxData.object_id)
-      .order("number", { ascending: false })
-      .limit(1);
+      .insert(boxData)
+      .select()
+      .single();
 
-    if (existingBoxes && existingBoxes.length > 0 && existingBoxes[0].number) {
-      nextNumber = existingBoxes[0].number + 1;
+    if (error) {
+      console.error("❌ Supabase ERROR (create box):", error);
+      return { success: false, message: error.message };
     }
+
+    console.log("✅ Box erstellt:", data.id, data.number);
+    return { success: true, data };
+  } catch (err) {
+    console.error("❌ UNHANDLED ERROR in create:", err);
+    return { success: false, message: err.message };
   }
-
-  // Nur Felder die in der DB existieren
-  const insertData = {
-    organisation_id: organisationId,
-    object_id: boxData.object_id || null,
-    box_type_id: boxData.box_type_id || null,
-    number: boxData.number || nextNumber,
-    box_name: boxData.box_name || `Box ${nextNumber}`,
-    lat: boxData.lat || null,
-    lng: boxData.lng || null,
-    notes: boxData.notes || null,
-    control_interval_days: boxData.control_interval_days || 30,
-    current_status: boxData.current_status || "green",
-    active: true
-  };
-
-  const { data, error } = await supabase
-    .from("boxes")
-    .insert(insertData)
-    .select(`
-      *,
-      box_types:box_type_id (
-        id,
-        name,
-        category
-      )
-    `)
-    .single();
-
-  if (error) {
-    console.error("Box create error:", error);
-    return { success: false, message: error.message };
-  }
-
-  console.log(`📦 Box created: ${data.box_name} (ID: ${data.id})`);
-  return { success: true, data };
 };
 
 // ============================================
 // UPDATE BOX
 // ============================================
-exports.update = async (id, organisationId, updateData) => {
-  // Nur erlaubte Felder updaten (ohne floor/room)
-  const allowedFields = [
-    "box_name", "box_type_id", "number", "notes", 
-    "control_interval_days", "current_status", "active", "lat", "lng"
-  ];
+exports.update = async (id, organisationId, payload) => {
+  try {
+    console.log("📦 Updating box:", id, payload);
 
-  const cleanData = {};
-  for (const key of allowedFields) {
-    if (updateData[key] !== undefined) {
-      cleanData[key] = updateData[key];
+    const updateData = {
+      updated_at: new Date().toISOString()
+    };
+
+    // Nur gesetzte Felder updaten
+    if (payload.number !== undefined) updateData.number = payload.number;
+    if (payload.notes !== undefined) updateData.notes = payload.notes;
+    if (payload.boxtype_id !== undefined) updateData.box_type_id = payload.boxtype_id ? parseInt(payload.boxtype_id) : null;
+    if (payload.current_status !== undefined) updateData.current_status = payload.current_status;
+    if (payload.active !== undefined) updateData.active = payload.active;
+    if (payload.floor_plan_id !== undefined) updateData.floor_plan_id = payload.floor_plan_id ? parseInt(payload.floor_plan_id) : null;
+    if (payload.pos_x !== undefined) updateData.pos_x = payload.pos_x;
+    if (payload.pos_y !== undefined) updateData.pos_y = payload.pos_y;
+    if (payload.lat !== undefined) updateData.lat = payload.lat;
+    if (payload.lng !== undefined) updateData.lng = payload.lng;
+    if (payload.control_interval_days !== undefined) updateData.control_interval_days = payload.control_interval_days;
+
+    const { data, error } = await supabase
+      .from("boxes")
+      .update(updateData)
+      .eq("id", id)
+      .eq("organisation_id", organisationId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("❌ Supabase ERROR (update box):", error);
+      return { success: false, message: error.message };
     }
+
+    console.log("✅ Box aktualisiert:", data.id);
+    return { success: true, data };
+  } catch (err) {
+    console.error("❌ UNHANDLED ERROR in update:", err);
+    return { success: false, message: err.message };
   }
-
-  const { data, error } = await supabase
-    .from("boxes")
-    .update(cleanData)
-    .eq("id", id)
-    .eq("organisation_id", organisationId)
-    .select(`
-      *,
-      box_types:box_type_id (
-        id,
-        name,
-        category
-      )
-    `)
-    .single();
-
-  if (error) {
-    console.error("Box update error:", error);
-    return { success: false, message: error.message };
-  }
-
-  console.log(`📦 Box updated: ${data.box_name} (ID: ${data.id})`);
-  return { success: true, data };
 };
 
 // ============================================
-// UPDATE LOCATION (GPS Verschieben)
+// UPDATE LOCATION (GPS)
 // ============================================
 exports.updateLocation = async (id, organisationId, lat, lng) => {
   const { data, error } = await supabase
     .from("boxes")
-    .update({ 
-      lat: lat,
-      lng: lng
+    .update({
+      lat,
+      lng,
+      updated_at: new Date().toISOString()
     })
     .eq("id", id)
     .eq("organisation_id", organisationId)
     .select()
     .single();
 
-  if (error) {
-    console.error("Update location error:", error);
-    return { success: false, message: error.message };
-  }
-
-  console.log(`📍 Box ${id} relocated to: ${lat}, ${lng}`);
+  if (error) return { success: false, message: error.message };
   return { success: true, data };
 };
 
@@ -222,7 +211,6 @@ exports.updateLocation = async (id, organisationId, lat, lng) => {
 // UNDO LOCATION (GPS zurücksetzen)
 // ============================================
 exports.undoLocation = async (id, organisationId) => {
-  // Hole ursprüngliche Position vom Object
   const { data: box } = await supabase
     .from("boxes")
     .select(`
@@ -237,12 +225,12 @@ exports.undoLocation = async (id, organisationId) => {
     return { success: false, message: "Box or Object not found" };
   }
 
-  // Setze auf Object-Position zurück
   const { data, error } = await supabase
     .from("boxes")
     .update({
       lat: box.objects.lat,
-      lng: box.objects.lng
+      lng: box.objects.lng,
+      updated_at: new Date().toISOString()
     })
     .eq("id", id)
     .eq("organisation_id", organisationId)
@@ -250,7 +238,6 @@ exports.undoLocation = async (id, organisationId) => {
     .single();
 
   if (error) return { success: false, message: error.message };
-
   return { success: true, data };
 };
 
@@ -260,13 +247,14 @@ exports.undoLocation = async (id, organisationId) => {
 exports.remove = async (id, organisationId) => {
   const { error } = await supabase
     .from("boxes")
-    .update({ active: false })
+    .update({
+      active: false,
+      updated_at: new Date().toISOString()
+    })
     .eq("id", id)
     .eq("organisation_id", organisationId);
 
   if (error) return { success: false, message: error.message };
-
-  console.log(`🗑️ Box ${id} deactivated`);
   return { success: true };
 };
 
@@ -282,10 +270,10 @@ exports.getScans = async (boxId, organisationId, days = 90) => {
       id,
       status,
       notes,
-      consumption,
-      quantity,
-      trap_state,
+      findings,
       photo_url,
+      pest_found,
+      pest_count,
       scanned_at,
       created_at,
       users:user_id (
@@ -300,6 +288,5 @@ exports.getScans = async (boxId, organisationId, days = 90) => {
     .order("scanned_at", { ascending: false });
 
   if (error) return { success: false, message: error.message };
-
-  return { success: true, data: data || [] };
+  return { success: true, data };
 };

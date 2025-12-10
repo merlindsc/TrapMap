@@ -1,13 +1,6 @@
-/* ============================================================
-   TRAPMAP — RECENT SCANS COMPONENT
-   ✅ Farbige Status-Anzeige
-   ✅ Icons für Status
-   ✅ Kompakte Darstellung
-   ============================================================ */
-
 import React, { useEffect, useState } from "react";
 import { getRecentScans } from "../../api/dashboard";
-import { Clock, User, CheckCircle, AlertTriangle, XCircle } from "lucide-react";
+import { Clock, User } from "lucide-react";
 
 export default function RecentScans() {
   const [scans, setScans] = useState(null);
@@ -28,106 +21,66 @@ export default function RecentScans() {
   if (!scans) return <ScanSkeleton />;
 
   return (
-    <div className="bg-[#111827] border border-white/5 rounded-xl p-6 h-full">
-      <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-        <Clock size={20} className="text-indigo-400" />
-        Letzte Scans
-      </h2>
+    <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-lg flex flex-col" style={{ maxHeight: '500px' }}>
+      <h2 className="text-xl font-semibold text-white mb-4 flex-shrink-0">Letzte Scans</h2>
 
-      {scans.length === 0 ? (
-        <div className="text-center py-12 text-gray-400">
-          <Clock size={48} className="mx-auto mb-3 opacity-30" />
-          <p>Noch keine Scans vorhanden</p>
-        </div>
-      ) : (
-        <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
-          {scans.map((s) => (
+      {/* Scrollable container */}
+      <div className="space-y-3 overflow-y-auto flex-1 pr-2" style={{ maxHeight: '400px' }}>
+        {scans.length === 0 ? (
+          <div className="text-gray-500 text-center py-8">
+            Noch keine Scans vorhanden
+          </div>
+        ) : (
+          scans.map((s) => (
             <ScanItem key={s.id} scan={s} />
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </div>
   );
 }
 
 function ScanItem({ scan }) {
-  // Status aus message extrahieren falls vorhanden
-  let status = scan.status;
-  if (!status && scan.message?.includes("Status:")) {
-    status = scan.message.split("Status:")[1]?.trim()?.toLowerCase();
-  }
-
-  const getStatusConfig = (status) => {
-    switch (status?.toLowerCase()) {
-      case "green":
-      case "ok":
-        return {
-          icon: <CheckCircle size={16} />,
-          color: "text-green-400",
-          bg: "bg-green-500/10",
-          border: "border-l-green-500",
-          label: "OK"
-        };
-      case "yellow":
-        return {
-          icon: <AlertTriangle size={16} />,
-          color: "text-yellow-400",
-          bg: "bg-yellow-500/10",
-          border: "border-l-yellow-500",
-          label: "Auffällig"
-        };
-      case "orange":
-        return {
-          icon: <AlertTriangle size={16} />,
-          color: "text-orange-400",
-          bg: "bg-orange-500/10",
-          border: "border-l-orange-500",
-          label: "Erhöht"
-        };
-      case "red":
-        return {
-          icon: <XCircle size={16} />,
-          color: "text-red-400",
-          bg: "bg-red-500/10",
-          border: "border-l-red-500",
-          label: "Kritisch"
-        };
-      default:
-        return {
-          icon: <CheckCircle size={16} />,
-          color: "text-gray-400",
-          bg: "bg-gray-500/10",
-          border: "border-l-gray-500",
-          label: "-"
-        };
-    }
+  const statusColors = {
+    green: "bg-green-500",
+    yellow: "bg-yellow-500",
+    orange: "bg-orange-500",
+    red: "bg-red-500",
   };
 
-  const config = getStatusConfig(status);
+  // Get box name from nested data
+  const boxName = scan.boxes?.number || scan.box_name || `Box ${scan.box_id}`;
+  const objectName = scan.boxes?.objects?.name || scan.object_name || "";
+  const techName = scan.users?.first_name 
+    ? `${scan.users.first_name} ${scan.users.last_name || ''}`.trim()
+    : scan.technician_name || "Unbekannt";
 
   return (
-    <div className={`p-3 rounded-lg border-l-4 ${config.border} ${config.bg} hover:bg-white/5 transition-colors`}>
-      <div className="flex items-center justify-between">
+    <div className="bg-gray-900 p-4 rounded-lg border border-gray-700 hover:border-gray-600 transition">
+      <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
-          <div className={config.color}>
-            {config.icon}
-          </div>
+          {/* Status Dot */}
+          <div className={`w-3 h-3 rounded-full ${statusColors[scan.status] || 'bg-gray-500'} flex-shrink-0`} />
+          
           <div>
-            <div className="text-white font-medium text-sm">{scan.box_name}</div>
-            <div className={`text-xs ${config.color}`}>
-              {config.label}
+            <div className="text-white font-medium">{boxName}</div>
+            {objectName && (
+              <div className="text-gray-500 text-sm">{objectName}</div>
+            )}
+            <div className="text-gray-400 text-sm capitalize">
+              Status: {scan.status}
             </div>
           </div>
         </div>
-        
-        <div className="text-right text-xs text-gray-500">
-          <div className="flex items-center gap-1 justify-end">
-            <Clock size={11} />
-            {timeAgo(scan.created_at)}
+
+        <div className="text-right flex-shrink-0">
+          <div className="flex items-center gap-1 text-gray-500 text-xs">
+            <Clock className="w-3 h-3" />
+            {timeAgo(scan.scanned_at || scan.created_at)}
           </div>
-          <div className="flex items-center gap-1 justify-end mt-0.5">
-            <User size={11} />
-            {scan.technician_name?.split(" ")[0] || "?"}
+          <div className="flex items-center gap-1 text-gray-500 text-xs mt-1">
+            <User className="w-3 h-3" />
+            {techName}
           </div>
         </div>
       </div>
@@ -137,10 +90,10 @@ function ScanItem({ scan }) {
 
 function ScanSkeleton() {
   return (
-    <div className="bg-[#111827] border border-white/5 rounded-xl p-6 animate-pulse h-full">
-      <div className="h-6 w-32 bg-gray-700 rounded mb-6"></div>
-      {[1, 2, 3, 4, 5, 6].map((i) => (
-        <div key={i} className="h-14 bg-gray-800 rounded-lg mb-2"></div>
+    <div className="bg-gray-800 border border-gray-700 rounded-xl p-6 shadow-lg animate-pulse" style={{ maxHeight: '500px' }}>
+      <div className="h-5 w-32 bg-gray-700 rounded mb-6"></div>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="h-16 bg-gray-700 rounded-lg mb-3"></div>
       ))}
     </div>
   );
@@ -154,5 +107,5 @@ function timeAgo(ts) {
   const h = Math.round(diff / 60);
   if (h < 24) return `vor ${h} Std`;
   const d = Math.round(h / 24);
-  return `vor ${d}d`;
+  return `vor ${d} Tag${d > 1 ? 'en' : ''}`;
 }

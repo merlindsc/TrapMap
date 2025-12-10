@@ -16,7 +16,6 @@ export default function Dashboard() {
     try {
       const token = localStorage.getItem("trapmap_token");
       
-      // EIN API-Call für alles!
       const res = await axios.get(`${API}/dashboard/all`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -57,7 +56,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Recent Scans */}
+      {/* Recent Scans - gruppiert nach Objekt */}
       <RecentScansSection scans={recentScans} />
     </div>
   );
@@ -103,10 +102,25 @@ function StatusCard({ label, count, color }) {
 }
 
 // ============================================
-// Recent Scans Section (jetzt inline statt separate Komponente)
+// Recent Scans Section - Gruppiert nach Objekt
 // ============================================
 function RecentScansSection({ scans }) {
   if (!scans) return <ScanSkeleton />;
+
+  // Gruppiere Scans nach Objekt
+  const groupedScans = scans.reduce((acc, scan) => {
+    const objName = scan.object_name || "Sonstiges";
+    if (!acc[objName]) {
+      acc[objName] = [];
+    }
+    acc[objName].push(scan);
+    return acc;
+  }, {});
+
+  // Sortiere Objekte alphabetisch
+  const sortedObjects = Object.keys(groupedScans).sort((a, b) => 
+    a.localeCompare(b, 'de')
+  );
 
   return (
     <div className="bg-[#111827] border border-white/5 rounded-xl p-6 shadow-lg">
@@ -115,20 +129,42 @@ function RecentScansSection({ scans }) {
       {scans.length === 0 ? (
         <p className="text-gray-400">Noch keine Scans vorhanden</p>
       ) : (
-        <div className="space-y-4">
-          {scans.map((s) => (
-            <div key={s.id} className="bg-[#0f1623] p-4 rounded-xl border border-white/5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <StatusDot status={s.status} />
-                <div>
-                  <div className="text-indigo-300 font-semibold">{s.box_name}</div>
-                  <div className="text-gray-300 text-sm">{s.message}</div>
-                </div>
+        <div className="space-y-6 max-h-[600px] overflow-y-auto pr-2">
+          {sortedObjects.map(objectName => (
+            <div key={objectName}>
+              {/* Objekt Header */}
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
+                <h3 className="text-sm font-medium text-indigo-400 uppercase tracking-wide">
+                  {objectName}
+                </h3>
+                <div className="flex-1 h-px bg-white/10"></div>
+                <span className="text-xs text-gray-500">
+                  {groupedScans[objectName].length} Scans
+                </span>
               </div>
 
-              <div className="text-right">
-                <div className="text-gray-500 text-xs">⏱ {timeAgo(s.created_at)}</div>
-                <div className="text-gray-500 text-xs">👨 {s.technician_name}</div>
+              {/* Scans für dieses Objekt */}
+              <div className="space-y-2 ml-4">
+                {groupedScans[objectName].map((s) => (
+                  <div 
+                    key={s.id} 
+                    className="bg-[#0f1623] p-3 rounded-lg border border-white/5 flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <StatusDot status={s.status} />
+                      <div>
+                        <div className="text-white font-medium text-sm">{s.box_name}</div>
+                        <div className="text-gray-400 text-xs">{s.message}</div>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="text-gray-500 text-xs">{timeAgo(s.created_at)}</div>
+                      <div className="text-gray-600 text-xs">{s.technician_name}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           ))}

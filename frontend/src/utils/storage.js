@@ -4,7 +4,7 @@
 // ============================================
 
 const DB_NAME = 'TrapMapDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Version erhöht für synced index fix
 
 let db = null;
 
@@ -47,11 +47,11 @@ export const initDB = () => {
         boxesStore.createIndex('object_id', 'object_id', { unique: false });
       }
 
-      // Offline Scans Queue
+      // Offline Scans Queue - use number instead of boolean for synced
       if (!db.objectStoreNames.contains('scans_queue')) {
         const scansStore = db.createObjectStore('scans_queue', { keyPath: 'temp_id', autoIncrement: true });
         scansStore.createIndex('box_id', 'box_id', { unique: false });
-        scansStore.createIndex('synced', 'synced', { unique: false });
+        scansStore.createIndex('synced', 'synced', { unique: false }); // 0 = unsynced, 1 = synced
       }
 
       // Zones Store
@@ -78,17 +78,22 @@ export const initDB = () => {
 };
 
 /**
- * Generic save function
- * @param {string} storeName 
- * @param {Object} data 
+ * Ensure DB is initialized
  */
-export const save = (storeName, data) => {
-  return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Database not initialized'));
-      return;
-    }
+const ensureDB = async () => {
+  if (!db) {
+    await initDB();
+  }
+  return db;
+};
 
+/**
+ * Generic save function
+ */
+export const save = async (storeName, data) => {
+  await ensureDB();
+  
+  return new Promise((resolve, reject) => {
     const transaction = db.transaction([storeName], 'readwrite');
     const store = transaction.objectStore(storeName);
     const request = store.put(data);
@@ -100,16 +105,11 @@ export const save = (storeName, data) => {
 
 /**
  * Generic get function
- * @param {string} storeName 
- * @param {number} id 
  */
-export const get = (storeName, id) => {
+export const get = async (storeName, id) => {
+  await ensureDB();
+  
   return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Database not initialized'));
-      return;
-    }
-
     const transaction = db.transaction([storeName], 'readonly');
     const store = transaction.objectStore(storeName);
     const request = store.get(id);
@@ -121,15 +121,11 @@ export const get = (storeName, id) => {
 
 /**
  * Generic getAll function
- * @param {string} storeName 
  */
-export const getAll = (storeName) => {
+export const getAll = async (storeName) => {
+  await ensureDB();
+  
   return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Database not initialized'));
-      return;
-    }
-
     const transaction = db.transaction([storeName], 'readonly');
     const store = transaction.objectStore(storeName);
     const request = store.getAll();
@@ -140,40 +136,40 @@ export const getAll = (storeName) => {
 };
 
 /**
- * Get by index
- * @param {string} storeName 
- * @param {string} indexName 
- * @param {any} value 
+ * Get by index - with proper key validation
  */
-export const getByIndex = (storeName, indexName, value) => {
+export const getByIndex = async (storeName, indexName, value) => {
+  await ensureDB();
+  
   return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Database not initialized'));
-      return;
+    try {
+      const transaction = db.transaction([storeName], 'readonly');
+      const store = transaction.objectStore(storeName);
+      const index = store.index(indexName);
+      
+      // Validate key - IndexedDB doesn't accept booleans
+      let queryValue = value;
+      if (typeof value === 'boolean') {
+        queryValue = value ? 1 : 0;
+      }
+      
+      const request = index.getAll(queryValue);
+
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    } catch (error) {
+      reject(error);
     }
-
-    const transaction = db.transaction([storeName], 'readonly');
-    const store = transaction.objectStore(storeName);
-    const index = store.index(indexName);
-    const request = index.getAll(value);
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
   });
 };
 
 /**
  * Delete by key
- * @param {string} storeName 
- * @param {number} id 
  */
-export const remove = (storeName, id) => {
+export const remove = async (storeName, id) => {
+  await ensureDB();
+  
   return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Database not initialized'));
-      return;
-    }
-
     const transaction = db.transaction([storeName], 'readwrite');
     const store = transaction.objectStore(storeName);
     const request = store.delete(id);
@@ -185,15 +181,11 @@ export const remove = (storeName, id) => {
 
 /**
  * Clear entire store
- * @param {string} storeName 
  */
-export const clear = (storeName) => {
+export const clear = async (storeName) => {
+  await ensureDB();
+  
   return new Promise((resolve, reject) => {
-    if (!db) {
-      reject(new Error('Database not initialized'));
-      return;
-    }
-
     const transaction = db.transaction([storeName], 'readwrite');
     const store = transaction.objectStore(storeName);
     const request = store.clear();
@@ -205,12 +197,11 @@ export const clear = (storeName) => {
 
 /**
  * Save offline scan to queue
- * @param {Object} scanData 
  */
 export const saveOfflineScan = async (scanData) => {
   const offlineScan = {
     ...scanData,
-    synced: false,
+    synced: 0, // Use 0 instead of false
     created_at: new Date().toISOString()
   };
   
@@ -218,25 +209,37 @@ export const saveOfflineScan = async (scanData) => {
 };
 
 /**
- * Get unsynced scans
+ * Get unsynced scans - use 0 instead of false
  */
 export const getUnsyncedScans = async () => {
-  return await getByIndex('scans_queue', 'synced', false);
+  try {
+    // Get all and filter - safer approach
+    const all = await getAll('scans_queue');
+    return (all || []).filter(scan => scan.synced === 0 || scan.synced === false);
+  } catch (error) {
+    console.warn('Could not get unsynced scans:', error);
+    return [];
+  }
 };
 
 /**
  * Mark scan as synced
- * @param {number} tempId 
  */
 export const markScanAsSynced = async (tempId) => {
-  const scan = await get('scans_queue', tempId);
-  if (scan) {
-    scan.synced = true;
-    await save('scans_queue', scan);
+  try {
+    const scan = await get('scans_queue', tempId);
+    if (scan) {
+      scan.synced = 1; // Use 1 instead of true
+      await save('scans_queue', scan);
+    }
+  } catch (error) {
+    console.error('Failed to mark scan as synced:', error);
   }
 };
 
 // Initialize on load
 if (typeof window !== 'undefined') {
-  initDB().catch(console.error);
+  initDB().catch(err => {
+    console.warn('IndexedDB init failed (will retry):', err);
+  });
 }

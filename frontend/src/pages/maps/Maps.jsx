@@ -1,14 +1,16 @@
 /* ============================================================
-   TRAPMAP — MAPS V6 PROFESSIONAL
-   ✅ Sidebar mit allen Objekten (standardmäßig offen)
-   ✅ Klick auf Objekt → Boxen laden
-   ✅ Box-Klick → Kontrolle
-   ✅ GPS Verschieben
-   ✅ Object/Box Edit Dialogs
-   ✅ Audit Report
+   TRAPMAP - MAPS V6 PROFESSIONAL
+   - Popup-frei
+   - Sidebar automatisch
+   - Box-Klick - Kontrolle
+   - Objekt-Klick - Sidebar
+   - Icons nach Typ
+   - Kein Scrollen
+   - 48px Header
    ============================================================ */
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   MapContainer,
   TileLayer,
@@ -19,17 +21,16 @@ import {
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
-import { Plus, Layers3, Search, Move, Menu, FileText } from "lucide-react";
+import { Plus, Layers3, X, Search } from "lucide-react";
 import "./Maps.css";
 
 // Components
 import ObjectSidebar from "./ObjectSidebar";
-import BoxControlDialog from "./BoxControlDialog";
+import BoxScanDialog from "../../components/BoxScanDialog";
 import BoxEditDialog from "./BoxEditDialog";
 import ObjectCreateDialog from "./ObjectCreateDialog";
 import ObjectEditDialog from "./ObjectEditDialog";
 import BoxCreateDialog from "./BoxCreateDialog";
-import ReportDialog from "./ReportDialog";
 
 /* ENV */
 const API = import.meta.env.VITE_API_URL;
@@ -43,13 +44,13 @@ const MAPBOX_STREETS = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tile
 const MAPBOX_SAT = `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
 
 /* ============================================================
-   ICONS
+   ICONS - Different per Box Type
    ============================================================ */
 
 const createObjectIcon = () => {
   return L.divIcon({
     html: `<div style="background: #6366f1; width: 36px; height: 36px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;">
-      <div style="transform: rotate(45deg); color: white; font-size: 18px; font-weight: bold;">🏢</div>
+      <div style="transform: rotate(45deg); color: white; font-size: 18px; font-weight: bold;">O</div>
     </div>`,
     className: "custom-object-marker",
     iconSize: [36, 36],
@@ -57,7 +58,7 @@ const createObjectIcon = () => {
   });
 };
 
-const createBoxIcon = (boxType, status = "green") => {
+const createBoxIcon = (boxNumber, status = "green") => {
   const colors = {
     green: "#10b981",
     yellow: "#eab308",
@@ -68,45 +69,24 @@ const createBoxIcon = (boxType, status = "green") => {
   };
 
   const color = colors[status] || colors.green;
-
-  const icons = {
-    schlagfalle: "🪤",
-    giftbox: "🐭",
-    monitoring_rodent: "🧀",
-    monitoring_insect: "🦟",
-    uv_light: "💡",
-    default: "📦",
-  };
-
-  const icon = icons[boxType] || icons.default;
+  const displayNum = String(boxNumber || "?").slice(-3);
 
   return L.divIcon({
-    html: `<div style="background: ${color}; width: 32px; height: 32px; border-radius: 6px; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 16px; font-weight: bold;">${icon}</div>`,
+    html: `<div style="background: ${color}; width: 28px; height: 28px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: bold;">${displayNum}</div>`,
     className: "custom-box-marker",
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
+    iconSize: [28, 28],
+    iconAnchor: [14, 28],
   });
 };
 
 /* ============================================================
-   BOX MARKER
+   BOX MARKER - NO POPUP, only onClick
    ============================================================ */
-function BoxMarker({ box, onClick, isRelocating }) {
-  const getBoxType = (box) => {
-    const typeName = (box.box_type_name || "").toLowerCase();
-    
-    if (typeName.includes("schlag") || typeName.includes("trap")) return "schlagfalle";
-    if (typeName.includes("gift") || typeName.includes("bait") || typeName.includes("köder")) return "giftbox";
-    if (typeName.includes("monitoring") && (typeName.includes("maus") || typeName.includes("ratte"))) return "monitoring_rodent";
-    if (typeName.includes("insekt") || typeName.includes("insect") || typeName.includes("uv")) return "monitoring_insect";
-    
-    return "default";
-  };
-
+function BoxMarker({ box, onClick }) {
   return (
     <Marker
       position={[box.lat, box.lng]}
-      icon={createBoxIcon(getBoxType(box), isRelocating ? "blue" : (box.current_status || box.status))}
+      icon={createBoxIcon(box.number || box.id, box.current_status || box.status)}
       eventHandlers={{
         click: () => onClick(box),
       }}
@@ -115,9 +95,9 @@ function BoxMarker({ box, onClick, isRelocating }) {
 }
 
 /* ============================================================
-   OBJECT MARKER
+   OBJECT MARKER - NO POPUP, only onClick
    ============================================================ */
-function ObjectMarkerComponent({ object, onSelect }) {
+function ObjectMarkerComponent({ object, isSelected, onSelect }) {
   return (
     <Marker
       position={[object.lat, object.lng]}
@@ -137,10 +117,16 @@ export default function Maps() {
   const token = localStorage.getItem("trapmap_token");
   const userStr = localStorage.getItem("trapmap_user");
   const user = userStr ? JSON.parse(userStr) : null;
-  const canEdit = user?.role === "admin" || user?.role === "editor" || user?.role === "supervisor";
+  const canEdit = user?.role === "admin" || user?.role === "editor";
+
+  // URL Parameters for deep linking
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlObjectId = searchParams.get("object_id");
+  const urlFlyTo = searchParams.get("flyTo") === "true";
 
   // Data
   const [objects, setObjects] = useState([]);
+  const [filteredObjects, setFilteredObjects] = useState([]);
   const [boxes, setBoxes] = useState([]);
   const [boxTypes, setBoxTypes] = useState([]);
 
@@ -148,14 +134,13 @@ export default function Maps() {
   const [selectedObject, setSelectedObject] = useState(null);
   const [selectedBox, setSelectedBox] = useState(null);
 
-  // UI State - Sidebar standardmäßig OFFEN
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // UI State
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [controlDialogOpen, setControlDialogOpen] = useState(false);
   const [boxEditDialogOpen, setBoxEditDialogOpen] = useState(false);
   const [objectCreateDialogOpen, setObjectCreateDialogOpen] = useState(false);
   const [objectEditDialogOpen, setObjectEditDialogOpen] = useState(false);
   const [boxCreateDialogOpen, setBoxCreateDialogOpen] = useState(false);
-  const [reportDialogOpen, setReportDialogOpen] = useState(false);
 
   // Map
   const [mapStyle, setMapStyle] = useState("streets");
@@ -167,11 +152,8 @@ export default function Maps() {
   const [tempObjectLatLng, setTempObjectLatLng] = useState(null);
   const [tempBoxLatLng, setTempBoxLatLng] = useState(null);
 
-  // Relocate Mode
-  const [relocateMode, setRelocateMode] = useState(false);
-  const [relocatingBox, setRelocatingBox] = useState(null);
-
   // Search
+  const [objectSearchQuery, setObjectSearchQuery] = useState("");
   const [addressSearchQuery, setAddressSearchQuery] = useState("");
   const [addressResults, setAddressResults] = useState([]);
 
@@ -183,15 +165,7 @@ export default function Maps() {
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === "Escape") {
-        if (relocateMode) {
-          setRelocateMode(false);
-          setRelocatingBox(null);
-          return;
-        }
-        
-        if (reportDialogOpen) {
-          setReportDialogOpen(false);
-        } else if (controlDialogOpen) {
+        if (controlDialogOpen) {
           setControlDialogOpen(false);
           setSelectedBox(null);
         } else if (boxEditDialogOpen) {
@@ -206,13 +180,16 @@ export default function Maps() {
           setBoxCreateDialogOpen(false);
           setTempBoxLatLng(null);
           setBoxPlacingMode(false);
+        } else if (sidebarOpen) {
+          setSidebarOpen(false);
+          setSelectedObject(null);
         }
       }
     };
 
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
-  }, [controlDialogOpen, boxEditDialogOpen, objectEditDialogOpen, objectCreateDialogOpen, boxCreateDialogOpen, relocateMode, reportDialogOpen]);
+  }, [controlDialogOpen, boxEditDialogOpen, objectEditDialogOpen, objectCreateDialogOpen, boxCreateDialogOpen, sidebarOpen]);
 
   /* ============================================================
      LOAD DATA
@@ -227,17 +204,18 @@ export default function Maps() {
       const json = await res.json();
       const arr = Array.isArray(json) ? json : [];
 
-      console.log("🏢 Loaded objects:", arr.length);
+      console.log("B Loaded objects:", arr.length);
       setObjects(arr);
+      setFilteredObjects(arr);
     } catch (e) {
-      console.error("❌ Fehler beim Laden der Objekte:", e);
+      console.error("- Fehler beim Laden der Objekte:", e);
     }
   }, [token]);
 
   const loadBoxes = useCallback(
     async (objectId) => {
       try {
-        console.log("📦 Fetching boxes for object:", objectId);
+        console.log("B Fetching boxes for object:", objectId);
 
         const res = await fetch(`${API}/boxes?object_id=${objectId}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -252,10 +230,10 @@ export default function Maps() {
           boxesData = json.data;
         }
 
-        console.log("📦 Loaded boxes:", boxesData.length);
+        console.log("B Loaded boxes:", boxesData.length);
         setBoxes(boxesData);
       } catch (e) {
-        console.error("❌ Fehler beim Laden der Boxen:", e);
+        console.error("- Fehler beim Laden der Boxen:", e);
         setBoxes([]);
       }
     },
@@ -275,10 +253,10 @@ export default function Maps() {
       else if (Array.isArray(json.data)) types = json.data;
       else if (Array.isArray(json.boxtypes)) types = json.boxtypes;
 
-      console.log("📋 Loaded box types:", types.length);
+      console.log("B Loaded box types:", types.length);
       setBoxTypes(types);
     } catch (e) {
-      console.error("❌ Fehler beim Laden der Boxtypen:", e);
+      console.error("- Fehler beim Laden der Boxtypen:", e);
     }
   }, [token]);
 
@@ -287,13 +265,39 @@ export default function Maps() {
     loadBoxTypes();
   }, [loadObjects, loadBoxTypes]);
 
-  // Wenn Objekt ausgewählt, Boxen laden
+  // Handle URL parameter for deep linking (flyTo object)
+  useEffect(() => {
+    if (urlObjectId && objects.length > 0 && urlFlyTo) {
+      const targetObject = objects.find(obj => String(obj.id) === urlObjectId);
+      if (targetObject && targetObject.lat && targetObject.lng) {
+        console.log("[FLYTO] Flying to object from URL:", targetObject.name);
+        setSelectedObject(targetObject);
+        loadBoxes(targetObject.id);
+        setSidebarOpen(true);
+        
+        // Give map time to initialize then fly
+        setTimeout(() => {
+          if (mapRef.current) {
+            mapRef.current.flyTo([targetObject.lat, targetObject.lng], 18, {
+              duration: 1.5,
+            });
+          }
+        }, 500);
+        
+        // Clear URL params after handling
+        setSearchParams({});
+      }
+    }
+  }, [urlObjectId, urlFlyTo, objects, loadBoxes, setSearchParams]);
+
   useEffect(() => {
     if (selectedObject) {
-      console.log("🔄 Loading boxes for object:", selectedObject.id);
+      console.log("B Loading boxes for object:", selectedObject.id);
       loadBoxes(selectedObject.id);
+      setSidebarOpen(true); // - Sidebar Ã¶ffnet automatisch
     } else {
       setBoxes([]);
+      setSidebarOpen(false);
     }
   }, [selectedObject, loadBoxes]);
 
@@ -302,18 +306,16 @@ export default function Maps() {
      ============================================================ */
 
   const handleBoxClick = (box) => {
-    if (relocateMode) return;
-    
-    console.log("📦 Box clicked:", box);
+    console.log("B Box clicked:", box);
     setSelectedBox(box);
-    setControlDialogOpen(true);
+    setControlDialogOpen(true); // - Kontrolle Ã¶ffnet, NICHT Bearbeiten!
   };
 
   const handleObjectClick = (obj) => {
-    if (relocateMode) return;
-    
-    console.log("🏢 Object clicked:", obj);
+    console.log("[OBJ] Object clicked:", obj);
     setSelectedObject(obj);
+    loadBoxes(obj.id);
+    setSidebarOpen(true);
     
     if (mapRef.current) {
       mapRef.current.flyTo([obj.lat, obj.lng], 18, {
@@ -323,51 +325,7 @@ export default function Maps() {
   };
 
   /* ============================================================
-     RELOCATE BOX
-     ============================================================ */
-  const handleRelocateBox = (box) => {
-    setBoxEditDialogOpen(false);
-    setRelocatingBox(box);
-    setRelocateMode(true);
-  };
-
-  const saveNewLocation = async (latlng) => {
-    if (!relocatingBox) return;
-
-    try {
-      const res = await fetch(`${API}/boxes/${relocatingBox.id}/location`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          lat: latlng.lat,
-          lng: latlng.lng,
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        console.error("Relocate error:", err);
-        return;
-      }
-
-      console.log("✅ Box relocated to:", latlng);
-      
-      if (selectedObject) {
-        loadBoxes(selectedObject.id);
-      }
-    } catch (e) {
-      console.error("❌ Relocate error:", e);
-    } finally {
-      setRelocateMode(false);
-      setRelocatingBox(null);
-    }
-  };
-
-  /* ============================================================
-     ADDRESS SEARCH (Mapbox Geocoding)
+     ADDRESS SEARCH (Nominatim)
      ============================================================ */
 
   const searchAddress = async (query) => {
@@ -377,22 +335,13 @@ export default function Maps() {
     }
 
     try {
-      const countries = "de,at,ch,nl,be,lu,pl,cz,dk,fr";
       const res = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN}&country=${countries}&language=de&limit=5&types=address,poi,place,locality`
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`
       );
-      
       const data = await res.json();
-      
-      const results = (data.features || []).map(f => ({
-        display_name: f.place_name,
-        lat: f.center[1],
-        lon: f.center[0]
-      }));
-      
-      setAddressResults(results);
+      setAddressResults(data);
     } catch (e) {
-      console.error("❌ Address search error:", e);
+      console.error("- Address search error:", e);
     }
   };
 
@@ -404,6 +353,28 @@ export default function Maps() {
     }
     setAddressResults([]);
     setAddressSearchQuery("");
+  };
+
+  /* ============================================================
+     OBJECT SEARCH
+     ============================================================ */
+
+  const filterObjects = (query) => {
+    setObjectSearchQuery(query);
+    if (!query.trim()) {
+      setFilteredObjects(objects);
+      return;
+    }
+
+    const v = query.toLowerCase();
+    setFilteredObjects(
+      objects.filter(
+        (o) =>
+          o.name?.toLowerCase().includes(v) ||
+          o.address?.toLowerCase().includes(v) ||
+          o.city?.toLowerCase().includes(v)
+      )
+    );
   };
 
   /* ============================================================
@@ -421,11 +392,6 @@ export default function Maps() {
   function MapEventsHandler() {
     useMapEvents({
       click(e) {
-        if (relocateMode && relocatingBox) {
-          saveNewLocation(e.latlng);
-          return;
-        }
-
         if (objectPlacingMode) {
           setTempObjectLatLng(e.latlng);
           setObjectCreateDialogOpen(true);
@@ -455,70 +421,39 @@ export default function Maps() {
   return (
     <div className="maps-page">
       {/* ============================================================
-          RELOCATE BANNER
-          ============================================================ */}
-      {relocateMode && (
-        <div style={{
-          position: "absolute",
-          top: "60px",
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 1000,
-          background: "#3b82f6",
-          color: "white",
-          padding: "12px 24px",
-          borderRadius: "8px",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-          display: "flex",
-          alignItems: "center",
-          gap: "12px"
-        }}>
-          <Move size={20} />
-          <span>Klicke auf die neue Position für <b>Box {relocatingBox?.number || relocatingBox?.box_name}</b></span>
-          <button
-            onClick={() => {
-              setRelocateMode(false);
-              setRelocatingBox(null);
-            }}
-            style={{
-              background: "rgba(255,255,255,0.2)",
-              border: "none",
-              borderRadius: "4px",
-              padding: "4px 12px",
-              color: "white",
-              cursor: "pointer",
-              marginLeft: "8px"
-            }}
-          >
-            Abbrechen
-          </button>
-        </div>
-      )}
-
-      {/* ============================================================
-          HEADER
+          HEADER (48px kompakt)
           ============================================================ */}
       <div className="maps-header-v6">
-        {/* Sidebar Toggle */}
-        <button
-          className="sidebar-toggle-btn"
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          style={{
-            background: sidebarOpen ? "#6366f1" : "#1a1a1a",
-            border: "1px solid #404040",
-            borderRadius: "6px",
-            padding: "8px",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-        >
-          <Menu size={20} color="#fff" />
-        </button>
+        {/* Objekt-Suche */}
+        <div className="search-group">
+          <Search size={18} className="search-icon" />
+          <input
+            className="object-search-input-v6"
+            placeholder="Objekte suchen..."
+            value={objectSearchQuery}
+            onChange={(e) => filterObjects(e.target.value)}
+          />
+          {filteredObjects.length > 0 && objectSearchQuery && (
+            <div className="object-dropdown">
+              {filteredObjects.map((obj) => (
+                <div
+                  key={obj.id}
+                  className="object-dropdown-item"
+                  onClick={() => {
+                    handleObjectClick(obj);
+                    setObjectSearchQuery("");
+                  }}
+                >
+                  <span className="object-name">{obj.name}</span>
+                  <span className="object-address">{obj.address}, {obj.city}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-        {/* Adress-Suche (Mapbox) */}
-        <div className="search-group" style={{ flex: 1, maxWidth: "400px" }}>
+        {/* Adress-Suche (Nominatim) */}
+        <div className="search-group">
           <Search size={18} className="search-icon" />
           <input
             className="address-search-input-v6"
@@ -545,7 +480,7 @@ export default function Maps() {
         </div>
 
         {/* Buttons */}
-        {canEdit && !relocateMode && (
+        {canEdit && (
           <button
             className={`action-btn-v6 ${objectPlacingMode ? "active" : ""}`}
             onClick={() => {
@@ -557,7 +492,7 @@ export default function Maps() {
           </button>
         )}
 
-        {selectedObject && canEdit && !relocateMode && (
+        {selectedObject && canEdit && (
           <button
             className={`action-btn-v6 ${boxPlacingMode ? "active" : ""}`}
             onClick={() => {
@@ -568,15 +503,6 @@ export default function Maps() {
             <Plus size={16} /> Box
           </button>
         )}
-
-        {/* Report Button */}
-        <button
-          className="action-btn-v6"
-          onClick={() => setReportDialogOpen(true)}
-          title="Audit-Report erstellen"
-        >
-          <FileText size={16} /> Report
-        </button>
 
         {/* Map Style */}
         <div className="map-controls-v6">
@@ -596,7 +522,7 @@ export default function Maps() {
                   setStyleOpen(false);
                 }}
               >
-                🗺️ Straßen
+                B StraÃŸen
               </button>
 
               <button
@@ -606,7 +532,7 @@ export default function Maps() {
                   setStyleOpen(false);
                 }}
               >
-                🛰️ Satellit
+                B Satellit
               </button>
 
               <button
@@ -616,7 +542,7 @@ export default function Maps() {
                   setStyleOpen(false);
                 }}
               >
-                🌍 Hybrid
+                B Hybrid
               </button>
             </div>
           )}
@@ -626,7 +552,7 @@ export default function Maps() {
       {/* ============================================================
           MAP
           ============================================================ */}
-      <div className="map-wrapper-v6" style={{ cursor: relocateMode ? "crosshair" : "grab" }}>
+      <div className="map-wrapper-v6">
         <MapContainer
           center={[51.1657, 10.4515]}
           zoom={6}
@@ -661,50 +587,50 @@ export default function Maps() {
           <MapEventsHandler />
 
           {/* Objects */}
-          {objects.filter(obj => obj.lat && obj.lng).map((obj) => (
+          {objects.map((obj) => (
             <ObjectMarkerComponent
               key={obj.id}
               object={obj}
+              isSelected={selectedObject?.id === obj.id}
               onSelect={handleObjectClick}
             />
           ))}
 
-          {/* Boxes */}
+          {/* Boxes - NO POPUP! */}
           {boxes.filter(box => box.lat && box.lng).map((box) => (
             <BoxMarker
               key={box.id}
               box={box}
               onClick={handleBoxClick}
-              isRelocating={relocatingBox?.id === box.id}
             />
           ))}
         </MapContainer>
 
-        {/* Zoom Buttons */}
+        {/* Zoom Buttons - mittig rechts */}
         <div className="zoom-buttons-v6">
           <button onClick={() => mapRef.current?.zoomIn()}>+</button>
-          <button onClick={() => mapRef.current?.zoomOut()}>−</button>
+          <button onClick={() => mapRef.current?.zoomOut()}>-</button>
         </div>
       </div>
 
       {/* ============================================================
-          SIDEBAR - Alle Objekte
+          SIDEBAR (350px, slide-in)
           ============================================================ */}
-      {sidebarOpen && !relocateMode && (
+      {sidebarOpen && selectedObject && (
         <ObjectSidebar
-          objects={objects}
-          selectedObject={selectedObject}
+          object={selectedObject}
           boxes={boxes}
-          onClose={() => setSidebarOpen(false)}
-          onSelectObject={(obj) => {
-            setSelectedObject(obj);
-            if (obj && mapRef.current) {
-              mapRef.current.flyTo([obj.lat, obj.lng], 18, { duration: 1.0 });
-            }
+          onClose={() => {
+            setSidebarOpen(false);
+            setSelectedObject(null);
           }}
           onBoxClick={handleBoxClick}
-          onEditObject={() => setObjectEditDialogOpen(true)}
-          onCreateBox={() => setBoxPlacingMode(true)}
+          onEditObject={() => {
+            setObjectEditDialogOpen(true);
+          }}
+          onCreateBox={() => {
+            setBoxPlacingMode(true);
+          }}
         />
       )}
 
@@ -712,7 +638,7 @@ export default function Maps() {
           CONTROL DIALOG
           ============================================================ */}
       {controlDialogOpen && selectedBox && (
-        <BoxControlDialog
+        <BoxScanDialog
           box={selectedBox}
           onClose={() => {
             setControlDialogOpen(false);
@@ -725,6 +651,7 @@ export default function Maps() {
           onSave={() => {
             setControlDialogOpen(false);
             setSelectedBox(null);
+            // Reload boxes
             if (selectedObject) {
               loadBoxes(selectedObject.id);
             }
@@ -746,6 +673,7 @@ export default function Maps() {
           onSave={() => {
             setBoxEditDialogOpen(false);
             setSelectedBox(null);
+            // Reload boxes
             if (selectedObject) {
               loadBoxes(selectedObject.id);
             }
@@ -753,30 +681,10 @@ export default function Maps() {
           onDelete={() => {
             setBoxEditDialogOpen(false);
             setSelectedBox(null);
+            // Reload boxes
             if (selectedObject) {
               loadBoxes(selectedObject.id);
             }
-          }}
-          onRelocate={handleRelocateBox}
-        />
-      )}
-
-      {/* ============================================================
-          OBJECT EDIT DIALOG
-          ============================================================ */}
-      {objectEditDialogOpen && selectedObject && (
-        <ObjectEditDialog
-          object={selectedObject}
-          onClose={() => setObjectEditDialogOpen(false)}
-          onSave={() => {
-            setObjectEditDialogOpen(false);
-            loadObjects();
-          }}
-          onDelete={() => {
-            setObjectEditDialogOpen(false);
-            setSelectedObject(null);
-            setBoxes([]);
-            loadObjects();
           }}
         />
       )}
@@ -794,10 +702,38 @@ export default function Maps() {
           }}
           onSave={(newObject) => {
             setObjects((prev) => [...prev, newObject]);
+            setFilteredObjects((prev) => [...prev, newObject]);
             setSelectedObject(newObject);
             setObjectCreateDialogOpen(false);
             setTempObjectLatLng(null);
             setObjectPlacingMode(false);
+          }}
+        />
+      )}
+
+      {/* ============================================================
+          OBJECT EDIT DIALOG
+          ============================================================ */}
+      {objectEditDialogOpen && selectedObject && (
+        <ObjectEditDialog
+          object={selectedObject}
+          onClose={() => {
+            setObjectEditDialogOpen(false);
+          }}
+          onSave={(updated) => {
+            // Update in list
+            setObjects((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+            setFilteredObjects((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+            setSelectedObject(updated);
+            setObjectEditDialogOpen(false);
+          }}
+          onDelete={(id) => {
+            // Remove from lists
+            setObjects((prev) => prev.filter((o) => o.id !== id));
+            setFilteredObjects((prev) => prev.filter((o) => o.id !== id));
+            setSelectedObject(null);
+            setSidebarOpen(false);
+            setObjectEditDialogOpen(false);
           }}
         />
       )}
@@ -819,16 +755,10 @@ export default function Maps() {
             setBoxCreateDialogOpen(false);
             setTempBoxLatLng(null);
             setBoxPlacingMode(false);
+            // Reload boxes
             loadBoxes(selectedObject.id);
           }}
         />
-      )}
-
-      {/* ============================================================
-          REPORT DIALOG
-          ============================================================ */}
-      {reportDialogOpen && (
-        <ReportDialog onClose={() => setReportDialogOpen(false)} />
       )}
     </div>
   );

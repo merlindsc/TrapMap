@@ -26,7 +26,22 @@ const labelRoutes = require('./routes/labels.routes');
 const reportRoutes = require('./routes/reports.routes');
 const boxtypesRoutes = require('./routes/boxtypes.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
-const adminRoutes = require('./routes/admin.routes');
+
+// Admin Routes (Super-Admin only)
+let adminRoutes = null;
+try {
+  adminRoutes = require('./routes/admin.routes');
+} catch (e) {
+  console.log('Admin routes not found - skipping');
+}
+
+// FloorPlans Routes (optional)
+let floorplansRoutes = null;
+try {
+  floorplansRoutes = require('./routes/floorplans.routes');
+} catch (e) {
+  console.log('FloorPlans routes not found - skipping');
+}
 
 // ============================================
 // EXPRESS APP SETUP
@@ -99,7 +114,18 @@ app.use('/api/labels', labelRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/boxtypes', boxtypesRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/admin', adminRoutes);
+
+// Admin Routes (if available)
+if (adminRoutes) {
+  app.use('/api/admin', adminRoutes);
+  console.log('Admin routes loaded');
+}
+
+// FloorPlans API (if available)
+if (floorplansRoutes) {
+  app.use('/api/floorplans', floorplansRoutes);
+  console.log('FloorPlans routes loaded');
+}
 
 // ============================================
 // 404 HANDLER
@@ -126,14 +152,16 @@ app.use(errorHandler);
 const PORT = config.port || 5000;
 
 app.listen(PORT, () => {
-  console.log('╔════════════════════════════════════════╗');
-  console.log('║      TRAPMAP BACKEND SERVER            ║');
-  console.log('╚════════════════════════════════════════╝');
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🌍 Environment: ${config.nodeEnv}`);
-  console.log(`📡 API Base: http://localhost:${PORT}/api`);
-  console.log(`❤️  Health Check: http://localhost:${PORT}/health`);
-  console.log('══════════════════════════════════════════');
+  console.log('');
+  console.log('=========================================');
+  console.log('       TRAPMAP BACKEND SERVER           ');
+  console.log('=========================================');
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${config.nodeEnv}`);
+  console.log(`API Base: http://localhost:${PORT}/api`);
+  console.log(`Health Check: http://localhost:${PORT}/health`);
+  console.log('=========================================');
+  console.log('');
 });
 
 // ============================================
@@ -141,11 +169,11 @@ app.listen(PORT, () => {
 // ============================================
 
 process.on('SIGTERM', () => {
-  console.log('👋 SIGTERM received. Shutting down gracefully...');
+  console.log('SIGTERM received. Shutting down gracefully...');
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
-  console.log('👋 SIGINT received. Shutting down gracefully...');
+  console.log('SIGINT received. Shutting down gracefully...');
   process.exit(0);
 });

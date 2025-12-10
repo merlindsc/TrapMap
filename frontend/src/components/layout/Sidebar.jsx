@@ -130,10 +130,14 @@ const Sidebar = () => {
   return (
     <div className="sidebar">
       
-      {/* Header */}
+      {/* Header mit Logo */}
       <div className="sidebar-header">
         <Link to="/dashboard" className="sidebar-brand">
-          <h1>TrapMap</h1>
+          <img 
+            src="/logo.png" 
+            alt="TrapMap" 
+            className="sidebar-logo"
+          />
         </Link>
 
         {user && (

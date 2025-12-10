@@ -1,10 +1,10 @@
 /* ============================================================
    TRAPMAP — SETTINGS / EINSTELLUNGEN
-   Logo-Upload + Organisationsdaten pflegen
+   Logo-Upload, Organisationsdaten, Passwort ändern
    ============================================================ */
 
 import { useState, useEffect } from "react";
-import { Upload, Image, Check, Loader, Building2, Save, MapPin, Phone, Mail, User } from "lucide-react";
+import { Upload, Image, Check, Loader, Building2, Save, MapPin, Phone, Mail, User, Key, Eye, EyeOff, AlertCircle } from "lucide-react";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -20,20 +20,22 @@ export default function Settings() {
 
   // Organisationsdaten
   const [orgData, setOrgData] = useState({
-    name: "",
-    address: "",
-    zip: "",
-    city: "",
-    phone: "",
-    email: "",
-    contact_name: ""
+    name: "", address: "", zip: "", city: "", phone: "", email: "", contact_name: ""
   });
+
+  // Passwort ändern
+  const [passwords, setPasswords] = useState({
+    current: "", new: "", confirm: ""
+  });
+  const [showPasswords, setShowPasswords] = useState({
+    current: false, new: false, confirm: false
+  });
+  const [changingPassword, setChangingPassword] = useState(false);
 
   // Daten laden
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Organisation laden
         const orgRes = await fetch(`${API}/reports/organisation`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -127,10 +129,58 @@ export default function Settings() {
     }
   };
 
+  // Passwort ändern
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    
+    if (passwords.new !== passwords.confirm) {
+      setMessage({ type: 'error', text: 'Die neuen Passwörter stimmen nicht überein' });
+      return;
+    }
+
+    if (passwords.new.length < 8) {
+      setMessage({ type: 'error', text: 'Das neue Passwort muss mindestens 8 Zeichen haben' });
+      return;
+    }
+
+    setChangingPassword(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch(`${API}/auth/change-password`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}` 
+        },
+        body: JSON.stringify({
+          currentPassword: passwords.current,
+          newPassword: passwords.new
+        })
+      });
+
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'Passwort erfolgreich geändert!' });
+        setPasswords({ current: '', new: '', confirm: '' });
+      } else {
+        const err = await res.json();
+        setMessage({ type: 'error', text: err.error || 'Fehler beim Ändern' });
+      }
+    } catch (e) {
+      setMessage({ type: 'error', text: 'Netzwerkfehler' });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const togglePasswordVisibility = (field) => {
+    setShowPasswords(prev => ({ ...prev, [field]: !prev[field] }));
+  };
+
   return (
     <div className="max-w-3xl mx-auto">
       <h1 className="text-3xl font-bold text-white mb-2">Einstellungen</h1>
-      <p className="text-gray-400 mb-8">Verwalten Sie Ihre Organisation</p>
+      <p className="text-gray-400 mb-8">Verwalten Sie Ihr Profil und Ihre Organisation</p>
 
       {/* Message */}
       {message && (
@@ -139,7 +189,7 @@ export default function Settings() {
             ? 'bg-green-900/30 border border-green-500/30 text-green-400'
             : 'bg-red-900/30 border border-red-500/30 text-red-400'
         }`}>
-          {message.type === 'success' && <Check size={18} />}
+          {message.type === 'success' ? <Check size={18} /> : <AlertCircle size={18} />}
           {message.text}
         </div>
       )}
@@ -171,6 +221,102 @@ export default function Settings() {
         </div>
       </div>
 
+      {/* Passwort ändern Card */}
+      <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-6 mb-6">
+        <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <Key size={20} className="text-indigo-400" />
+          Passwort ändern
+        </h2>
+        
+        <form onSubmit={handleChangePassword} className="space-y-4">
+          {/* Aktuelles Passwort */}
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Aktuelles Passwort</label>
+            <div className="relative">
+              <input
+                type={showPasswords.current ? "text" : "password"}
+                value={passwords.current}
+                onChange={(e) => setPasswords(prev => ({ ...prev, current: e.target.value }))}
+                className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg px-4 py-2 text-white pr-10"
+                placeholder="••••••••"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => togglePasswordVisibility('current')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+              >
+                {showPasswords.current ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+
+          {/* Neues Passwort */}
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Neues Passwort</label>
+            <div className="relative">
+              <input
+                type={showPasswords.new ? "text" : "password"}
+                value={passwords.new}
+                onChange={(e) => setPasswords(prev => ({ ...prev, new: e.target.value }))}
+                className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg px-4 py-2 text-white pr-10"
+                placeholder="Mindestens 8 Zeichen"
+                minLength={8}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => togglePasswordVisibility('new')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+              >
+                {showPasswords.new ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+
+          {/* Passwort bestätigen */}
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Neues Passwort bestätigen</label>
+            <div className="relative">
+              <input
+                type={showPasswords.confirm ? "text" : "password"}
+                value={passwords.confirm}
+                onChange={(e) => setPasswords(prev => ({ ...prev, confirm: e.target.value }))}
+                className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg px-4 py-2 text-white pr-10"
+                placeholder="Passwort wiederholen"
+                minLength={8}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => togglePasswordVisibility('confirm')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+              >
+                {showPasswords.confirm ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={changingPassword}
+            className="flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50"
+          >
+            {changingPassword ? (
+              <>
+                <Loader size={18} className="animate-spin" />
+                Wird geändert...
+              </>
+            ) : (
+              <>
+                <Key size={18} />
+                Passwort ändern
+              </>
+            )}
+          </button>
+        </form>
+      </div>
+
       {/* Organisationsdaten Card */}
       <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-6 mb-6">
         <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
@@ -182,7 +328,6 @@ export default function Settings() {
         </p>
         
         <div className="space-y-4">
-          {/* Firmenname */}
           <div>
             <label className="block text-sm text-gray-400 mb-1">Firmenname</label>
             <input
@@ -194,7 +339,6 @@ export default function Settings() {
             />
           </div>
 
-          {/* Adresse */}
           <div className="grid md:grid-cols-3 gap-4">
             <div className="md:col-span-2">
               <label className="block text-sm text-gray-400 mb-1">
@@ -232,7 +376,6 @@ export default function Settings() {
             />
           </div>
 
-          {/* Kontakt */}
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-gray-400 mb-1">
@@ -273,7 +416,6 @@ export default function Settings() {
             />
           </div>
 
-          {/* Speichern Button */}
           <button
             onClick={handleSaveOrg}
             disabled={saving}
@@ -305,7 +447,6 @@ export default function Settings() {
           Das Logo erscheint auf allen Reports oben rechts.
         </p>
 
-        {/* Aktuelles Logo */}
         {logoUrl && (
           <div className="mb-4 p-4 bg-[#0d0d1a] rounded-lg border border-white/10">
             <p className="text-xs text-gray-500 mb-2">Aktuelles Logo:</p>
@@ -318,7 +459,6 @@ export default function Settings() {
           </div>
         )}
 
-        {/* Upload Button */}
         <label className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg cursor-pointer transition-colors">
           {uploading ? (
             <>
