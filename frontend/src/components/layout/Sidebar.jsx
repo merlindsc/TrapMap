@@ -15,7 +15,7 @@ import {
   XMarkIcon
 } from '@heroicons/react/24/outline';
 
-const Sidebar = ({ isOpen, isMobile, onClose }) => {
+const Sidebar = ({ isMobile, onClose }) => {
   const location = useLocation();
   const { user } = useAuth();
 
@@ -23,15 +23,28 @@ const Sidebar = ({ isOpen, isMobile, onClose }) => {
     return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
-  // Holt Navigationseinträge basierend auf Rolle
+  const handleNavClick = () => {
+    if (isMobile && onClose) {
+      onClose();
+    }
+  };
+
+  const handleClose = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log("X button clicked");
+    if (onClose) {
+      onClose();
+    }
+  };
+
+  // Navigationseinträge basierend auf Rolle
   const getNavigationItems = () => {
     const role = user?.role;
 
-    const items = [];
-
     // Admin
     if (role === "admin") {
-      items.push(
+      return [
         { name: 'Dashboard', path: '/dashboard', icon: HomeIcon },
         { name: 'Objekte', path: '/objects', icon: BuildingOfficeIcon },
         { name: 'Boxen', path: '/boxes', icon: ArchiveBoxIcon },
@@ -40,8 +53,7 @@ const Sidebar = ({ isOpen, isMobile, onClose }) => {
         { name: 'Reports', path: '/reports', icon: DocumentTextIcon },
         { name: 'QR-Scanner', path: '/qr/scanner', icon: QrCodeIcon },
         { name: 'Einstellungen', path: '/settings', icon: CogIcon }
-      );
-      return items;
+      ];
     }
 
     // Supervisor
@@ -112,28 +124,25 @@ const Sidebar = ({ isOpen, isMobile, onClose }) => {
 
   const navigationItems = getNavigationItems();
 
-  // CSS Klassen für Mobile/Desktop
-  const sidebarClasses = isMobile
-    ? `sidebar sidebar-mobile ${isOpen ? 'sidebar-open' : 'sidebar-closed'}`
-    : 'sidebar sidebar-desktop';
-
   return (
-    <div className={sidebarClasses}>
+    <div className="sidebar">
       
       {/* Header */}
       <div className="sidebar-header">
         <div className="sidebar-header-row">
-          <Link to="/dashboard" className="sidebar-brand" onClick={onClose}>
+          <Link to="/dashboard" className="sidebar-brand" onClick={handleNavClick}>
             <h1>TrapMap</h1>
           </Link>
           
           {/* Close Button (Mobile only) */}
           {isMobile && (
             <button 
-              onClick={onClose}
+              onClick={handleClose}
               className="sidebar-close-btn"
+              type="button"
+              aria-label="Menü schließen"
             >
-              <XMarkIcon className="w-6 h-6" />
+              <XMarkIcon style={{ width: '24px', height: '24px' }} />
             </button>
           )}
         </div>
@@ -159,14 +168,10 @@ const Sidebar = ({ isOpen, isMobile, onClose }) => {
             key={item.path}
             to={item.path}
             className={`sidebar-nav-item ${isActive(item.path) ? 'active' : ''}`}
-            title={item.description}
-            onClick={onClose}
+            onClick={handleNavClick}
           >
             <item.icon className="sidebar-nav-icon" />
             <span className="sidebar-nav-text">{item.name}</span>
-            {item.badge && (
-              <span className="sidebar-nav-badge">{item.badge}</span>
-            )}
           </Link>
         ))}
       </nav>

@@ -7,13 +7,14 @@ import { Bars3Icon } from "@heroicons/react/24/outline";
 export default function DashboardLayout({ children }) {
   const { pathname } = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   // Check if mobile
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-      if (window.innerWidth >= 768) {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) {
         setSidebarOpen(false);
       }
     };
@@ -28,7 +29,17 @@ export default function DashboardLayout({ children }) {
     if (isMobile) {
       setSidebarOpen(false);
     }
-  }, [pathname, isMobile]);
+  }, [pathname]);
+
+  const closeSidebar = () => {
+    console.log("Closing sidebar");
+    setSidebarOpen(false);
+  };
+
+  const openSidebar = () => {
+    console.log("Opening sidebar");
+    setSidebarOpen(true);
+  };
 
   return (
     <div className="flex bg-[#0b1120] text-white min-h-screen relative">
@@ -36,43 +47,77 @@ export default function DashboardLayout({ children }) {
       {/* Mobile Overlay */}
       {isMobile && sidebarOpen && (
         <div 
-          className="fixed inset-0 bg-black/60 z-40 md:hidden"
-          onClick={() => setSidebarOpen(false)}
+          className="mobile-overlay"
+          onClick={closeSidebar}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 40,
+            cursor: 'pointer'
+          }}
         />
       )}
 
-      {/* Sidebar */}
-      <Sidebar 
-        activePath={pathname} 
-        isOpen={sidebarOpen}
-        isMobile={isMobile}
-        onClose={() => setSidebarOpen(false)}
-      />
+      {/* Sidebar Container */}
+      <div 
+        style={{
+          position: isMobile ? 'fixed' : 'relative',
+          top: 0,
+          left: 0,
+          bottom: 0,
+          zIndex: 50,
+          transform: isMobile && !sidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
+          transition: 'transform 0.3s ease-in-out'
+        }}
+      >
+        <Sidebar 
+          activePath={pathname} 
+          isMobile={isMobile}
+          onClose={closeSidebar}
+        />
+      </div>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden w-full">
 
         {/* Mobile Header with Hamburger */}
         {isMobile && (
-          <div className="flex items-center justify-between p-4 bg-[#1a1f3a] border-b border-white/10 md:hidden">
+          <div 
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '16px',
+              backgroundColor: '#1a1f3a',
+              borderBottom: '1px solid rgba(255,255,255,0.1)'
+            }}
+          >
             <button
-              onClick={() => setSidebarOpen(true)}
-              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+              onClick={openSidebar}
+              style={{
+                padding: '8px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(255,255,255,0.05)',
+                border: 'none',
+                cursor: 'pointer'
+              }}
             >
-              <Bars3Icon className="w-6 h-6 text-white" />
+              <Bars3Icon style={{ width: '24px', height: '24px', color: 'white' }} />
             </button>
-            <h1 className="text-lg font-bold text-white">TrapMap</h1>
-            <div className="w-10" /> {/* Spacer for centering */}
+            <h1 style={{ fontSize: '18px', fontWeight: 'bold', color: 'white', margin: 0 }}>TrapMap</h1>
+            <div style={{ width: '40px' }} />
           </div>
         )}
 
-        {/* Navbar (Desktop) */}
-        <div className="hidden md:block">
-          <Navbar />
-        </div>
+        {/* Navbar (Desktop only) */}
+        {!isMobile && <Navbar />}
 
         {/* Hauptinhalt */}
-        <main className="p-4 md:p-8 overflow-y-auto h-full flex-1">
+        <main className="p-4 md:p-8 overflow-y-auto flex-1">
           {children}
         </main>
       </div>
