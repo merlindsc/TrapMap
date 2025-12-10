@@ -11,10 +11,11 @@ import {
   CogIcon,
   QrCodeIcon,
   MapIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 
-const Sidebar = () => {
+const Sidebar = ({ isOpen, isMobile, onClose }) => {
   const location = useLocation();
   const { user } = useAuth();
 
@@ -37,7 +38,7 @@ const Sidebar = () => {
         { name: 'Maps', path: '/maps', icon: MapIcon },
         { name: 'Techniker', path: '/technicians', icon: UsersIcon },
         { name: 'Reports', path: '/reports', icon: DocumentTextIcon },
-        { name: 'QR-Scanner', path: '/qr/scanner', icon: QrCodeIcon }, // <-- FIXED
+        { name: 'QR-Scanner', path: '/qr/scanner', icon: QrCodeIcon },
         { name: 'Einstellungen', path: '/settings', icon: CogIcon }
       );
       return items;
@@ -51,7 +52,7 @@ const Sidebar = () => {
         { name: 'Boxen', path: '/boxes', icon: ArchiveBoxIcon },
         { name: 'Maps', path: '/maps', icon: MapIcon },
         { name: 'Scans', path: '/scans', icon: QrCodeIcon },
-        { name: 'QR-Scanner', path: '/qr/scanner', icon: QrCodeIcon }, // <-- NEW
+        { name: 'QR-Scanner', path: '/qr/scanner', icon: QrCodeIcon },
         { name: 'Reports', path: '/reports', icon: DocumentTextIcon },
         { name: 'Einstellungen', path: '/settings', icon: CogIcon }
       ];
@@ -62,7 +63,7 @@ const Sidebar = () => {
       return [
         { name: 'Dashboard', path: '/dashboard', icon: HomeIcon },
         { name: 'Maps', path: '/maps', icon: MapIcon },
-        { name: 'QR-Scanner', path: '/qr/scanner', icon: QrCodeIcon }, // <-- wichtig
+        { name: 'QR-Scanner', path: '/qr/scanner', icon: QrCodeIcon },
         { name: 'Scans', path: '/scans', icon: QrCodeIcon },
         { name: 'Boxen', path: '/boxes', icon: ArchiveBoxIcon },
         { name: 'Einstellungen', path: '/settings', icon: CogIcon }
@@ -111,14 +112,31 @@ const Sidebar = () => {
 
   const navigationItems = getNavigationItems();
 
+  // CSS Klassen für Mobile/Desktop
+  const sidebarClasses = isMobile
+    ? `sidebar sidebar-mobile ${isOpen ? 'sidebar-open' : 'sidebar-closed'}`
+    : 'sidebar sidebar-desktop';
+
   return (
-    <div className="sidebar">
+    <div className={sidebarClasses}>
       
       {/* Header */}
       <div className="sidebar-header">
-        <Link to="/dashboard" className="sidebar-brand">
-          <h1>TrapMap</h1>
-        </Link>
+        <div className="sidebar-header-row">
+          <Link to="/dashboard" className="sidebar-brand" onClick={onClose}>
+            <h1>TrapMap</h1>
+          </Link>
+          
+          {/* Close Button (Mobile only) */}
+          {isMobile && (
+            <button 
+              onClick={onClose}
+              className="sidebar-close-btn"
+            >
+              <XMarkIcon className="w-6 h-6" />
+            </button>
+          )}
+        </div>
 
         {user && (
           <div className="sidebar-user-info">
@@ -142,6 +160,7 @@ const Sidebar = () => {
             to={item.path}
             className={`sidebar-nav-item ${isActive(item.path) ? 'active' : ''}`}
             title={item.description}
+            onClick={onClose}
           >
             <item.icon className="sidebar-nav-icon" />
             <span className="sidebar-nav-text">{item.name}</span>
