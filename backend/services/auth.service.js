@@ -13,6 +13,8 @@ const { sign, signRefresh, verify } = require('../utils/jwt');
  */
 const login = async (email, password) => {
   try {
+    console.log('[LOGIN] Attempting login for:', email);
+    
     const { data: user, error } = await supabase
       .from('users')
       .select('id, organisation_id, email, password_hash, role, first_name, last_name, active, must_change_password')
@@ -20,6 +22,7 @@ const login = async (email, password) => {
       .single();
 
     if (error || !user) {
+      console.log('[LOGIN] User not found or error:', error);
       return { success: false, message: 'Ungültige E-Mail oder Passwort' };
     }
 
@@ -43,6 +46,8 @@ const login = async (email, password) => {
     const token = sign(payload);
     const refreshToken = signRefresh(payload);
 
+    console.log('[LOGIN] Success for user:', user.id, 'must_change_password:', user.must_change_password);
+
     return {
       success: true,
       token,
@@ -58,7 +63,7 @@ const login = async (email, password) => {
       }
     };
   } catch (error) {
-    console.error('Login service error:', error);
+    console.error('[LOGIN] Service error:', error);
     return { success: false, message: 'Login fehlgeschlagen' };
   }
 };
@@ -103,6 +108,8 @@ const refreshToken = async (refreshTokenStr) => {
  */
 const changePassword = async (userId, currentPassword, newPassword) => {
   try {
+    console.log('[CHANGE-PASSWORD] userId:', userId);
+    
     // User holen
     const { data: user, error } = await supabase
       .from('users')
@@ -111,12 +118,14 @@ const changePassword = async (userId, currentPassword, newPassword) => {
       .single();
 
     if (error || !user) {
+      console.log('[CHANGE-PASSWORD] User not found:', error);
       return { success: false, message: 'Benutzer nicht gefunden' };
     }
 
     // Aktuelles Passwort prüfen
     const isValid = await bcrypt.compare(currentPassword, user.password_hash);
     if (!isValid) {
+      console.log('[CHANGE-PASSWORD] Current password invalid');
       return { success: false, message: 'Aktuelles Passwort ist falsch' };
     }
 
@@ -132,12 +141,14 @@ const changePassword = async (userId, currentPassword, newPassword) => {
       .eq('id', userId);
 
     if (updateError) {
+      console.log('[CHANGE-PASSWORD] Update error:', updateError);
       return { success: false, message: 'Fehler beim Speichern' };
     }
 
+    console.log('[CHANGE-PASSWORD] Success');
     return { success: true, message: 'Passwort erfolgreich geändert' };
   } catch (error) {
-    console.error('Change password error:', error);
+    console.error('[CHANGE-PASSWORD] Catch error:', error);
     return { success: false, message: 'Fehler beim Ändern des Passworts' };
   }
 };
@@ -147,23 +158,42 @@ const changePassword = async (userId, currentPassword, newPassword) => {
  */
 const setNewPassword = async (userId, newPassword) => {
   try {
-    const newHash = await bcrypt.hash(newPassword, 12);
+    console.log('[SET-PASSWORD] ====== START ======');
+    console.log('[SET-PASSWORD] userId:', userId);
+    console.log('[SET-PASSWORD] userId type:', typeof userId);
+    console.log('[SET-PASSWORD] newPassword exists:', !!newPassword);
+    console.log('[SET-PASSWORD] newPassword length:', newPassword?.length);
     
-    const { error } = await supabase
+    const newHash = await bcrypt.hash(newPassword, 12);
+    console.log('[SET-PASSWORD] Hash created successfully');
+    
+    const { data, error } = await supabase
       .from('users')
       .update({ 
         password_hash: newHash,
         must_change_password: false 
       })
-      .eq('id', userId);
+      .eq('id', userId)
+      .select();
+
+    console.log('[SET-PASSWORD] Supabase response data:', data);
+    console.log('[SET-PASSWORD] Supabase error:', error);
 
     if (error) {
+      console.log('[SET-PASSWORD] Returning error response');
       return { success: false, message: 'Fehler beim Speichern' };
     }
 
+    if (!data || data.length === 0) {
+      console.log('[SET-PASSWORD] No rows updated - user not found?');
+      return { success: false, message: 'Benutzer nicht gefunden' };
+    }
+
+    console.log('[SET-PASSWORD] ====== SUCCESS ======');
     return { success: true, message: 'Passwort erfolgreich gesetzt' };
   } catch (error) {
-    console.error('Set password error:', error);
+    console.error('[SET-PASSWORD] ====== CATCH ERROR ======');
+    console.error('[SET-PASSWORD] Error:', error);
     return { success: false, message: 'Fehler beim Setzen des Passworts' };
   }
 };
@@ -173,6 +203,8 @@ const setNewPassword = async (userId, newPassword) => {
  */
 const forgotPassword = async (email, sendEmailFn) => {
   try {
+    console.log('[FORGOT-PASSWORD] Email:', email);
+    
     const { data: user, error } = await supabase
       .from('users')
       .select('id, email, first_name')
@@ -181,12 +213,15 @@ const forgotPassword = async (email, sendEmailFn) => {
 
     // Immer "Erfolg" zurückgeben um Email-Enumeration zu verhindern
     if (error || !user) {
+      console.log('[FORGOT-PASSWORD] User not found (returning success anyway)');
       return { success: true, message: 'Falls ein Account existiert, wurde eine E-Mail gesendet' };
     }
 
     // Reset Token generieren
     const resetToken = crypto.randomBytes(32).toString('hex');
     const resetExpires = new Date(Date.now() + 3600000).toISOString(); // 1 Stunde
+
+    console.log('[FORGOT-PASSWORD] Generated token for user:', user.id);
 
     // Token in DB speichern
     const { error: updateError } = await supabase
@@ -198,21 +233,25 @@ const forgotPassword = async (email, sendEmailFn) => {
       .eq('id', user.id);
 
     if (updateError) {
-      console.error('Reset token save error:', updateError);
+      console.error('[FORGOT-PASSWORD] Token save error:', updateError);
       return { success: false, message: 'Fehler beim Erstellen des Reset-Links' };
     }
 
     // Email senden
     if (sendEmailFn) {
+      console.log('[FORGOT-PASSWORD] Sending email...');
       await sendEmailFn(user.email, {
         name: user.first_name,
         resetToken: resetToken
       });
+      console.log('[FORGOT-PASSWORD] Email sent');
+    } else {
+      console.log('[FORGOT-PASSWORD] No email function provided');
     }
 
     return { success: true, message: 'Falls ein Account existiert, wurde eine E-Mail gesendet' };
   } catch (error) {
-    console.error('Forgot password error:', error);
+    console.error('[FORGOT-PASSWORD] Catch error:', error);
     return { success: false, message: 'Fehler beim Zurücksetzen' };
   }
 };
@@ -222,6 +261,8 @@ const forgotPassword = async (email, sendEmailFn) => {
  */
 const resetPasswordWithToken = async (token, newPassword) => {
   try {
+    console.log('[RESET-PASSWORD] Token provided:', !!token);
+    
     // User mit Token finden
     const { data: user, error } = await supabase
       .from('users')
@@ -230,11 +271,13 @@ const resetPasswordWithToken = async (token, newPassword) => {
       .single();
 
     if (error || !user) {
+      console.log('[RESET-PASSWORD] Invalid token:', error);
       return { success: false, message: 'Ungültiger oder abgelaufener Link' };
     }
 
     // Token-Ablauf prüfen
     if (new Date(user.reset_token_expires) < new Date()) {
+      console.log('[RESET-PASSWORD] Token expired');
       return { success: false, message: 'Link ist abgelaufen. Bitte erneut anfordern.' };
     }
 
@@ -252,12 +295,14 @@ const resetPasswordWithToken = async (token, newPassword) => {
       .eq('id', user.id);
 
     if (updateError) {
+      console.log('[RESET-PASSWORD] Update error:', updateError);
       return { success: false, message: 'Fehler beim Speichern' };
     }
 
+    console.log('[RESET-PASSWORD] Success for user:', user.id);
     return { success: true, message: 'Passwort erfolgreich geändert. Sie können sich jetzt einloggen.' };
   } catch (error) {
-    console.error('Reset password error:', error);
+    console.error('[RESET-PASSWORD] Catch error:', error);
     return { success: false, message: 'Fehler beim Zurücksetzen' };
   }
 };
