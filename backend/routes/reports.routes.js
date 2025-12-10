@@ -1,5 +1,6 @@
 // ============================================
 // REPORTS ROUTES
+// Audit + Gefahrenanalyse + Logo
 // ============================================
 
 const express = require("express");
@@ -20,10 +21,18 @@ const upload = multer({
 
 router.use(authenticate);
 
-// Audit Reports
+// Objects für Report-Auswahl
 router.get("/objects", asyncHandler(reportsController.getObjects));
+
+// Organisation Info
+router.get("/organisation", asyncHandler(reportsController.getOrganisation));
+
+// Audit Reports
 router.post("/audit", asyncHandler(reportsController.generateAuditReport));
 router.post("/audit/preview", asyncHandler(reportsController.getAuditPreview));
+
+// Gefahrenanalyse
+router.post("/gefahrenanalyse", asyncHandler(reportsController.generateGefahrenanalyse));
 
 // Logo
 router.post("/logo", upload.single('logo'), asyncHandler(reportsController.uploadLogo));

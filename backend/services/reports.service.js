@@ -1,6 +1,6 @@
 // ============================================
-// REPORTS SERVICE - VERSION 5 (FINAL)
-// Seitennummer oben rechts, KEIN Footer der Seiten erstellt
+// REPORTS SERVICE - KOMPLETT
+// Audit Reports + Gefahrenanalyse + Logo
 // ============================================
 
 const { supabase } = require("../config/supabase");
@@ -12,17 +12,33 @@ try {
   console.warn("⚠️ pdfkit nicht installiert");
 }
 
-const formatDate = (d) => d ? new Date(d).toLocaleDateString("de-DE") : "-";
-const formatDateTime = (d) => d ? new Date(d).toLocaleString("de-DE") : "-";
+const formatDate = (d) => d ? new Date(d).toLocaleDateString("de-DE") : "";
+const formatDateTime = (d) => d ? new Date(d).toLocaleString("de-DE") : "";
 const statusText = { green: "OK", yellow: "Auffällig", orange: "Erhöht", red: "Befall" };
 
+// ============================================
+// GET OBJECTS
+// ============================================
 exports.getObjects = async (orgId) => {
   const { data, error } = await supabase
-    .from("objects").select("id, name, address, city")
+    .from("objects").select("id, name, address, city, zip, contact_name, contact_phone")
     .eq("organisation_id", orgId).order("name", { ascending: true });
   return error ? { success: false, message: error.message } : { success: true, data: data || [] };
 };
 
+// ============================================
+// GET ORGANISATION
+// ============================================
+exports.getOrganisation = async (orgId) => {
+  const { data, error } = await supabase
+    .from("organisations").select("*")
+    .eq("id", orgId).single();
+  return error ? { success: false, message: error.message } : { success: true, data };
+};
+
+// ============================================
+// GET REPORT DATA (für Audit)
+// ============================================
 exports.getReportData = async (orgId, objectId, startDate, endDate) => {
   try {
     const { data: object } = await supabase
@@ -31,7 +47,7 @@ exports.getReportData = async (orgId, objectId, startDate, endDate) => {
     if (!object) return { success: false, message: "Objekt nicht gefunden" };
 
     const { data: organisation } = await supabase
-      .from("organisations").select("id, name, logo_url")
+      .from("organisations").select("id, name, logo_url, address, zip, city, phone")
       .eq("id", orgId).single();
 
     const { data: boxes } = await supabase
@@ -69,6 +85,9 @@ exports.getReportData = async (orgId, objectId, startDate, endDate) => {
   }
 };
 
+// ============================================
+// LOGO LADEN
+// ============================================
 const loadLogo = async (url) => {
   if (!url) return null;
   try {
@@ -86,7 +105,7 @@ const loadLogo = async (url) => {
 };
 
 // ============================================
-// PDF GENERIEREN - VERSION 5
+// AUDIT PDF GENERIEREN
 // ============================================
 exports.generatePDF = async (reportData) => {
   if (!PDFDocument) throw new Error("pdfkit nicht installiert");
@@ -110,7 +129,6 @@ exports.generatePDF = async (reportData) => {
     const BOTTOM = 750;
     let pageNum = 1;
 
-    // Header für Folgeseiten
     const addPageHeader = () => {
       doc.fontSize(8).font("Helvetica").fillColor("#999999");
       doc.text(`${orgName} | ${object.name} | Seite ${pageNum}`, 50, 30, { align: "right", width: W });
@@ -118,19 +136,13 @@ exports.generatePDF = async (reportData) => {
       doc.moveTo(50, 45).lineTo(545, 45).stroke("#eeeeee");
     };
 
-    // Neue Seite
     const newPage = () => {
       doc.addPage();
       pageNum++;
       addPageHeader();
-      return 55; // Start nach Header
+      return 55;
     };
 
-    // ============================================
-    // SEITE 1 - CONTENT
-    // ============================================
-    
-    // Logo oben rechts
     if (logoBuffer) {
       try { doc.image(logoBuffer, doc.page.width - 130, 30, { fit: [80, 40] }); } catch {}
     }
@@ -139,7 +151,6 @@ exports.generatePDF = async (reportData) => {
     doc.fontSize(11).font("Helvetica").text("Schädlingsbekämpfung");
     doc.moveDown(1.5);
 
-    // Info-Box
     const iy = doc.y;
     doc.rect(50, iy, W, 70).stroke("#cccccc");
     doc.fontSize(14).font("Helvetica-Bold").text(object.name, 60, iy + 10);
@@ -149,7 +160,6 @@ exports.generatePDF = async (reportData) => {
       .text(`Erstellt am: ${formatDateTime(new Date())}`, 60, iy + 56);
     doc.y = iy + 85;
 
-    // Zusammenfassung
     doc.fontSize(14).font("Helvetica-Bold").text("Zusammenfassung");
     doc.moveDown(0.3);
     doc.fontSize(10).font("Helvetica");
@@ -161,7 +171,6 @@ exports.generatePDF = async (reportData) => {
     doc.text(`Kontrollen Befall (rot): ${stats.redScans}`);
     doc.moveDown(1);
 
-    // Bewertung
     doc.fontSize(14).font("Helvetica-Bold").text("Bewertung");
     doc.moveDown(0.3);
     const rate = stats.totalScans > 0 ? ((stats.redScans / stats.totalScans) * 100).toFixed(1) : 0;
@@ -173,7 +182,6 @@ exports.generatePDF = async (reportData) => {
     doc.font("Helvetica").fontSize(10).text(`Befallsrate: ${rate}%`);
     doc.moveDown(1);
 
-    // BOX-ÜBERSICHT
     if (boxes?.length > 0) {
       doc.fontSize(14).font("Helvetica-Bold").text("Box-Übersicht");
       doc.moveDown(0.3);
@@ -199,7 +207,6 @@ exports.generatePDF = async (reportData) => {
       doc.y = y + 10;
     }
 
-    // KONTROLL-PROTOKOLL
     if (scans?.length > 0) {
       if (doc.y > BOTTOM - 60) doc.y = newPage();
       else doc.moveDown(1);
@@ -235,12 +242,234 @@ exports.generatePDF = async (reportData) => {
       }
     }
 
-    // KEIN Footer am Ende - vermeidet extra Seiten!
+    doc.end();
+  });
+};
+
+// ============================================
+// GEFAHRENANALYSE PDF GENERIEREN
+// ============================================
+exports.generateGefahrenanalyse = async (data, organisation) => {
+  if (!PDFDocument) throw new Error("pdfkit nicht installiert");
+
+  const logoBuffer = organisation?.logo_url ? await loadLogo(organisation.logo_url) : null;
+
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ 
+      size: "A4", 
+      margins: { top: 40, bottom: 40, left: 40, right: 40 }
+    });
+
+    const chunks = [];
+    doc.on("data", c => chunks.push(c));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    const W = doc.page.width - 80;
+    const LEFT = 40;
+    const COL2 = 300;
+
+    // Checkbox Helper
+    const checkbox = (x, y, checked) => {
+      doc.rect(x, y, 10, 10).stroke("#000000");
+      if (checked) {
+        doc.moveTo(x + 2, y + 5).lineTo(x + 4, y + 8).lineTo(x + 8, y + 2).stroke("#000000");
+      }
+    };
+
+    // ============================================
+    // HEADER
+    // ============================================
+    doc.fontSize(14).font("Helvetica-Bold").fillColor("#000000");
+    doc.text("Objektbezogene Gefahrenanalyse", LEFT, 40);
+    doc.fontSize(10).font("Helvetica");
+    doc.text("zur Bewertung der Notwendigkeit einer", LEFT, 58);
+    doc.text("befallsunabhängigen Dauerbeköderung gegen Schadnager", LEFT, 70);
+
+    // Logo oben rechts
+    if (logoBuffer) {
+      try { doc.image(logoBuffer, doc.page.width - 120, 35, { fit: [70, 35] }); } catch {}
+    } else {
+      doc.fontSize(10).font("Helvetica-Bold").text("LOGO", doc.page.width - 80, 50);
+    }
+
+    // Hinweistext
+    doc.fontSize(7).font("Helvetica").fillColor("#333333");
+    doc.text('Aufgrund der „Allgemeinen Kriterien einer guten fachlichen Anwendung von Fraßködern bei der Nagetierbekämpfung mit Antikoagulanzien durch sachkundige Verwender und berufsmäßige Verwender mit Sachkunde" erfolgte die Bewertung zur Notwendigkeit einer befallsunabhängigen Dauerbeköderung gegen Schadnager.', LEFT, 90, { width: W });
+
+    let y = 125;
+
+    // ============================================
+    // AUFTRAGGEBER (linke Spalte)
+    // ============================================
+    doc.fillColor("#000000").fontSize(10).font("Helvetica-Bold").text("Auftraggeber:", LEFT, y);
+    y += 15;
+    
+    const fieldHeight = 16;
+    const labelWidth = 80;
+    const valueWidth = 150;
+
+    const drawField = (label, value, x, yPos, vw = valueWidth) => {
+      doc.fontSize(9).font("Helvetica").fillColor("#000000");
+      doc.text(label, x, yPos + 2);
+      doc.rect(x + labelWidth, yPos, vw, fieldHeight).stroke("#999999");
+      if (value) doc.text(value, x + labelWidth + 3, yPos + 3);
+      return yPos + 20;
+    };
+
+    y = drawField("Firma", data.auftraggeber?.firma || organisation?.name || "", LEFT, y);
+    y = drawField("Straße", data.auftraggeber?.strasse || organisation?.address || "", LEFT, y);
+    y = drawField("PLZ/Ort", data.auftraggeber?.plzOrt || `${organisation?.zip || ""} ${organisation?.city || ""}`.trim(), LEFT, y);
+    y = drawField("Verantwortlicher", data.auftraggeber?.verantwortlicher || "", LEFT, y);
+    y = drawField("Telefon", data.auftraggeber?.telefon || organisation?.phone || "", LEFT, y);
+
+    // ============================================
+    // OBJEKT (rechte Spalte)
+    // ============================================
+    let y2 = 125;
+    doc.fontSize(10).font("Helvetica-Bold").text("Objekt:", COL2, y2);
+    y2 += 15;
+
+    y2 = drawField("Firma", data.objekt?.firma || "", COL2, y2);
+    y2 = drawField("Straße", data.objekt?.strasse || "", COL2, y2);
+    y2 = drawField("PLZ/Ort", data.objekt?.plzOrt || "", COL2, y2);
+    y2 = drawField("Verantwortlicher", data.objekt?.verantwortlicher || "", COL2, y2);
+    y2 = drawField("Telefon", data.objekt?.telefon || "", COL2, y2);
+
+    y = Math.max(y, y2) + 10;
+
+    // ============================================
+    // DURCHFÜHRUNG
+    // ============================================
+    doc.fontSize(10).font("Helvetica-Bold").text("Durchführung:", LEFT, y);
+    y += 15;
+    
+    doc.fontSize(9).font("Helvetica");
+    doc.text("Am:", LEFT, y + 2);
+    doc.rect(LEFT + 25, y, 100, fieldHeight).stroke("#999999");
+    doc.text(data.durchfuehrung?.datum || formatDate(new Date()), LEFT + 28, y + 3);
+    
+    doc.text("Durch:", LEFT + 150, y + 2);
+    doc.rect(LEFT + 185, y, 150, fieldHeight).stroke("#999999");
+    doc.text(data.durchfuehrung?.durch || "", LEFT + 188, y + 3);
+
+    y += 30;
+
+    // ============================================
+    // DOKUMENTATION
+    // ============================================
+    doc.fontSize(10).font("Helvetica-Bold").text("Aktuelle Dokumentation (Zutreffendes ankreuzen):", LEFT, y);
+    y += 18;
+    doc.fontSize(9).font("Helvetica");
+    
+    checkbox(LEFT, y, data.dokumentation?.apcIntegral);
+    doc.text("APC Integral", LEFT + 15, y + 1);
+    
+    checkbox(LEFT + 100, y, data.dokumentation?.apcDocuWeb);
+    doc.text("APC DocuWeb", LEFT + 115, y + 1);
+    
+    checkbox(LEFT + 220, y, data.dokumentation?.trapmap !== false);
+    doc.text("TrapMap", LEFT + 235, y + 1);
+
+    y += 25;
+
+    // Behandlungen
+    doc.text("Behandlungen jährlich (Anzahl eintragen):", LEFT, y + 2);
+    doc.rect(LEFT + 200, y, 40, fieldHeight).stroke("#999999");
+    doc.text(data.behandlungenJaehrlich?.toString() || "", LEFT + 205, y + 3);
+    
+    doc.text("Inspektionsintervall jährlich", LEFT + 260, y + 2);
+
+    y += 30;
+
+    // ============================================
+    // VORAUSSETZUNGEN HEADER
+    // ============================================
+    doc.rect(LEFT, y, W, 18).fill("#e8e8e8");
+    doc.fillColor("#000000").fontSize(9).font("Helvetica-Bold");
+    doc.text("Voraussetzungen für eine befallsunabhängige Dauerbeköderung", LEFT + 5, y + 4);
+    doc.text("Gegeben:", W - 100, y + 4);
+    doc.text("JA", W - 30, y + 4);
+    doc.text("NEIN", W + 5, y + 4);
+
+    y += 22;
+    doc.fontSize(7).font("Helvetica").fillColor("#444444");
+    doc.text("Die Voraussetzung für eine befallsunabhängige Dauerbeköderung durch Rodentizide mit Antikoagulanzien der 2. Generation ist nur gegeben, wenn alle drei der nachfolgenden Kriterien mit JA zu beantworten sind.", LEFT, y, { width: W });
+    
+    doc.fillColor("#000000");
+    y += 22;
+
+    // ============================================
+    // KRITERIEN
+    // ============================================
+    const kriterien = [
+      "1. Ausschließlicher Einsatz dauerhaft kontrollierter Köderstellen an bevorzugten Eintritts- und Einniststellen von Schadnagern in und am Gebäude. Verwendung zugriffgeschützter Köderboxen.",
+      "2. Erhöhte Befallsgefahr durch Nagetiere, die eine besondere Gefahr für Gesundheit oder Sicherheit von Mensch und Tier darstellt.",
+      "3. Keine Möglichkeit, die Befallsgefahr durch verhältnismäßige Maßnahmen (z.B. organisatorische oder bauliche Maßnahmen oder Einsatz toxinfreier Alternativen) zu verhindern."
+    ];
+
+    doc.fontSize(8).font("Helvetica");
+    kriterien.forEach((text, i) => {
+      const textHeight = doc.heightOfString(text, { width: W - 80 });
+      doc.text(text, LEFT, y, { width: W - 80 });
+      
+      checkbox(W - 25, y, data.kriterien?.[i]?.ja);
+      checkbox(W + 10, y, data.kriterien?.[i]?.nein);
+      
+      y += Math.max(textHeight, 15) + 8;
+    });
+
+    y += 5;
+
+    // ============================================
+    // EMPFEHLUNG HEADER
+    // ============================================
+    doc.rect(LEFT, y, W, 18).fill("#e8e8e8");
+    doc.fillColor("#000000").fontSize(9).font("Helvetica-Bold");
+    doc.text("Empfehlung auf Grund der vorliegenden Gefahrenanalyse:", LEFT + 5, y + 4);
+    doc.fontSize(8).font("Helvetica");
+    doc.text("Zutreffendes ankreuzen", W - 70, y + 5);
+
+    y += 25;
+    doc.fontSize(8).font("Helvetica");
+
+    // Empfehlung 1
+    checkbox(LEFT, y, data.empfehlung === 1);
+    const emp1 = "Wir empfehlen die Beibehaltung des bisherigen Inspektionsintervalls von weniger als 12 Behandlungen jährlich. Bei Eintreten eines Befalls durch Nagetiere empfehlen wir die temporäre Umstellung von NeoTox auf Tox unter Berücksichtigung der Allgemeinen Kriterien einer guten fachlichen Anwendung von Fraßködern bei der Nagetierbekämpfung. Entsprechend erforderliche zusätzliche Behandlungen werden gesondert berechnet.";
+    doc.text(emp1, LEFT + 15, y, { width: W - 20 });
+    
+    y += doc.heightOfString(emp1, { width: W - 20 }) + 12;
+
+    // Empfehlung 2
+    checkbox(LEFT, y, data.empfehlung === 2);
+    const emp2 = "Wir empfehlen die befallsunabhängige Beköderung mit Rodentiziden der beiliegenden Einzelzulassung der Systeme zur Nagetierbekämpfung mit Benennung der Kontrollpunkte bzw. Objektbereiche. Das Intervall zur Systembetreuung bei befallsunabhängiger Dauerbeköderung muss im Zeitraum von 1-4 Wochen liegen.";
+    doc.text(emp2, LEFT + 15, y, { width: W - 20 });
+
+    y += doc.heightOfString(emp2, { width: W - 20 }) + 25;
+
+    // ============================================
+    // UNTERSCHRIFTEN
+    // ============================================
+    doc.fontSize(9).font("Helvetica");
+    doc.text("Unterschrift Kunde:", LEFT, y);
+    doc.moveTo(LEFT + 95, y + 15).lineTo(LEFT + 220, y + 15).stroke("#000000");
+    
+    doc.text("Unterschrift Firma:", COL2, y);
+    doc.moveTo(COL2 + 95, y + 15).lineTo(COL2 + 220, y + 15).stroke("#000000");
+
+    y += 40;
+
+    // Footer
+    doc.fontSize(8).fillColor("#888888");
+    doc.text("Erstellt mit TrapMap - Professionelles Schädlingsmanagement", LEFT, y, { align: "center", width: W });
 
     doc.end();
   });
 };
 
+// ============================================
+// LOGO UPLOAD & GET
+// ============================================
 exports.uploadLogo = async (orgId, fileBuffer, fileName, mimeType) => {
   try {
     const ext = fileName.split('.').pop();

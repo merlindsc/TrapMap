@@ -16,6 +16,7 @@ import Maps from "./pages/maps/Maps";
 import Scanner from "./pages/qr/Scanner";
 import AssignCode from "./pages/qr/AssignCode";
 import Settings from "./pages/settings/Settings";
+import Reports from "./pages/reports/Reports";
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -37,24 +38,21 @@ export default function App() {
     );
   }
 
-  const QRRoutes = (
+  // Gemeinsame Routes
+  const CommonRoutes = (
     <>
       <Route path="/qr/scanner" element={<DashboardLayout><Scanner /></DashboardLayout>} />
       <Route path="/qr/assign/:code" element={<DashboardLayout><AssignCode /></DashboardLayout>} />
+      <Route path="/settings" element={<DashboardLayout><Settings /></DashboardLayout>} />
+      <Route path="/reports" element={<DashboardLayout><Reports /></DashboardLayout>} />
     </>
-  );
-
-  // Settings Route für alle Rollen
-  const SettingsRoute = (
-    <Route path="/settings" element={<DashboardLayout><Settings /></DashboardLayout>} />
   );
 
   return (
     <Routes>
       {["admin", "supervisor"].includes(user.role) && (
         <>
-          {QRRoutes}
-          {SettingsRoute}
+          {CommonRoutes}
           <Route path="/dashboard" element={<DashboardLayout><Dashboard /></DashboardLayout>} />
           <Route path="/objects" element={<DashboardLayout><ObjectList /></DashboardLayout>} />
           <Route path="/objects/new" element={<DashboardLayout><ObjectCreate /></DashboardLayout>} />
@@ -69,8 +67,7 @@ export default function App() {
 
       {user.role === "technician" && (
         <>
-          {QRRoutes}
-          {SettingsRoute}
+          {CommonRoutes}
           <Route path="/dashboard" element={<DashboardLayout><TechnicianHome /></DashboardLayout>} />
           <Route path="/maps" element={<DashboardLayout><Maps /></DashboardLayout>} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -79,8 +76,7 @@ export default function App() {
 
       {["auditor", "viewer", "partner"].includes(user.role) && (
         <>
-          {QRRoutes}
-          {SettingsRoute}
+          {CommonRoutes}
           <Route path="/dashboard" element={<DashboardLayout><Dashboard /></DashboardLayout>} />
           <Route path="/objects" element={<DashboardLayout><ObjectList /></DashboardLayout>} />
           <Route path="/maps" element={<DashboardLayout><Maps /></DashboardLayout>} />

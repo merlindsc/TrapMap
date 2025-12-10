@@ -1,5 +1,6 @@
 // ============================================
 // REPORTS CONTROLLER
+// Audit + Gefahrenanalyse + Logo
 // ============================================
 
 const reportsService = require("../services/reports.service");
@@ -23,14 +24,14 @@ exports.generateAuditReport = async (req, res) => {
     if (!dataResult.success) return res.status(400).json({ error: dataResult.message });
 
     const pdfBuffer = await reportsService.generatePDF(dataResult.data);
-    const objectName = dataResult.data.object.name.replace(/[^a-zA-Z0-9]/g, "_");
+    const objectName = dataResult.data.object.name.replace(/[^a-zA-Z0-9äöüÄÖÜß]/g, "_");
     const filename = `Audit_${objectName}_${new Date().toISOString().split("T")[0]}.pdf`;
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(pdfBuffer);
     
-    console.log(`✅ Report generated: ${filename}`);
+    console.log(`✅ Audit report generated: ${filename}`);
   } catch (err) {
     console.error("generateAuditReport error:", err);
     res.status(500).json({ error: "Fehler beim Generieren" });
@@ -54,6 +55,38 @@ exports.getAuditPreview = async (req, res) => {
   });
 };
 
+// ============================================
+// GEFAHRENANALYSE
+// ============================================
+exports.generateGefahrenanalyse = async (req, res) => {
+  try {
+    const formData = req.body;
+    
+    console.log(`📄 Generating Gefahrenanalyse for org ${req.user.organisation_id}`);
+    
+    // Organisation laden
+    const orgResult = await reportsService.getOrganisation(req.user.organisation_id);
+    const organisation = orgResult.success ? orgResult.data : null;
+
+    const pdfBuffer = await reportsService.generateGefahrenanalyse(formData, organisation);
+    
+    const objektName = (formData.objekt?.firma || "Objekt").replace(/[^a-zA-Z0-9äöüÄÖÜß]/g, "_");
+    const filename = `Gefahrenanalyse_${objektName}_${new Date().toISOString().split("T")[0]}.pdf`;
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(pdfBuffer);
+    
+    console.log(`✅ Gefahrenanalyse generated: ${filename}`);
+  } catch (err) {
+    console.error("generateGefahrenanalyse error:", err);
+    res.status(500).json({ error: "Fehler beim Generieren" });
+  }
+};
+
+// ============================================
+// LOGO
+// ============================================
 exports.uploadLogo = async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Keine Datei" });
   
@@ -72,4 +105,11 @@ exports.getLogo = async (req, res) => {
   const result = await reportsService.getOrganisationLogo(req.user.organisation_id);
   if (!result.success) return res.status(400).json({ error: result.message });
   res.json({ logoUrl: result.logoUrl });
+};
+
+// Organisation Info für Formulare
+exports.getOrganisation = async (req, res) => {
+  const result = await reportsService.getOrganisation(req.user.organisation_id);
+  if (!result.success) return res.status(400).json({ error: result.message });
+  res.json(result.data);
 };
