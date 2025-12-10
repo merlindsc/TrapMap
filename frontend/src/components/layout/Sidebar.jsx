@@ -12,10 +12,17 @@ import {
   QrCodeIcon,
   MapIcon,
   DocumentTextIcon,
-  XMarkIcon
+  ShieldCheckIcon
 } from '@heroicons/react/24/outline';
 
-const Sidebar = ({ isMobile, onClose }) => {
+// Super-Admin E-Mails
+const SUPER_ADMINS = [
+  "admin@demo.trapmap.de",
+  "merlin@trapmap.de",
+  "hilfe@die-schaedlingsexperten.de"
+];
+
+const Sidebar = () => {
   const location = useLocation();
   const { user } = useAuth();
 
@@ -23,28 +30,17 @@ const Sidebar = ({ isMobile, onClose }) => {
     return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
-  const handleNavClick = () => {
-    if (isMobile && onClose) {
-      onClose();
-    }
-  };
+  const isSuperAdmin = user && SUPER_ADMINS.includes(user.email);
 
-  const handleClose = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    console.log("X button clicked");
-    if (onClose) {
-      onClose();
-    }
-  };
-
-  // Navigationseinträge basierend auf Rolle
+  // Holt Navigationseinträge basierend auf Rolle
   const getNavigationItems = () => {
     const role = user?.role;
 
+    const items = [];
+
     // Admin
     if (role === "admin") {
-      return [
+      items.push(
         { name: 'Dashboard', path: '/dashboard', icon: HomeIcon },
         { name: 'Objekte', path: '/objects', icon: BuildingOfficeIcon },
         { name: 'Boxen', path: '/boxes', icon: ArchiveBoxIcon },
@@ -53,7 +49,14 @@ const Sidebar = ({ isMobile, onClose }) => {
         { name: 'Reports', path: '/reports', icon: DocumentTextIcon },
         { name: 'QR-Scanner', path: '/qr/scanner', icon: QrCodeIcon },
         { name: 'Einstellungen', path: '/settings', icon: CogIcon }
-      ];
+      );
+      
+      // Super-Admin Link hinzufügen
+      if (isSuperAdmin) {
+        items.push({ name: 'Admin', path: '/admin', icon: ShieldCheckIcon });
+      }
+      
+      return items;
     }
 
     // Supervisor
@@ -129,28 +132,14 @@ const Sidebar = ({ isMobile, onClose }) => {
       
       {/* Header */}
       <div className="sidebar-header">
-        <div className="sidebar-header-row">
-          <Link to="/dashboard" className="sidebar-brand" onClick={handleNavClick}>
-            <h1>TrapMap</h1>
-          </Link>
-          
-          {/* Close Button (Mobile only) */}
-          {isMobile && (
-            <button 
-              onClick={handleClose}
-              className="sidebar-close-btn"
-              type="button"
-              aria-label="Menü schließen"
-            >
-              <XMarkIcon style={{ width: '24px', height: '24px' }} />
-            </button>
-          )}
-        </div>
+        <Link to="/dashboard" className="sidebar-brand">
+          <h1>TrapMap</h1>
+        </Link>
 
         {user && (
           <div className="sidebar-user-info">
             <div className="user-role-badge">
-              {user.role === 'admin' && '👑 Admin'}
+              {user.role === 'admin' && (isSuperAdmin ? '⚡ Super-Admin' : '👑 Admin')}
               {user.role === 'supervisor' && '⭐ Supervisor'}
               {user.role === 'technician' && '🔧 Techniker'}
               {user.role === 'auditor' && '📋 Auditor'}
@@ -168,10 +157,13 @@ const Sidebar = ({ isMobile, onClose }) => {
             key={item.path}
             to={item.path}
             className={`sidebar-nav-item ${isActive(item.path) ? 'active' : ''}`}
-            onClick={handleNavClick}
+            title={item.description}
           >
             <item.icon className="sidebar-nav-icon" />
             <span className="sidebar-nav-text">{item.name}</span>
+            {item.badge && (
+              <span className="sidebar-nav-badge">{item.badge}</span>
+            )}
           </Link>
         ))}
       </nav>

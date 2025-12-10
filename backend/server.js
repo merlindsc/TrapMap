@@ -25,9 +25,8 @@ const pinRoutes = require('./routes/pins.routes');
 const labelRoutes = require('./routes/labels.routes');
 const reportRoutes = require('./routes/reports.routes');
 const boxtypesRoutes = require('./routes/boxtypes.routes');
-
-// ⭐ WICHTIG: Dashboard Route importieren!
 const dashboardRoutes = require('./routes/dashboard.routes');
+const adminRoutes = require('./routes/admin.routes');
 
 // ============================================
 // EXPRESS APP SETUP
@@ -50,7 +49,9 @@ app.use(cors({
     'http://localhost:5175',
     'http://localhost:5176',
     'http://localhost:5177',
-    'https://trapmap-app.onrender.com'  // ← NEU!
+    'https://trapmap-app.onrender.com',
+    'https://trap-map.de',
+    'https://www.trap-map.de'
   ],
   credentials: true
 }));
@@ -97,9 +98,8 @@ app.use('/api/pins', pinRoutes);
 app.use('/api/labels', labelRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/boxtypes', boxtypesRoutes);
-
-// ⭐⭐ NEUE DASHBOARD ROUTE ⭐⭐
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/admin', adminRoutes);
 
 // ============================================
 // 404 HANDLER
@@ -127,13 +127,13 @@ const PORT = config.port || 5000;
 
 app.listen(PORT, () => {
   console.log('╔════════════════════════════════════════╗');
-  console.log('║      TRAPMAP BACKEND SERVER           ║');
+  console.log('║      TRAPMAP BACKEND SERVER            ║');
   console.log('╚════════════════════════════════════════╝');
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌍 Environment: ${config.nodeEnv}`);
   console.log(`📡 API Base: http://localhost:${PORT}/api`);
   console.log(`❤️  Health Check: http://localhost:${PORT}/health`);
-  console.log('════════════════════════════════════════');
+  console.log('══════════════════════════════════════════');
 });
 
 // ============================================

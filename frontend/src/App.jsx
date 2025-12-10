@@ -17,6 +17,10 @@ import Scanner from "./pages/qr/Scanner";
 import AssignCode from "./pages/qr/AssignCode";
 import Settings from "./pages/settings/Settings";
 import Reports from "./pages/reports/Reports";
+import Admin from "./pages/admin/Admin";
+
+// Super-Admin E-Mails
+const SUPER_ADMINS = ["admin@demo.trapmap.de", "merlin@trapmap.de"];
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -38,6 +42,8 @@ export default function App() {
     );
   }
 
+  const isSuperAdmin = SUPER_ADMINS.includes(user.email);
+
   // Gemeinsame Routes
   const CommonRoutes = (
     <>
@@ -45,6 +51,9 @@ export default function App() {
       <Route path="/qr/assign/:code" element={<DashboardLayout><AssignCode /></DashboardLayout>} />
       <Route path="/settings" element={<DashboardLayout><Settings /></DashboardLayout>} />
       <Route path="/reports" element={<DashboardLayout><Reports /></DashboardLayout>} />
+      {isSuperAdmin && (
+        <Route path="/admin" element={<DashboardLayout><Admin /></DashboardLayout>} />
+      )}
     </>
   );
 
