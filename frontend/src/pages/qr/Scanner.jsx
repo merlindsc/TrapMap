@@ -6,7 +6,7 @@ import axios from "axios";
 
 export default function Scanner() {
   const videoRef = useRef(null);
-  const codeReader = useRef(null);
+  const controlsRef = useRef(null);
   const [error, setError] = useState("");
   const [scannedCode, setScannedCode] = useState(null);
 
@@ -20,7 +20,7 @@ export default function Scanner() {
 
   const startScanner = async () => {
     try {
-      codeReader.current = new BrowserQRCodeReader();
+      const codeReader = new BrowserQRCodeReader();
 
       const devices = await BrowserQRCodeReader.listVideoInputDevices();
 
@@ -29,8 +29,8 @@ export default function Scanner() {
         return;
       }
 
-      // Kamera starten
-      codeReader.current.decodeFromVideoDevice(
+      // Kamera starten - gibt Controls zurück
+      controlsRef.current = await codeReader.decodeFromVideoDevice(
         devices[0].deviceId,
         videoRef.current,
         (result, err) => {
@@ -44,8 +44,8 @@ export default function Scanner() {
   };
 
   const stopScanner = () => {
-    if (codeReader.current) {
-      codeReader.current.reset();
+    if (controlsRef.current) {
+      controlsRef.current.stop();
     }
   };
 

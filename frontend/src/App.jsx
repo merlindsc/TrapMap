@@ -20,7 +20,7 @@ import Reports from "./pages/reports/Reports";
 import Admin from "./pages/admin/Admin";
 
 // Super-Admin E-Mails
-const SUPER_ADMINS = ["admin@demo.trapmap.de", "merlin@trapmap.de"];
+const SUPER_ADMINS = ["admin@demo.trapmap.de", "merlin@trapmap.de", "hilfe@die-schaedlingsexperten.de"];
 
 export default function App() {
   const { user, loading } = useAuth();
