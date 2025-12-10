@@ -91,7 +91,7 @@ const sendInvitationEmail = async (to, { name, email, tempPassword, orgName }) =
  */
 const sendPasswordResetEmail = async (to, { name, resetToken }) => {
   try {
-    const resetLink = `https://trap-map.de/reset-password?token=${resetToken}`;
+    const resetLink = `https://trap-map.de/login?token=${resetToken}`;
     
     const { data, error } = await resend.emails.send({
       from: FROM_EMAIL,
