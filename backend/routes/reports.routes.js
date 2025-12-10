@@ -1,6 +1,5 @@
 // ============================================
-// REPORTS ROUTES - KOMPLETT
-// Audit Reports + PDF Generierung
+// REPORTS ROUTES
 // ============================================
 
 const express = require("express");
@@ -8,21 +7,26 @@ const router = express.Router();
 const reportsController = require("../controllers/reports.controller");
 const { authenticate } = require("../middleware/auth");
 const { asyncHandler } = require("../middleware/errorHandler");
+const multer = require("multer");
 
-// Alle Routes brauchen Auth
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Nur Bilder erlaubt'), false);
+  }
+});
+
 router.use(authenticate);
 
-// ============================================
-// AUDIT REPORT ROUTES
-// ============================================
-
-// Objekte für Dropdown
+// Audit Reports
 router.get("/objects", asyncHandler(reportsController.getObjects));
-
-// Audit Report generieren (PDF)
 router.post("/audit", asyncHandler(reportsController.generateAuditReport));
-
-// Audit Vorschau (Statistiken)
 router.post("/audit/preview", asyncHandler(reportsController.getAuditPreview));
+
+// Logo
+router.post("/logo", upload.single('logo'), asyncHandler(reportsController.uploadLogo));
+router.get("/logo", asyncHandler(reportsController.getLogo));
 
 module.exports = router;
