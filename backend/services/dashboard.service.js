@@ -1,172 +1,154 @@
-// ============================================
-// DASHBOARD SERVICE - KOMPLETT
-// KPIs + Recent Scans
-// ============================================
-
 const { supabase } = require("../config/supabase");
 
-// ============================================
-// GET STATS (KPIs für Dashboard)
-// ============================================
-exports.getStats = async (organisation_id) => {
-  try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString();
-    
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    weekAgo.setHours(0, 0, 0, 0);
-    const weekAgoStr = weekAgo.toISOString();
+// =============================================
+//   GET ALL DASHBOARD DATA (Ein Request!)
+// =============================================
+exports.getAll = async (organisation_id) => {
+  const today = new Date().toISOString().split("T")[0];
 
-    // 1. Anzahl aktive Boxen
-    const { count: boxCount, error: boxError } = await supabase
+  // Alle Queries parallel ausführen
+  const [boxesResult, todayScans, statusCounts, lastUpdate, recentScans, objects] = await Promise.all([
+    // 1. Anzahl Boxen
+    supabase
       .from("boxes")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact" })
       .eq("organisation_id", organisation_id)
-      .eq("active", true);
-
-    if (boxError) console.error("Box count error:", boxError);
+      .eq("active", true),
 
     // 2. Scans heute
-    const { count: todayScansCount, error: todayError } = await supabase
+    supabase
       .from("scans")
-      .select("*", { count: "exact", head: true })
+      .select("id", { count: "exact" })
       .eq("organisation_id", organisation_id)
-      .gte("scanned_at", todayStr);
+      .gte("scanned_at", today),
 
-    if (todayError) console.error("Today scans error:", todayError);
-
-    // 3. Scans diese Woche
-    const { count: weekScansCount, error: weekError } = await supabase
-      .from("scans")
-      .select("*", { count: "exact", head: true })
-      .eq("organisation_id", organisation_id)
-      .gte("scanned_at", weekAgoStr);
-
-    if (weekError) console.error("Week scans error:", weekError);
-
-    // 4. Status-Zählung nach current_status
-    const { count: greenCount, error: greenError } = await supabase
+    // 3. Status-Verteilung (alle Boxen)
+    supabase
       .from("boxes")
-      .select("*", { count: "exact", head: true })
+      .select("current_status")
       .eq("organisation_id", organisation_id)
-      .eq("active", true)
-      .eq("current_status", "green");
+      .eq("active", true),
 
-    if (greenError) console.error("Green count error:", greenError);
-
-    const { count: yellowCount, error: yellowError } = await supabase
-      .from("boxes")
-      .select("*", { count: "exact", head: true })
-      .eq("organisation_id", organisation_id)
-      .eq("active", true)
-      .eq("current_status", "yellow");
-
-    if (yellowError) console.error("Yellow count error:", yellowError);
-
-    const { count: redCount, error: redError } = await supabase
-      .from("boxes")
-      .select("*", { count: "exact", head: true })
-      .eq("organisation_id", organisation_id)
-      .eq("active", true)
-      .eq("current_status", "red");
-
-    if (redError) console.error("Red count error:", redError);
-
-    // 5. Letzter Scan-Zeitpunkt
-    const { data: lastScanData, error: lastError } = await supabase
+    // 4. Letzter Scan
+    supabase
       .from("scans")
       .select("scanned_at")
       .eq("organisation_id", organisation_id)
       .order("scanned_at", { ascending: false })
       .limit(1)
-      .maybeSingle();
+      .maybeSingle(),
 
-    if (lastError) console.error("Last scan error:", lastError);
-
-    // Berechnungen
-    const totalBoxes = boxCount || 0;
-    const greenBoxes = greenCount || 0;
-    const yellowBoxes = yellowCount || 0;
-    const redBoxes = redCount || 0;
-    
-    // Boxen ohne expliziten Status sind implizit "grün"
-    const unassignedBoxes = totalBoxes - greenBoxes - yellowBoxes - redBoxes;
-    const finalGreenBoxes = greenBoxes + Math.max(0, unassignedBoxes);
-    
-    const totalWarnings = yellowBoxes + redBoxes;
-
-    console.log(`📊 Dashboard Stats: boxes=${totalBoxes}, today=${todayScansCount}, green=${finalGreenBoxes}, yellow=${yellowBoxes}, red=${redBoxes}`);
-
-    return {
-      boxes: totalBoxes,
-      scansToday: todayScansCount || 0,
-      scansThisWeek: weekScansCount || 0,
-      warnings: totalWarnings,
-      greenBoxes: finalGreenBoxes,
-      yellowBoxes: yellowBoxes,
-      redBoxes: redBoxes,
-      lastSync: lastScanData?.scanned_at || null
-    };
-  } catch (err) {
-    console.error("getStats exception:", err);
-    return {
-      boxes: 0,
-      scansToday: 0,
-      scansThisWeek: 0,
-      warnings: 0,
-      greenBoxes: 0,
-      yellowBoxes: 0,
-      redBoxes: 0,
-      lastSync: null
-    };
-  }
-};
-
-// ============================================
-// GET RECENT SCANS (Letzte Scans)
-// ============================================
-exports.getRecentScans = async (organisation_id) => {
-  try {
-    const { data, error } = await supabase
+    // 5. Letzte 10 Scans mit Details
+    supabase
       .from("scans")
       .select(`
-        id,
-        status,
-        notes,
-        scanned_at,
-        box_id,
-        boxes (
-          number,
-          box_name
-        ),
-        users (
-          first_name,
-          last_name,
-          email
-        )
+        id, status, notes, scanned_at, box_id,
+        boxes (number, notes),
+        users (first_name, last_name, email)
       `)
       .eq("organisation_id", organisation_id)
       .order("scanned_at", { ascending: false })
-      .limit(15);
+      .limit(10),
 
-    if (error) {
-      console.error("Recent scans error:", error);
-      return [];
-    }
+    // 6. Objekte
+    supabase
+      .from("objects")
+      .select("id, name, address, active")
+      .eq("organisation_id", organisation_id)
+      .eq("active", true)
+      .order("name", { ascending: true })
+  ]);
 
-    return (data || []).map(scan => ({
-      id: scan.id,
-      status: scan.status,
-      box_name: scan.boxes?.box_name || `Box ${scan.boxes?.number || "?"}`,
-      message: scan.notes || `Status: ${scan.status}`,
-      created_at: scan.scanned_at,
-      technician_name: scan.users?.first_name
-        ? `${scan.users.first_name} ${scan.users.last_name}`
-        : scan.users?.email || "Unbekannt"
-    }));
-  } catch (err) {
-    console.error("getRecentScans exception:", err);
-    return [];
-  }
+  // Status zählen
+  const statuses = statusCounts.data || [];
+  const green = statuses.filter(b => b.current_status === "green").length;
+  const yellow = statuses.filter(b => b.current_status === "yellow").length;
+  const orange = statuses.filter(b => b.current_status === "orange").length;
+  const red = statuses.filter(b => b.current_status === "red").length;
+
+  // Scans formatieren
+  const scans = (recentScans.data || []).map(scan => ({
+    id: scan.id,
+    box_name: scan.boxes?.notes || `Box ${scan.boxes?.number || "?"}`,
+    message: scan.notes || `Status: ${scan.status}`,
+    status: scan.status,
+    created_at: scan.scanned_at,
+    technician_name: scan.users?.first_name
+      ? `${scan.users.first_name} ${scan.users.last_name}`
+      : scan.users?.email || "Unbekannt"
+  }));
+
+  return {
+    stats: {
+      boxes: boxesResult.count || 0,
+      scansToday: todayScans.count || 0,
+      green,
+      yellow,
+      orange,
+      red,
+      warnings: yellow + orange + red,
+      lastSync: lastUpdate.data?.scanned_at || null
+    },
+    recentScans: scans,
+    objects: objects.data || []
+  };
+};
+
+// =============================================
+//   GET STATS (Legacy - für Kompatibilität)
+// =============================================
+exports.getStats = async (organisation_id) => {
+  const today = new Date().toISOString().split("T")[0];
+
+  const [boxesResult, todayScans, statusCounts, lastUpdate] = await Promise.all([
+    supabase.from("boxes").select("id", { count: "exact" }).eq("organisation_id", organisation_id).eq("active", true),
+    supabase.from("scans").select("id", { count: "exact" }).eq("organisation_id", organisation_id).gte("scanned_at", today),
+    supabase.from("boxes").select("current_status").eq("organisation_id", organisation_id).eq("active", true),
+    supabase.from("scans").select("scanned_at").eq("organisation_id", organisation_id).order("scanned_at", { ascending: false }).limit(1).maybeSingle()
+  ]);
+
+  const statuses = statusCounts.data || [];
+  const green = statuses.filter(b => b.current_status === "green").length;
+  const yellow = statuses.filter(b => b.current_status === "yellow").length;
+  const red = statuses.filter(b => b.current_status === "red").length;
+
+  console.log(`📊 Dashboard Stats: boxes=${boxesResult.count || 0}, today=${todayScans.count || 0}, green=${green}, yellow=${yellow}, red=${red}`);
+
+  return {
+    boxes: boxesResult.count || 0,
+    scansToday: todayScans.count || 0,
+    green,
+    yellow,
+    red,
+    warnings: yellow + red,
+    lastSync: lastUpdate.data?.scanned_at || null
+  };
+};
+
+// =============================================
+//   GET RECENT SCANS (Legacy)
+// =============================================
+exports.getRecentScans = async (organisation_id) => {
+  const { data, error } = await supabase
+    .from("scans")
+    .select(`
+      id, status, notes, scanned_at, box_id,
+      boxes (number, notes),
+      users (first_name, last_name, email)
+    `)
+    .eq("organisation_id", organisation_id)
+    .order("scanned_at", { ascending: false })
+    .limit(10);
+
+  if (error) throw new Error(error.message);
+
+  return (data || []).map(scan => ({
+    id: scan.id,
+    box_name: scan.boxes?.notes || `Box ${scan.boxes?.number || "?"}`,
+    message: scan.notes || `Status: ${scan.status}`,
+    created_at: scan.scanned_at,
+    technician_name: scan.users?.first_name
+      ? `${scan.users.first_name} ${scan.users.last_name}`
+      : scan.users?.email || "Unbekannt"
+  }));
 };

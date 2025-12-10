@@ -3,10 +3,11 @@ const router = express.Router();
 const dashboardController = require("../controllers/dashboard.controller");
 const { authenticate } = require("../middleware/auth");
 
-// LIVE KPIs
-router.get("/stats", authenticate, dashboardController.getStats);
+// NEUER kombinierter Endpoint - EINE Request für alles!
+router.get("/all", authenticate, dashboardController.getAll);
 
-// LAST 10 SCANS
+// Legacy Endpoints (für Kompatibilität)
+router.get("/stats", authenticate, dashboardController.getStats);
 router.get("/recent-scans", authenticate, dashboardController.getRecentScans);
 
 module.exports = router;
