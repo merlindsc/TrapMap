@@ -21,7 +21,7 @@ const statusText = { green: "OK", yellow: "Auffällig", orange: "Erhöht", red: 
 // ============================================
 exports.getObjects = async (orgId) => {
   const { data, error } = await supabase
-    .from("objects").select("id, name, address, city, zip, contact_name, contact_phone")
+    .from("objects").select("*")
     .eq("organisation_id", orgId).order("name", { ascending: true });
   return error ? { success: false, message: error.message } : { success: true, data: data || [] };
 };
@@ -47,7 +47,7 @@ exports.getReportData = async (orgId, objectId, startDate, endDate) => {
     if (!object) return { success: false, message: "Objekt nicht gefunden" };
 
     const { data: organisation } = await supabase
-      .from("organisations").select("id, name, logo_url, address, zip, city, phone")
+      .from("organisations").select("*")
       .eq("id", orgId).single();
 
     const { data: boxes } = await supabase
@@ -248,6 +248,7 @@ exports.generatePDF = async (reportData) => {
 
 // ============================================
 // GEFAHRENANALYSE PDF GENERIEREN
+// Mit Dienstleister, Auftraggeber, Objekt
 // ============================================
 exports.generateGefahrenanalyse = async (data, organisation) => {
   if (!PDFDocument) throw new Error("pdfkit nicht installiert");
@@ -267,7 +268,8 @@ exports.generateGefahrenanalyse = async (data, organisation) => {
 
     const W = doc.page.width - 80;
     const LEFT = 40;
-    const COL2 = 300;
+    const COL2 = 220;
+    const COL3 = 400;
 
     // Checkbox Helper
     const checkbox = (x, y, checked) => {
@@ -289,115 +291,108 @@ exports.generateGefahrenanalyse = async (data, organisation) => {
     // Logo oben rechts
     if (logoBuffer) {
       try { doc.image(logoBuffer, doc.page.width - 120, 35, { fit: [70, 35] }); } catch {}
-    } else {
-      doc.fontSize(10).font("Helvetica-Bold").text("LOGO", doc.page.width - 80, 50);
     }
 
     // Hinweistext
-    doc.fontSize(7).font("Helvetica").fillColor("#333333");
-    doc.text('Aufgrund der „Allgemeinen Kriterien einer guten fachlichen Anwendung von Fraßködern bei der Nagetierbekämpfung mit Antikoagulanzien durch sachkundige Verwender und berufsmäßige Verwender mit Sachkunde" erfolgte die Bewertung zur Notwendigkeit einer befallsunabhängigen Dauerbeköderung gegen Schadnager.', LEFT, 90, { width: W });
+    doc.fontSize(6).font("Helvetica").fillColor("#333333");
+    doc.text('Aufgrund der „Allgemeinen Kriterien einer guten fachlichen Anwendung von Fraßködern bei der Nagetierbekämpfung mit Antikoagulanzien durch sachkundige Verwender und berufsmäßige Verwender mit Sachkunde" erfolgte die Bewertung zur Notwendigkeit einer befallsunabhängigen Dauerbeköderung gegen Schadnager.', LEFT, 88, { width: W });
 
-    let y = 125;
+    let y = 115;
 
     // ============================================
-    // AUFTRAGGEBER (linke Spalte)
+    // DREI SPALTEN: Dienstleister, Auftraggeber, Objekt
     // ============================================
-    doc.fillColor("#000000").fontSize(10).font("Helvetica-Bold").text("Auftraggeber:", LEFT, y);
-    y += 15;
-    
-    const fieldHeight = 16;
-    const labelWidth = 80;
-    const valueWidth = 150;
+    const fieldHeight = 14;
+    const labelWidth = 55;
+    const valueWidth = 100;
 
-    const drawField = (label, value, x, yPos, vw = valueWidth) => {
-      doc.fontSize(9).font("Helvetica").fillColor("#000000");
-      doc.text(label, x, yPos + 2);
-      doc.rect(x + labelWidth, yPos, vw, fieldHeight).stroke("#999999");
-      if (value) doc.text(value, x + labelWidth + 3, yPos + 3);
-      return yPos + 20;
+    const drawSection = (title, data, x, startY) => {
+      doc.fillColor("#000000").fontSize(9).font("Helvetica-Bold").text(title, x, startY);
+      let yPos = startY + 14;
+      doc.fontSize(7).font("Helvetica");
+      
+      const fields = [
+        { label: "Firma", key: "firma" },
+        { label: "Straße", key: "strasse" },
+        { label: "PLZ/Ort", key: "plzOrt" },
+        { label: "Verantw.", key: "verantwortlicher" },
+        { label: "Telefon", key: "telefon" }
+      ];
+
+      fields.forEach(f => {
+        doc.fillColor("#000000").text(f.label, x, yPos + 2);
+        doc.rect(x + labelWidth, yPos, valueWidth, fieldHeight).stroke("#999999");
+        const val = data?.[f.key] || "";
+        if (val) doc.text(val.substring(0, 18), x + labelWidth + 2, yPos + 3);
+        yPos += 16;
+      });
+
+      return yPos;
     };
 
-    y = drawField("Firma", data.auftraggeber?.firma || organisation?.name || "", LEFT, y);
-    y = drawField("Straße", data.auftraggeber?.strasse || organisation?.address || "", LEFT, y);
-    y = drawField("PLZ/Ort", data.auftraggeber?.plzOrt || `${organisation?.zip || ""} ${organisation?.city || ""}`.trim(), LEFT, y);
-    y = drawField("Verantwortlicher", data.auftraggeber?.verantwortlicher || "", LEFT, y);
-    y = drawField("Telefon", data.auftraggeber?.telefon || organisation?.phone || "", LEFT, y);
+    const y1 = drawSection("Dienstleister:", data.dienstleister, LEFT, y);
+    drawSection("Auftraggeber:", data.auftraggeber, COL2, y);
+    drawSection("Objekt:", data.objekt, COL3, y);
 
-    // ============================================
-    // OBJEKT (rechte Spalte)
-    // ============================================
-    let y2 = 125;
-    doc.fontSize(10).font("Helvetica-Bold").text("Objekt:", COL2, y2);
-    y2 += 15;
-
-    y2 = drawField("Firma", data.objekt?.firma || "", COL2, y2);
-    y2 = drawField("Straße", data.objekt?.strasse || "", COL2, y2);
-    y2 = drawField("PLZ/Ort", data.objekt?.plzOrt || "", COL2, y2);
-    y2 = drawField("Verantwortlicher", data.objekt?.verantwortlicher || "", COL2, y2);
-    y2 = drawField("Telefon", data.objekt?.telefon || "", COL2, y2);
-
-    y = Math.max(y, y2) + 10;
+    y = y1 + 10;
 
     // ============================================
     // DURCHFÜHRUNG
     // ============================================
-    doc.fontSize(10).font("Helvetica-Bold").text("Durchführung:", LEFT, y);
-    y += 15;
+    doc.fontSize(9).font("Helvetica-Bold").text("Durchführung:", LEFT, y);
+    y += 14;
     
-    doc.fontSize(9).font("Helvetica");
+    doc.fontSize(8).font("Helvetica");
     doc.text("Am:", LEFT, y + 2);
-    doc.rect(LEFT + 25, y, 100, fieldHeight).stroke("#999999");
-    doc.text(data.durchfuehrung?.datum || formatDate(new Date()), LEFT + 28, y + 3);
+    doc.rect(LEFT + 20, y, 80, fieldHeight).stroke("#999999");
+    doc.text(data.durchfuehrung?.datum || formatDate(new Date()), LEFT + 23, y + 3);
     
-    doc.text("Durch:", LEFT + 150, y + 2);
-    doc.rect(LEFT + 185, y, 150, fieldHeight).stroke("#999999");
-    doc.text(data.durchfuehrung?.durch || "", LEFT + 188, y + 3);
+    doc.text("Durch:", LEFT + 120, y + 2);
+    doc.rect(LEFT + 150, y, 120, fieldHeight).stroke("#999999");
+    doc.text(data.durchfuehrung?.durch || "", LEFT + 153, y + 3);
 
-    y += 30;
+    y += 25;
 
     // ============================================
     // DOKUMENTATION
     // ============================================
-    doc.fontSize(10).font("Helvetica-Bold").text("Aktuelle Dokumentation (Zutreffendes ankreuzen):", LEFT, y);
-    y += 18;
-    doc.fontSize(9).font("Helvetica");
+    doc.fontSize(9).font("Helvetica-Bold").text("Aktuelle Dokumentation (Zutreffendes ankreuzen):", LEFT, y);
+    y += 14;
+    doc.fontSize(8).font("Helvetica");
     
     checkbox(LEFT, y, data.dokumentation?.apcIntegral);
-    doc.text("APC Integral", LEFT + 15, y + 1);
+    doc.text("APC Integral", LEFT + 14, y + 1);
     
-    checkbox(LEFT + 100, y, data.dokumentation?.apcDocuWeb);
-    doc.text("APC DocuWeb", LEFT + 115, y + 1);
+    checkbox(LEFT + 80, y, data.dokumentation?.apcDocuWeb);
+    doc.text("APC DocuWeb", LEFT + 94, y + 1);
     
-    checkbox(LEFT + 220, y, data.dokumentation?.trapmap !== false);
-    doc.text("TrapMap", LEFT + 235, y + 1);
+    checkbox(LEFT + 170, y, data.dokumentation?.trapmap !== false);
+    doc.text("TrapMap", LEFT + 184, y + 1);
+
+    doc.text("Behandlungen jährlich:", LEFT + 260, y + 1);
+    doc.rect(LEFT + 355, y - 1, 35, fieldHeight).stroke("#999999");
+    doc.text(data.behandlungenJaehrlich?.toString() || "", LEFT + 358, y + 2);
+    
+    doc.text("Inspektionsintervall", LEFT + 400, y + 1);
 
     y += 25;
-
-    // Behandlungen
-    doc.text("Behandlungen jährlich (Anzahl eintragen):", LEFT, y + 2);
-    doc.rect(LEFT + 200, y, 40, fieldHeight).stroke("#999999");
-    doc.text(data.behandlungenJaehrlich?.toString() || "", LEFT + 205, y + 3);
-    
-    doc.text("Inspektionsintervall jährlich", LEFT + 260, y + 2);
-
-    y += 30;
 
     // ============================================
     // VORAUSSETZUNGEN HEADER
     // ============================================
-    doc.rect(LEFT, y, W, 18).fill("#e8e8e8");
-    doc.fillColor("#000000").fontSize(9).font("Helvetica-Bold");
+    doc.rect(LEFT, y, W, 16).fill("#e8e8e8");
+    doc.fillColor("#000000").fontSize(8).font("Helvetica-Bold");
     doc.text("Voraussetzungen für eine befallsunabhängige Dauerbeköderung", LEFT + 5, y + 4);
-    doc.text("Gegeben:", W - 100, y + 4);
-    doc.text("JA", W - 30, y + 4);
-    doc.text("NEIN", W + 5, y + 4);
+    doc.text("Gegeben:", W - 60, y + 4);
+    doc.text("JA", W - 15, y + 4);
+    doc.text("NEIN", W + 15, y + 4);
 
-    y += 22;
-    doc.fontSize(7).font("Helvetica").fillColor("#444444");
-    doc.text("Die Voraussetzung für eine befallsunabhängige Dauerbeköderung durch Rodentizide mit Antikoagulanzien der 2. Generation ist nur gegeben, wenn alle drei der nachfolgenden Kriterien mit JA zu beantworten sind.", LEFT, y, { width: W });
+    y += 20;
+    doc.fontSize(6).font("Helvetica").fillColor("#444444");
+    doc.text("Die Voraussetzung für eine befallsunabhängige Dauerbeköderung durch Rodentizide mit Antikoagulanzien der 2. Generation ist nur gegeben, wenn alle drei der nachfolgenden Kriterien mit JA zu beantworten sind.", LEFT, y, { width: W - 50 });
     
     doc.fillColor("#000000");
-    y += 22;
+    y += 18;
 
     // ============================================
     // KRITERIEN
@@ -408,15 +403,15 @@ exports.generateGefahrenanalyse = async (data, organisation) => {
       "3. Keine Möglichkeit, die Befallsgefahr durch verhältnismäßige Maßnahmen (z.B. organisatorische oder bauliche Maßnahmen oder Einsatz toxinfreier Alternativen) zu verhindern."
     ];
 
-    doc.fontSize(8).font("Helvetica");
+    doc.fontSize(7).font("Helvetica");
     kriterien.forEach((text, i) => {
-      const textHeight = doc.heightOfString(text, { width: W - 80 });
-      doc.text(text, LEFT, y, { width: W - 80 });
+      const textHeight = doc.heightOfString(text, { width: W - 70 });
+      doc.text(text, LEFT, y, { width: W - 70 });
       
-      checkbox(W - 25, y, data.kriterien?.[i]?.ja);
-      checkbox(W + 10, y, data.kriterien?.[i]?.nein);
+      checkbox(W - 10, y, data.kriterien?.[i]?.ja);
+      checkbox(W + 20, y, data.kriterien?.[i]?.nein);
       
-      y += Math.max(textHeight, 15) + 8;
+      y += Math.max(textHeight, 12) + 6;
     });
 
     y += 5;
@@ -424,43 +419,43 @@ exports.generateGefahrenanalyse = async (data, organisation) => {
     // ============================================
     // EMPFEHLUNG HEADER
     // ============================================
-    doc.rect(LEFT, y, W, 18).fill("#e8e8e8");
-    doc.fillColor("#000000").fontSize(9).font("Helvetica-Bold");
+    doc.rect(LEFT, y, W, 16).fill("#e8e8e8");
+    doc.fillColor("#000000").fontSize(8).font("Helvetica-Bold");
     doc.text("Empfehlung auf Grund der vorliegenden Gefahrenanalyse:", LEFT + 5, y + 4);
-    doc.fontSize(8).font("Helvetica");
-    doc.text("Zutreffendes ankreuzen", W - 70, y + 5);
+    doc.fontSize(7).font("Helvetica");
+    doc.text("Zutreffendes ankreuzen", W - 50, y + 5);
 
-    y += 25;
-    doc.fontSize(8).font("Helvetica");
+    y += 22;
+    doc.fontSize(7).font("Helvetica");
 
     // Empfehlung 1
     checkbox(LEFT, y, data.empfehlung === 1);
     const emp1 = "Wir empfehlen die Beibehaltung des bisherigen Inspektionsintervalls von weniger als 12 Behandlungen jährlich. Bei Eintreten eines Befalls durch Nagetiere empfehlen wir die temporäre Umstellung von NeoTox auf Tox unter Berücksichtigung der Allgemeinen Kriterien einer guten fachlichen Anwendung von Fraßködern bei der Nagetierbekämpfung. Entsprechend erforderliche zusätzliche Behandlungen werden gesondert berechnet.";
-    doc.text(emp1, LEFT + 15, y, { width: W - 20 });
+    doc.text(emp1, LEFT + 14, y, { width: W - 20 });
     
-    y += doc.heightOfString(emp1, { width: W - 20 }) + 12;
+    y += doc.heightOfString(emp1, { width: W - 20 }) + 8;
 
     // Empfehlung 2
     checkbox(LEFT, y, data.empfehlung === 2);
     const emp2 = "Wir empfehlen die befallsunabhängige Beköderung mit Rodentiziden der beiliegenden Einzelzulassung der Systeme zur Nagetierbekämpfung mit Benennung der Kontrollpunkte bzw. Objektbereiche. Das Intervall zur Systembetreuung bei befallsunabhängiger Dauerbeköderung muss im Zeitraum von 1-4 Wochen liegen.";
-    doc.text(emp2, LEFT + 15, y, { width: W - 20 });
+    doc.text(emp2, LEFT + 14, y, { width: W - 20 });
 
-    y += doc.heightOfString(emp2, { width: W - 20 }) + 25;
+    y += doc.heightOfString(emp2, { width: W - 20 }) + 20;
 
     // ============================================
     // UNTERSCHRIFTEN
     // ============================================
-    doc.fontSize(9).font("Helvetica");
+    doc.fontSize(8).font("Helvetica");
     doc.text("Unterschrift Kunde:", LEFT, y);
-    doc.moveTo(LEFT + 95, y + 15).lineTo(LEFT + 220, y + 15).stroke("#000000");
+    doc.moveTo(LEFT + 80, y + 12).lineTo(LEFT + 200, y + 12).stroke("#000000");
     
-    doc.text("Unterschrift Firma:", COL2, y);
-    doc.moveTo(COL2 + 95, y + 15).lineTo(COL2 + 220, y + 15).stroke("#000000");
+    doc.text("Unterschrift Firma:", LEFT + 280, y);
+    doc.moveTo(LEFT + 360, y + 12).lineTo(LEFT + 480, y + 12).stroke("#000000");
 
-    y += 40;
+    y += 35;
 
     // Footer
-    doc.fontSize(8).fillColor("#888888");
+    doc.fontSize(7).fillColor("#888888");
     doc.text("Erstellt mit TrapMap - Professionelles Schädlingsmanagement", LEFT, y, { align: "center", width: W });
 
     doc.end();

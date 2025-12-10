@@ -1,10 +1,15 @@
 /* ============================================================
    TRAPMAP — GEFAHRENANALYSE DIALOG
    Formular zur Erstellung der objektbezogenen Gefahrenanalyse
+   
+   Struktur:
+   - Dienstleister = Eigene Firma (vorausgefüllt)
+   - Auftraggeber = Der Kunde
+   - Objekt = Das konkrete Objekt
    ============================================================ */
 
 import { useState, useEffect } from "react";
-import { X, FileText, Download, Loader, Building2, MapPin, Calendar, ClipboardCheck } from "lucide-react";
+import { X, FileText, Download, Loader, Building2, MapPin, Calendar, ClipboardCheck, Briefcase } from "lucide-react";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -19,8 +24,13 @@ export default function GefahrenanalyseDialog({ isOpen, onClose }) {
 
   // Formular State
   const [formData, setFormData] = useState({
+    // Dienstleister (eigene Firma - vorausgefüllt)
+    dienstleister: { firma: "", strasse: "", plzOrt: "", verantwortlicher: "", telefon: "" },
+    // Auftraggeber (der Kunde)
     auftraggeber: { firma: "", strasse: "", plzOrt: "", verantwortlicher: "", telefon: "" },
+    // Objekt
     objekt: { firma: "", strasse: "", plzOrt: "", verantwortlicher: "", telefon: "" },
+    // Durchführung
     durchfuehrung: {
       datum: new Date().toISOString().split("T")[0],
       durch: user ? `${user.first_name} ${user.last_name}` : ""
@@ -37,6 +47,7 @@ export default function GefahrenanalyseDialog({ isOpen, onClose }) {
     const loadData = async () => {
       setLoading(true);
       try {
+        // Organisation laden (für Dienstleister)
         const orgRes = await fetch(`${API}/reports/organisation`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -44,16 +55,17 @@ export default function GefahrenanalyseDialog({ isOpen, onClose }) {
           const org = await orgRes.json();
           setFormData(prev => ({
             ...prev,
-            auftraggeber: {
+            dienstleister: {
               firma: org.name || "",
               strasse: org.address || "",
               plzOrt: `${org.zip || ""} ${org.city || ""}`.trim(),
-              verantwortlicher: "",
+              verantwortlicher: user ? `${user.first_name} ${user.last_name}` : "",
               telefon: org.phone || ""
             }
           }));
         }
 
+        // Objekte laden
         const objRes = await fetch(`${API}/reports/objects`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -67,11 +79,19 @@ export default function GefahrenanalyseDialog({ isOpen, onClose }) {
     loadData();
   }, [isOpen, token]);
 
+  // Objekt auswählen - füllt Auftraggeber UND Objekt vor
   const handleObjectSelect = (objectId) => {
     const obj = objects.find(o => o.id === parseInt(objectId));
     if (obj) {
       setFormData(prev => ({
         ...prev,
+        auftraggeber: {
+          firma: obj.name || "",
+          strasse: obj.address || "",
+          plzOrt: `${obj.zip || ""} ${obj.city || ""}`.trim(),
+          verantwortlicher: obj.contact_name || "",
+          telefon: obj.contact_phone || ""
+        },
         objekt: {
           firma: obj.name || "",
           strasse: obj.address || "",
@@ -120,9 +140,19 @@ export default function GefahrenanalyseDialog({ isOpen, onClose }) {
 
   if (!isOpen) return null;
 
+  const InputField = ({ placeholder, value, onChange }) => (
+    <input
+      type="text"
+      placeholder={placeholder}
+      value={value}
+      onChange={onChange}
+      className="w-full bg-[#1a1a2e] border border-white/10 rounded-lg px-3 py-2 text-white text-sm"
+    />
+  );
+
   return (
     <div className="fixed inset-0 bg-black/70 flex items-start justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-[#1a1a2e] rounded-xl w-full max-w-4xl my-8 border border-white/10 shadow-2xl">
+      <div className="bg-[#1a1a2e] rounded-xl w-full max-w-5xl my-8 border border-white/10 shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-white/10">
           <div className="flex items-center gap-3">
@@ -147,7 +177,7 @@ export default function GefahrenanalyseDialog({ isOpen, onClose }) {
             {/* Objekt Auswahl */}
             <div className="bg-[#0d0d1a] rounded-lg p-4 border border-white/5">
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                Objekt auswählen (zum Vorausfüllen)
+                Objekt auswählen (zum Vorausfüllen von Auftraggeber & Objekt)
               </label>
               <select
                 onChange={(e) => handleObjectSelect(e.target.value)}
@@ -160,25 +190,46 @@ export default function GefahrenanalyseDialog({ isOpen, onClose }) {
               </select>
             </div>
 
-            {/* Auftraggeber & Objekt */}
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Auftraggeber */}
-              <div className="bg-[#0d0d1a] rounded-lg p-4 border border-white/5">
+            {/* Drei Spalten: Dienstleister, Auftraggeber, Objekt */}
+            <div className="grid md:grid-cols-3 gap-4">
+              
+              {/* Dienstleister (eigene Firma) */}
+              <div className="bg-[#0d0d1a] rounded-lg p-4 border border-indigo-500/30">
                 <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                  <Building2 size={18} className="text-indigo-400" /> Auftraggeber
+                  <Briefcase size={18} className="text-indigo-400" /> Dienstleister
                 </h3>
+                <p className="text-xs text-gray-500 mb-3">Ihre Firma</p>
                 <div className="space-y-3">
                   {["firma", "strasse", "plzOrt", "verantwortlicher", "telefon"].map(field => (
-                    <input
+                    <InputField
                       key={field}
-                      type="text"
+                      placeholder={field === "plzOrt" ? "PLZ / Ort" : field.charAt(0).toUpperCase() + field.slice(1)}
+                      value={formData.dienstleister[field]}
+                      onChange={(e) => setFormData(prev => ({
+                        ...prev,
+                        dienstleister: { ...prev.dienstleister, [field]: e.target.value }
+                      }))}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Auftraggeber (Kunde) */}
+              <div className="bg-[#0d0d1a] rounded-lg p-4 border border-white/5">
+                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                  <Building2 size={18} className="text-yellow-400" /> Auftraggeber
+                </h3>
+                <p className="text-xs text-gray-500 mb-3">Der Kunde</p>
+                <div className="space-y-3">
+                  {["firma", "strasse", "plzOrt", "verantwortlicher", "telefon"].map(field => (
+                    <InputField
+                      key={field}
                       placeholder={field === "plzOrt" ? "PLZ / Ort" : field.charAt(0).toUpperCase() + field.slice(1)}
                       value={formData.auftraggeber[field]}
                       onChange={(e) => setFormData(prev => ({
                         ...prev,
                         auftraggeber: { ...prev.auftraggeber, [field]: e.target.value }
                       }))}
-                      className="w-full bg-[#1a1a2e] border border-white/10 rounded-lg px-3 py-2 text-white text-sm"
                     />
                   ))}
                 </div>
@@ -189,18 +240,17 @@ export default function GefahrenanalyseDialog({ isOpen, onClose }) {
                 <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
                   <MapPin size={18} className="text-green-400" /> Objekt
                 </h3>
+                <p className="text-xs text-gray-500 mb-3">Einsatzort</p>
                 <div className="space-y-3">
                   {["firma", "strasse", "plzOrt", "verantwortlicher", "telefon"].map(field => (
-                    <input
+                    <InputField
                       key={field}
-                      type="text"
                       placeholder={field === "plzOrt" ? "PLZ / Ort" : field.charAt(0).toUpperCase() + field.slice(1)}
                       value={formData.objekt[field]}
                       onChange={(e) => setFormData(prev => ({
                         ...prev,
                         objekt: { ...prev.objekt, [field]: e.target.value }
                       }))}
-                      className="w-full bg-[#1a1a2e] border border-white/10 rounded-lg px-3 py-2 text-white text-sm"
                     />
                   ))}
                 </div>
