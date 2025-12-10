@@ -1,6 +1,6 @@
 // ============================================
 // REPORTS ROUTES
-// Audit + Gefahrenanalyse + Logo
+// Audit + Gefahrenanalyse + Logo + Org
 // ============================================
 
 const express = require("express");
@@ -24,8 +24,9 @@ router.use(authenticate);
 // Objects für Report-Auswahl
 router.get("/objects", asyncHandler(reportsController.getObjects));
 
-// Organisation Info
+// Organisation
 router.get("/organisation", asyncHandler(reportsController.getOrganisation));
+router.put("/organisation", asyncHandler(reportsController.updateOrganisation));
 
 // Audit Reports
 router.post("/audit", asyncHandler(reportsController.generateAuditReport));

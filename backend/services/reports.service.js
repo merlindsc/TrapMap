@@ -463,6 +463,33 @@ exports.generateGefahrenanalyse = async (data, organisation) => {
 };
 
 // ============================================
+// UPDATE ORGANISATION
+// ============================================
+exports.updateOrganisation = async (orgId, data) => {
+  try {
+    const { data: updated, error } = await supabase
+      .from("organisations")
+      .update({
+        name: data.name,
+        address: data.address,
+        zip: data.zip,
+        city: data.city,
+        phone: data.phone,
+        email: data.email,
+        contact_name: data.contact_name
+      })
+      .eq("id", orgId)
+      .select()
+      .single();
+
+    if (error) return { success: false, message: error.message };
+    return { success: true, data: updated };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+};
+
+// ============================================
 // LOGO UPLOAD & GET
 // ============================================
 exports.uploadLogo = async (orgId, fileBuffer, fileName, mimeType) => {

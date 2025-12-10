@@ -1,6 +1,6 @@
 // ============================================
 // REPORTS CONTROLLER
-// Audit + Gefahrenanalyse + Logo
+// Audit + Gefahrenanalyse + Logo + Org Update
 // ============================================
 
 const reportsService = require("../services/reports.service");
@@ -64,7 +64,6 @@ exports.generateGefahrenanalyse = async (req, res) => {
     
     console.log(`📄 Generating Gefahrenanalyse for org ${req.user.organisation_id}`);
     
-    // Organisation laden
     const orgResult = await reportsService.getOrganisation(req.user.organisation_id);
     const organisation = orgResult.success ? orgResult.data : null;
 
@@ -82,6 +81,26 @@ exports.generateGefahrenanalyse = async (req, res) => {
     console.error("generateGefahrenanalyse error:", err);
     res.status(500).json({ error: "Fehler beim Generieren" });
   }
+};
+
+// ============================================
+// ORGANISATION
+// ============================================
+exports.getOrganisation = async (req, res) => {
+  const result = await reportsService.getOrganisation(req.user.organisation_id);
+  if (!result.success) return res.status(400).json({ error: result.message });
+  res.json(result.data);
+};
+
+exports.updateOrganisation = async (req, res) => {
+  const { name, address, zip, city, phone, email, contact_name } = req.body;
+  
+  const result = await reportsService.updateOrganisation(req.user.organisation_id, {
+    name, address, zip, city, phone, email, contact_name
+  });
+  
+  if (!result.success) return res.status(400).json({ error: result.message });
+  res.json({ message: "Organisation aktualisiert", data: result.data });
 };
 
 // ============================================
@@ -105,11 +124,4 @@ exports.getLogo = async (req, res) => {
   const result = await reportsService.getOrganisationLogo(req.user.organisation_id);
   if (!result.success) return res.status(400).json({ error: result.message });
   res.json({ logoUrl: result.logoUrl });
-};
-
-// Organisation Info für Formulare
-exports.getOrganisation = async (req, res) => {
-  const result = await reportsService.getOrganisation(req.user.organisation_id);
-  if (!result.success) return res.status(400).json({ error: result.message });
-  res.json(result.data);
 };
