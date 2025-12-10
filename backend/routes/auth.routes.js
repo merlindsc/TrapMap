@@ -73,7 +73,7 @@ router.post('/change-password', authenticate, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Neues Passwort muss mindestens 8 Zeichen haben' });
   }
 
-  const result = await authService.changePassword(req.user.user_id, currentPassword, newPassword);
+  const result = await authService.changePassword(req.user.id, currentPassword, newPassword);
 
   if (!result.success) {
     return res.status(400).json({ error: result.message });
@@ -96,7 +96,7 @@ router.post('/set-password', authenticate, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Passwort muss mindestens 8 Zeichen haben' });
   }
 
-  const result = await authService.setNewPassword(req.user.user_id, newPassword);
+  const result = await authService.setNewPassword(req.user.id, newPassword);
 
   if (!result.success) {
     return res.status(400).json({ error: result.message });
