@@ -661,7 +661,7 @@ export default function Maps() {
           <MapEventsHandler />
 
           {/* Objects */}
-          {objects.map((obj) => (
+          {objects.filter(obj => obj.lat && obj.lng).map((obj) => (
             <ObjectMarkerComponent
               key={obj.id}
               object={obj}
@@ -670,7 +670,7 @@ export default function Maps() {
           ))}
 
           {/* Boxes */}
-          {boxes.map((box) => (
+          {boxes.filter(box => box.lat && box.lng).map((box) => (
             <BoxMarker
               key={box.id}
               box={box}

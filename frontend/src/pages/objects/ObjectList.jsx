@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getObjects } from '../../api/objects';
-import { Building2, Plus, MapPin } from 'lucide-react';
+import { Building2, MapPin, Map } from 'lucide-react';
 
 export default function ObjectList() {
   const [objects, setObjects] = useState([]);
@@ -15,7 +15,7 @@ export default function ObjectList() {
 
   const loadObjects = async () => {
     try {
-      const data = await getObjects();   // ✔ getObjects liefert direkt das Array!
+      const data = await getObjects();
       setObjects(data || []);
     } catch (err) {
       setError('Fehler beim Laden der Objekte');
@@ -33,8 +33,6 @@ export default function ObjectList() {
     );
   }
 
-  const handleCreate = () => navigate("/objects/new");
-
   return (
     <div>
       {/* HEADER */}
@@ -44,13 +42,13 @@ export default function ObjectList() {
           <p className="text-gray-400">Verwalten Sie alle Ihre Standorte</p>
         </div>
 
-        {/* EINZIGER BUTTON */}
+        {/* Button zu Maps */}
         <button
-          onClick={handleCreate}
+          onClick={() => navigate("/maps")}
           className="flex items-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
         >
-          <Plus className="w-5 h-5" />
-          <span>Neues Objekt</span>
+          <Map className="w-5 h-5" />
+          <span>Zur Karte</span>
         </button>
       </div>
 
@@ -65,12 +63,15 @@ export default function ObjectList() {
         <div className="bg-gray-800 rounded-lg p-12 text-center border border-gray-700">
           <Building2 className="w-16 h-16 text-gray-600 mx-auto mb-4" />
           <h3 className="text-xl font-semibold text-white mb-2">Noch keine Objekte</h3>
-
+          <p className="text-gray-400 mb-6">
+            Objekte werden über die Karte erstellt
+          </p>
           <button
-            onClick={handleCreate}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold"
+            onClick={() => navigate("/maps")}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center gap-2 mx-auto"
           >
-            Neues Objekt erstellen
+            <Map className="w-5 h-5" />
+            Zur Karte
           </button>
         </div>
       ) : (
