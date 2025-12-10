@@ -587,7 +587,7 @@ export default function Maps() {
           <MapEventsHandler />
 
           {/* Objects */}
-          {objects.map((obj) => (
+          {objects.filter(obj => obj.lat && obj.lng).map((obj) => (
             <ObjectMarkerComponent
               key={obj.id}
               object={obj}
