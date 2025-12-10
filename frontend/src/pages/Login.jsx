@@ -79,7 +79,7 @@ export default function Login() {
       localStorage.setItem("trapmap_refresh_token", data.refreshToken);
       localStorage.setItem("trapmap_user", JSON.stringify(data.user));
 
-      console.log("NAVIGATING TO DASHBOARD...");
+      window.location.href = "/dashboard";
       navigate("/dashboard");
     } catch (err) {
       console.error("LOGIN ERROR:", err);
@@ -194,7 +194,7 @@ export default function Login() {
       localStorage.setItem("trapmap_token", tempToken);
       localStorage.setItem("trapmap_user", JSON.stringify({ ...mustChangeUser, must_change_password: false }));
 
-      navigate("/dashboard");
+      window.location.href = "/dashboard";
     } catch (err) {
       setError("Verbindungsfehler");
     } finally {
