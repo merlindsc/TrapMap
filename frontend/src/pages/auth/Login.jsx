@@ -46,6 +46,8 @@ export default function Login() {
     setLoading(true);
     setError("");
 
+    console.log("LOGIN ATTEMPT:", email);
+
     try {
       const res = await fetch(`${API}/auth/login`, {
         method: "POST",
@@ -53,7 +55,9 @@ export default function Login() {
         body: JSON.stringify({ email, password }),
       });
 
+      console.log("LOGIN RESPONSE STATUS:", res.status);
       const data = await res.json();
+      console.log("LOGIN DATA:", data);
 
       if (!res.ok) {
         setError(data.error || "Login fehlgeschlagen");
@@ -62,6 +66,7 @@ export default function Login() {
 
       // Prüfe ob Passwort geändert werden muss
       if (data.user.must_change_password) {
+        console.log("MUST CHANGE PASSWORD");
         setMustChangeUser(data.user);
         setTempToken(data.token);
         setView("changePassword");
@@ -69,12 +74,15 @@ export default function Login() {
       }
 
       // Normaler Login
+      console.log("SAVING TO LOCALSTORAGE...");
       localStorage.setItem("trapmap_token", data.token);
       localStorage.setItem("trapmap_refresh_token", data.refreshToken);
       localStorage.setItem("trapmap_user", JSON.stringify(data.user));
 
+      console.log("NAVIGATING TO DASHBOARD...");
       navigate("/dashboard");
     } catch (err) {
+      console.error("LOGIN ERROR:", err);
       setError("Verbindungsfehler. Bitte versuchen Sie es erneut.");
     } finally {
       setLoading(false);
@@ -248,6 +256,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                    aria-label="Passwort anzeigen"
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
@@ -400,6 +409,7 @@ export default function Login() {
                       type="button"
                       onClick={() => setShowNewPassword(!showNewPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                      aria-label="Passwort anzeigen"
                     >
                       {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
@@ -484,6 +494,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setShowNewPassword(!showNewPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                    aria-label="Passwort anzeigen"
                   >
                     {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
