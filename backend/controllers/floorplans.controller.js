@@ -1,6 +1,6 @@
 // ============================================
-// FLOORPLANS CONTROLLER
-// Lagepläne verwalten + Boxen platzieren
+// FLOORPLANS CONTROLLER V2
+// Lagepläne verwalten + Grid-Konfiguration
 // ============================================
 
 const floorPlansService = require("../services/floorplans.service");
@@ -91,10 +91,18 @@ exports.uploadImage = async (req, res) => {
 
 // ========================================================
 // POST /api/floorplans
+// Create with Grid-Konfiguration
 // ========================================================
 exports.create = async (req, res) => {
   try {
     const orgId = req.user.organisation_id;
+    
+    console.log("📐 Creating floor plan with grid config:", {
+      grid_mode: req.body.grid_mode,
+      grid_preset: req.body.grid_preset,
+      grid_cols: req.body.grid_cols,
+      grid_rows: req.body.grid_rows
+    });
     
     const data = await floorPlansService.create(req.body, orgId);
     res.status(201).json(data);
@@ -106,11 +114,14 @@ exports.create = async (req, res) => {
 
 // ========================================================
 // PUT /api/floorplans/:id
+// Update with Grid-Konfiguration
 // ========================================================
 exports.update = async (req, res) => {
   try {
     const orgId = req.user.organisation_id;
     const { id } = req.params;
+    
+    console.log(`📐 Updating floor plan ${id}:`, req.body);
     
     const data = await floorPlansService.update(id, req.body, orgId);
     res.json(data);
@@ -135,7 +146,6 @@ exports.delete = async (req, res) => {
     if (floorPlan && floorPlan.image_url) {
       // Extract file path from URL
       const url = floorPlan.image_url;
-      // URL format: https://xxx.supabase.co/storage/v1/object/public/floorplans/path/to/file.jpg
       const match = url.match(/\/floorplans\/(.+)$/);
       if (match) {
         const filePath = match[1];
@@ -147,7 +157,6 @@ exports.delete = async (req, res) => {
           
         if (storageError) {
           console.warn("⚠️ Could not delete image from storage:", storageError);
-          // Continue anyway - don't block deletion
         } else {
           console.log("✅ Image deleted from storage");
         }
@@ -197,17 +206,17 @@ exports.getUnplacedBoxes = async (req, res) => {
 
 // ========================================================
 // PUT /api/floorplans/:id/boxes/:boxId
-// Place or update box position on floor plan
+// Place or update box position with Grid-Position
 // ========================================================
 exports.placeBox = async (req, res) => {
   try {
     const orgId = req.user.organisation_id;
     const { id, boxId } = req.params;
-    const { pos_x, pos_y } = req.body;
+    const { pos_x, pos_y, grid_position } = req.body;
     
-    console.log(`📍 Placing box ${boxId} on plan ${id} at (${pos_x}, ${pos_y})`);
+    console.log(`📍 Placing box ${boxId} on plan ${id} at (${pos_x}, ${pos_y}) - Grid: ${grid_position || 'none'}`);
     
-    const data = await floorPlansService.placeBox(id, boxId, pos_x, pos_y, orgId);
+    const data = await floorPlansService.placeBox(id, boxId, pos_x, pos_y, grid_position, orgId);
     res.json(data);
   } catch (err) {
     console.error("FloorPlans placeBox Error:", err);
@@ -217,15 +226,15 @@ exports.placeBox = async (req, res) => {
 
 // ========================================================
 // POST /api/floorplans/:id/boxes
-// Create new box directly on floor plan
+// Create new box directly on floor plan (LEGACY - use /api/boxes instead)
 // ========================================================
 exports.createBoxOnPlan = async (req, res) => {
   try {
     const orgId = req.user.organisation_id;
-    const { id } = req.params; // floor plan id
-    const { pos_x, pos_y, number, box_type_id, notes, object_id } = req.body;
+    const { id } = req.params;
+    const { pos_x, pos_y, grid_position, number, box_type_id, notes, object_id } = req.body;
 
-    console.log(`📦 Creating box on plan ${id} at (${pos_x}, ${pos_y})`);
+    console.log(`📦 Creating box on plan ${id} at (${pos_x}, ${pos_y}) - Grid: ${grid_position || 'none'}`);
 
     // Create box in database
     const { data, error } = await supabase
@@ -239,6 +248,7 @@ exports.createBoxOnPlan = async (req, res) => {
         notes: notes || null,
         pos_x: parseFloat(pos_x),
         pos_y: parseFloat(pos_y),
+        grid_position: grid_position || null,
         current_status: 'green',
         active: true
       })
@@ -257,7 +267,7 @@ exports.createBoxOnPlan = async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
 
-    console.log(`✅ Box ${data.number} created on floor plan`);
+    console.log(`✅ Box ${data.number} created on floor plan at ${grid_position || 'no grid'}`);
     res.status(201).json(data);
   } catch (err) {
     console.error("FloorPlans createBoxOnPlan Error:", err);

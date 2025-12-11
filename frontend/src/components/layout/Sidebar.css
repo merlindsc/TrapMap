@@ -44,20 +44,6 @@
   letter-spacing: -0.5px;
 }
 
-/* Logo Styling */
-.sidebar-logo {
-  height: 85px;
-  width: auto;
-  max-width: 100%;
-  object-fit: contain;
-  transition: transform 0.2s ease, opacity 0.2s ease;
-}
-
-.sidebar-brand:hover .sidebar-logo {
-  transform: scale(1.02);
-  opacity: 0.9;
-}
-
 /* Close Button */
 .sidebar-close-btn {
   display: flex;
@@ -228,15 +214,5 @@
   .sidebar-nav-icon {
     width: 20px;
     height: 20px;
-  }
-  
-  .sidebar-logo {
-    height: 80px;
-  }
-}
-
-@media (max-width: 767px) {
-  .sidebar-logo {
-    height: 85px;
   }
 }

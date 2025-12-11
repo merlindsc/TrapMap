@@ -1,5 +1,11 @@
-import { useState, useEffect } from "react";
-import { X, Save, CheckCircle, AlertCircle, Camera } from "lucide-react";
+/* ============================================================
+   TRAPMAP – BOX CREATE ON PLAN DIALOG
+   Gleiche Logik wie BoxCreateDialog (Maps)
+   Grid-Position wird automatisch vom Klick übernommen
+   ============================================================ */
+
+import { useState } from "react";
+import { X, Save, Camera, MapPin } from "lucide-react";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -10,37 +16,31 @@ const STATUS_CONFIG = {
   red: { label: "Befall", icon: "✗", color: "#ef4444" }
 };
 
-export default function BoxCreateOnPlanDialog({ objectId, floorPlanId, position, onClose, onCreated }) {
+export default function BoxCreateOnPlanDialog({ objectId, floorPlanId, position, boxTypes, onClose, onCreated }) {
   const token = localStorage.getItem("trapmap_token");
 
-  const [boxNumber, setBoxNumber] = useState("");
+  // Box Daten
   const [boxTypeId, setBoxTypeId] = useState("");
   const [notes, setNotes] = useState("");
+  const [intervalType, setIntervalType] = useState("fixed");
+  const [intervalFixed, setIntervalFixed] = useState(30);
+  const [intervalRangeStart, setIntervalRangeStart] = useState(20);
+  const [intervalRangeEnd, setIntervalRangeEnd] = useState(30);
+  
+  // Erstinstallation
   const [status, setStatus] = useState("green");
   const [findings, setFindings] = useState("");
   const [scanNotes, setScanNotes] = useState("");
   const [photo, setPhoto] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
-  const [boxTypes, setBoxTypes] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState(null);
 
-  useEffect(() => {
-    loadBoxTypes();
-  }, []);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-  const loadBoxTypes = async () => {
-    try {
-      const res = await fetch(`${API}/boxtypes`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      const types = Array.isArray(data) ? data : (data?.data || []);
-      setBoxTypes(types);
-    } catch (err) {
-      console.error("Error loading box types:", err);
-    }
-  };
+  // Grid-Position aus position props (automatisch vom Klick)
+  const gridPosition = position.gridCol && position.gridRow 
+    ? `${position.gridCol}${position.gridRow}` 
+    : null;
 
   const handlePhotoChange = (e) => {
     const file = e.target.files[0];
@@ -52,216 +52,339 @@ export default function BoxCreateOnPlanDialog({ objectId, floorPlanId, position,
     }
   };
 
-  const showToast = (type, message) => {
-    setToast({ type, message });
-    setTimeout(() => {
-      setToast(null);
-      if (type === "success") {
-        onClose();
-        if (onCreated) onCreated();
-      }
-    }, 1500);
-  };
-
-  const handleSubmit = async () => {
-    if (!boxNumber.trim()) {
-      showToast("error", "Bitte Box-Nummer eingeben");
+  const handleSave = async () => {
+    if (!boxTypeId) {
+      setError("Bitte Box-Typ auswählen!");
       return;
     }
 
-    setLoading(true);
+    setSaving(true);
+    setError("");
+
+    const interval = intervalType === "fixed"
+      ? intervalFixed
+      : Math.floor((intervalRangeStart + intervalRangeEnd) / 2);
 
     try {
-      // 1. Create Box
-      const boxData = {
-        object_id: objectId,
-        floor_plan_id: floorPlanId,
-        number: boxNumber,
-        boxtype_id: boxTypeId ? parseInt(boxTypeId) : null,
-        notes: notes || null,
-        pos_x: position.x,
-        pos_y: position.y,
-        current_status: status,
-        active: true
-      };
-
+      // 1. Box erstellen
       const boxRes = await fetch(`${API}/boxes`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(boxData)
+        body: JSON.stringify({
+          object_id: objectId,
+          box_type_id: parseInt(boxTypeId),
+          notes,
+          control_interval_days: interval,
+          floor_plan_id: floorPlanId,
+          pos_x: position.x,
+          pos_y: position.y,
+          grid_position: gridPosition,
+          current_status: status
+        })
       });
 
       if (!boxRes.ok) {
-        const errData = await boxRes.json();
-        throw new Error(errData.error || "Fehler beim Erstellen der Box");
+        const err = await boxRes.json();
+        throw new Error(err.error || "Fehler beim Erstellen der Box");
       }
 
       const newBox = await boxRes.json();
+      console.log("✅ Box erstellt:", newBox);
 
-      // 2. Create initial scan
-      if (newBox && newBox.id) {
+      // 2. Foto hochladen falls vorhanden
+      let photoUrl = null;
+      if (photo && newBox?.id) {
         const formData = new FormData();
+        formData.append("image", photo);
         formData.append("box_id", newBox.id);
-        formData.append("status", status);
-        if (findings) formData.append("findings", findings);
-        if (scanNotes) formData.append("notes", scanNotes);
-        if (photo) formData.append("photo", photo);
 
-        await fetch(`${API}/scans`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData
-        });
+        try {
+          const uploadRes = await fetch(`${API}/scans/upload`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            body: formData
+          });
+          if (uploadRes.ok) {
+            const uploadData = await uploadRes.json();
+            photoUrl = uploadData.url;
+          }
+        } catch (uploadErr) {
+          console.warn("Foto-Upload fehlgeschlagen:", uploadErr);
+        }
       }
 
-      showToast("success", "Box erstellt!");
+      // 3. Erstinstallation-Scan erstellen
+      if (newBox?.id) {
+        await fetch(`${API}/scans`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            box_id: newBox.id,
+            status: status,
+            findings: findings || null,
+            notes: scanNotes || "Erstinstallation",
+            photo_url: photoUrl
+          })
+        });
+        console.log("✅ Erstinstallation-Scan erstellt");
+      }
+
+      onCreated();
     } catch (err) {
-      console.error("Error creating box:", err);
-      showToast("error", err.message || "Fehler beim Erstellen");
+      console.error("❌ Error:", err);
+      setError(err.message);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
   return (
-    <>
-      {toast && (
-        <div style={{
-          position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)",
-          padding: "12px 24px", borderRadius: 8, zIndex: 1100,
-          background: toast.type === "success" ? "#10b981" : "#ef4444",
-          color: "#fff", fontWeight: 500, display: "flex", alignItems: "center", gap: 8,
-          boxShadow: "0 4px 20px rgba(0,0,0,0.3)"
-        }}>
-          {toast.type === "success" ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
-          {toast.message}
-        </div>
-      )}
-
-      <div onClick={(e) => e.target === e.currentTarget && onClose()} style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
-        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20
-      }}>
-        <div style={{
-          background: "#1e293b", borderRadius: 12, width: "100%", maxWidth: 480,
-          maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column"
-        }}>
-          {/* Header */}
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "16px 20px", borderBottom: "1px solid #334155"
-          }}>
-            <div>
-              <div style={{ color: "#fff", fontWeight: 600, fontSize: 18 }}>📦 Neue Box erstellen</div>
-              <div style={{ color: "#94a3b8", fontSize: 13 }}>Position: {position.x.toFixed(1)}%, {position.y.toFixed(1)}%</div>
-            </div>
-            <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }}>
-              <X size={24} />
-            </button>
-          </div>
-
-          {/* Body */}
-          <div style={{ padding: 20, overflowY: "auto", flex: 1 }}>
-            {/* Box Info Section */}
-            <div style={{ marginBottom: 20, padding: 16, background: "#0f172a", borderRadius: 8 }}>
-              <div style={{ color: "#3b82f6", fontWeight: 600, marginBottom: 12 }}>Box-Informationen</div>
-              
-              <div style={{ color: "#e2e8f0", marginBottom: 8, fontSize: 14 }}>Box-Nummer *</div>
-              <input type="text" value={boxNumber} onChange={(e) => setBoxNumber(e.target.value)}
-                placeholder="z.B. 1, 2, A1, B2..."
-                style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #334155",
-                  background: "#1e293b", color: "#e2e8f0", fontSize: 14, marginBottom: 12, boxSizing: "border-box" }} />
-
-              <div style={{ color: "#e2e8f0", marginBottom: 8, fontSize: 14 }}>Box-Typ</div>
-              <select value={boxTypeId} onChange={(e) => setBoxTypeId(e.target.value)}
-                style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #334155",
-                  background: "#1e293b", color: "#e2e8f0", fontSize: 14, marginBottom: 12 }}>
-                <option value="">Kein Typ ausgewählt</option>
-                {boxTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-
-              <div style={{ color: "#e2e8f0", marginBottom: 8, fontSize: 14 }}>Notizen</div>
-              <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
-                placeholder="z.B. Standort-Beschreibung..."
-                style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #334155",
-                  background: "#1e293b", color: "#e2e8f0", fontSize: 14, boxSizing: "border-box" }} />
-            </div>
-
-            {/* Initial Scan Section */}
-            <div style={{ padding: 16, background: "#0f172a", borderRadius: 8 }}>
-              <div style={{ color: "#10b981", fontWeight: 600, marginBottom: 12 }}>Erstkontrolle / Installation</div>
-
-              <div style={{ color: "#e2e8f0", marginBottom: 8, fontSize: 14 }}>Status *</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
-                {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-                  <div key={key} onClick={() => setStatus(key)} style={{
-                    padding: "12px 8px", borderRadius: 8, cursor: "pointer", textAlign: "center",
-                    border: status === key ? `2px solid ${cfg.color}` : "1px solid #334155",
-                    background: status === key ? `${cfg.color}20` : "#1e293b",
-                    color: status === key ? cfg.color : "#94a3b8"
-                  }}>
-                    <div style={{ fontSize: 18 }}>{cfg.icon}</div>
-                    <div style={{ fontSize: 11 }}>{cfg.label}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ color: "#e2e8f0", marginBottom: 8, fontSize: 14 }}>Befunde</div>
-              <textarea value={findings} onChange={(e) => setFindings(e.target.value)}
-                placeholder="Feststellungen bei Installation..."
-                style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #334155",
-                  background: "#1e293b", color: "#e2e8f0", fontSize: 14, minHeight: 60, marginBottom: 12,
-                  resize: "vertical", boxSizing: "border-box" }} />
-
-              <div style={{ color: "#e2e8f0", marginBottom: 8, fontSize: 14 }}>Scan-Notizen</div>
-              <input type="text" value={scanNotes} onChange={(e) => setScanNotes(e.target.value)}
-                placeholder="Zusätzliche Bemerkungen..."
-                style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #334155",
-                  background: "#1e293b", color: "#e2e8f0", fontSize: 14, marginBottom: 12, boxSizing: "border-box" }} />
-
-              <div style={{ color: "#e2e8f0", marginBottom: 8, fontSize: 14 }}>Foto</div>
-              {photoPreview ? (
-                <div style={{ position: "relative", marginBottom: 8 }}>
-                  <img src={photoPreview} alt="Preview" style={{ width: "100%", maxHeight: 150, objectFit: "cover", borderRadius: 8 }} />
-                  <button onClick={() => { setPhoto(null); setPhotoPreview(null); }} style={{
-                    position: "absolute", top: 8, right: 8, background: "#ef4444", border: "none",
-                    borderRadius: "50%", width: 24, height: 24, cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center"
-                  }}><X size={14} color="#fff" /></button>
-                </div>
-              ) : (
-                <label style={{
-                  width: "100%", padding: 12, border: "2px dashed #334155", borderRadius: 8,
-                  background: "#1e293b", color: "#94a3b8", cursor: "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8
-                }}>
-                  <Camera size={18} /> Foto aufnehmen
-                  <input type="file" accept="image/*" capture="environment" onChange={handlePhotoChange} style={{ display: "none" }} />
-                </label>
+    <div
+      className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div 
+        className="bg-gray-800 rounded-xl w-full max-w-lg border border-gray-700 max-h-[90vh] overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="p-4 border-b border-gray-700 flex items-center justify-between shrink-0">
+          <div>
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              📦 Neue Box erstellen
+            </h2>
+            <div className="flex items-center gap-3 mt-1">
+              {gridPosition && (
+                <span className="px-2 py-0.5 bg-blue-600 text-white text-sm rounded font-mono font-bold">
+                  {gridPosition}
+                </span>
               )}
+              <span className="text-xs text-gray-500">
+                Position: {position.x.toFixed(1)}%, {position.y.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-700 rounded-lg text-gray-400">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body - Scrollable */}
+        <div className="p-4 space-y-4 overflow-y-auto flex-1">
+          {error && (
+            <div className="p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-400 text-sm">
+              {error}
+            </div>
+          )}
+
+          {/* Info */}
+          <div className="p-3 bg-blue-900/30 border border-blue-700 rounded-lg text-blue-300 text-sm flex items-center gap-2">
+            <MapPin className="w-4 h-4 shrink-0" />
+            <span>
+              Die Box-Nummer wird automatisch vergeben
+              {gridPosition && <span className="font-bold ml-1">• Grid: {gridPosition}</span>}
+            </span>
+          </div>
+
+          {/* Box-Typ */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Box-Typ *</label>
+            <select
+              value={boxTypeId}
+              onChange={(e) => setBoxTypeId(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white"
+            >
+              <option value="">Bitte auswählen...</option>
+              {boxTypes?.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Kontrollintervall */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">Kontrollintervall *</label>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <button
+                type="button"
+                onClick={() => setIntervalType("fixed")}
+                className={`px-4 py-2 rounded-lg border transition ${
+                  intervalType === "fixed"
+                    ? "bg-indigo-600 border-indigo-600 text-white"
+                    : "bg-gray-900 border-gray-600 text-gray-400 hover:border-gray-500"
+                }`}
+              >
+                Fix
+              </button>
+              <button
+                type="button"
+                onClick={() => setIntervalType("range")}
+                className={`px-4 py-2 rounded-lg border transition ${
+                  intervalType === "range"
+                    ? "bg-indigo-600 border-indigo-600 text-white"
+                    : "bg-gray-900 border-gray-600 text-gray-400 hover:border-gray-500"
+                }`}
+              >
+                Range
+              </button>
+            </div>
+
+            {intervalType === "fixed" && (
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min="1"
+                  max="365"
+                  value={intervalFixed}
+                  onChange={(e) => setIntervalFixed(parseInt(e.target.value) || 30)}
+                  className="flex-1 px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white text-center"
+                />
+                <span className="text-gray-400">Tage</span>
+              </div>
+            )}
+
+            {intervalType === "range" && (
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min="1"
+                  max="365"
+                  value={intervalRangeStart}
+                  onChange={(e) => setIntervalRangeStart(parseInt(e.target.value) || 20)}
+                  className="flex-1 px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white text-center"
+                />
+                <span className="text-gray-400">bis</span>
+                <input
+                  type="number"
+                  min={intervalRangeStart}
+                  max="365"
+                  value={intervalRangeEnd}
+                  onChange={(e) => setIntervalRangeEnd(parseInt(e.target.value) || 30)}
+                  className="flex-1 px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white text-center"
+                />
+                <span className="text-gray-400">Tage</span>
+              </div>
+            )}
+          </div>
+
+          {/* Notizen zur Box */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Notizen zur Box</label>
+            <textarea
+              rows="2"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Zusätzliche Informationen..."
+              className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white resize-none"
+            />
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-gray-700 pt-4">
+            <h3 className="text-sm font-semibold text-gray-300 mb-3">🔍 Erstinstallation</h3>
+          </div>
+
+          {/* Status */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-2">Status</label>
+            <div className="grid grid-cols-4 gap-2">
+              {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setStatus(key)}
+                  className={`p-2 rounded-lg text-center text-xs transition border-2 ${
+                    status === key
+                      ? "border-white"
+                      : "border-transparent opacity-60 hover:opacity-100"
+                  }`}
+                  style={{ backgroundColor: cfg.color, color: "#fff" }}
+                >
+                  {cfg.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Footer */}
-          <div style={{ padding: "16px 20px", borderTop: "1px solid #334155", display: "flex", gap: 12 }}>
-            <button onClick={onClose} style={{
-              flex: 1, padding: 12, borderRadius: 8, border: "1px solid #334155",
-              background: "transparent", color: "#94a3b8", cursor: "pointer"
-            }}>Abbrechen</button>
-            <button onClick={handleSubmit} disabled={loading} style={{
-              flex: 2, padding: 12, borderRadius: 8, border: "none",
-              background: "#3b82f6", color: "#fff", fontWeight: 600,
-              cursor: loading ? "wait" : "pointer", opacity: loading ? 0.7 : 1,
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8
-            }}>
-              <Save size={18} /> {loading ? "Erstellen..." : "Box erstellen"}
-            </button>
+          {/* Befunde */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Befunde</label>
+            <input
+              type="text"
+              value={findings}
+              onChange={(e) => setFindings(e.target.value)}
+              placeholder="z.B. Fraßspuren, Kot..."
+              className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white"
+            />
           </div>
+
+          {/* Scan Notizen */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Scan-Notizen</label>
+            <textarea
+              rows="2"
+              value={scanNotes}
+              onChange={(e) => setScanNotes(e.target.value)}
+              placeholder="Bemerkungen zur Erstinstallation..."
+              className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white resize-none"
+            />
+          </div>
+
+          {/* Foto */}
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Foto (optional)</label>
+            <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-600 rounded-lg cursor-pointer hover:border-gray-500 transition">
+              {photoPreview ? (
+                <img src={photoPreview} alt="Vorschau" className="max-h-24 rounded" />
+              ) : (
+                <>
+                  <Camera className="w-6 h-6 text-gray-500" />
+                  <span className="text-gray-500">Foto hinzufügen</span>
+                </>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handlePhotoChange}
+                className="hidden"
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-gray-700 flex gap-3 shrink-0">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
+          >
+            Abbrechen
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {saving ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                Erstellen
+              </>
+            )}
+          </button>
         </div>
       </div>
-    </>
+    </div>
   );
 }

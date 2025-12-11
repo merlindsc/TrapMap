@@ -27,20 +27,17 @@ const reportRoutes = require('./routes/reports.routes');
 const boxtypesRoutes = require('./routes/boxtypes.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
 
-// Admin Routes (Super-Admin only)
-let adminRoutes = null;
-try {
-  adminRoutes = require('./routes/admin.routes');
-} catch (e) {
-  console.log('Admin routes not found - skipping');
-}
+// QR-Code Routes
+const qrRoutes = require('./routes/qr.routes');
+const qrGeneratorRoutes = require('./routes/qr-generator.routes');
+const qrOrderRoutes = require('./routes/qr-order.routes');
 
-// FloorPlans Routes (optional)
+// NEU: FloorPlans Routes (optional - may not exist yet)
 let floorplansRoutes = null;
 try {
   floorplansRoutes = require('./routes/floorplans.routes');
 } catch (e) {
-  console.log('FloorPlans routes not found - skipping');
+  console.log('âš ï¸ FloorPlans routes not found - skipping');
 }
 
 // ============================================
@@ -115,16 +112,15 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/boxtypes', boxtypesRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
-// Admin Routes (if available)
-if (adminRoutes) {
-  app.use('/api/admin', adminRoutes);
-  console.log('Admin routes loaded');
-}
+// QR-Code Endpoints
+app.use('/api/qr', qrRoutes);
+app.use('/api/qr-generator', qrGeneratorRoutes);
+app.use('/api/qr-orders', qrOrderRoutes);
 
-// FloorPlans API (if available)
+// NEU: FloorPlans API (if available)
 if (floorplansRoutes) {
   app.use('/api/floorplans', floorplansRoutes);
-  console.log('FloorPlans routes loaded');
+  console.log('âœ… FloorPlans routes loaded');
 }
 
 // ============================================
@@ -152,16 +148,14 @@ app.use(errorHandler);
 const PORT = config.port || 5000;
 
 app.listen(PORT, () => {
-  console.log('');
-  console.log('=========================================');
-  console.log('       TRAPMAP BACKEND SERVER           ');
-  console.log('=========================================');
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Environment: ${config.nodeEnv}`);
-  console.log(`API Base: http://localhost:${PORT}/api`);
-  console.log(`Health Check: http://localhost:${PORT}/health`);
-  console.log('=========================================');
-  console.log('');
+  console.log('â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—');
+  console.log('â•‘      TRAPMAP BACKEND SERVER            â•‘');
+  console.log('â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+  console.log(`ðŸš€ Server running on port ${PORT}`);
+  console.log(`ðŸŒ Environment: ${config.nodeEnv}`);
+  console.log(`ðŸ“¡ API Base: http://localhost:${PORT}/api`);
+  console.log(`â¤ï¸  Health Check: http://localhost:${PORT}/health`);
+  console.log('â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
 });
 
 // ============================================
@@ -169,11 +163,11 @@ app.listen(PORT, () => {
 // ============================================
 
 process.on('SIGTERM', () => {
-  console.log('SIGTERM received. Shutting down gracefully...');
+  console.log('ðŸ‘‹ SIGTERM received. Shutting down gracefully...');
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
-  console.log('SIGINT received. Shutting down gracefully...');
+  console.log('ðŸ‘‹ SIGINT received. Shutting down gracefully...');
   process.exit(0);
 });

@@ -32,7 +32,7 @@ const Sidebar = () => {
 
   const isSuperAdmin = user && SUPER_ADMINS.includes(user.email);
 
-  // Holt Navigationseinträge basierend auf Rolle
+  // Holt NavigationseintrÃ¤ge basierend auf Rolle
   const getNavigationItems = () => {
     const role = user?.role;
 
@@ -51,7 +51,7 @@ const Sidebar = () => {
         { name: 'Einstellungen', path: '/settings', icon: CogIcon }
       );
       
-      // Super-Admin Link hinzufügen
+      // Super-Admin Link hinzufÃ¼gen
       if (isSuperAdmin) {
         items.push({ name: 'Admin', path: '/admin', icon: ShieldCheckIcon });
       }
@@ -130,25 +130,21 @@ const Sidebar = () => {
   return (
     <div className="sidebar">
       
-      {/* Header mit Logo */}
+      {/* Header */}
       <div className="sidebar-header">
         <Link to="/dashboard" className="sidebar-brand">
-          <img 
-            src="/logo.png" 
-            alt="TrapMap" 
-            className="sidebar-logo"
-          />
+          <h1>TrapMap</h1>
         </Link>
 
         {user && (
           <div className="sidebar-user-info">
             <div className="user-role-badge">
-              {user.role === 'admin' && (isSuperAdmin ? '⚡ Super-Admin' : '👑 Admin')}
-              {user.role === 'supervisor' && '⭐ Supervisor'}
-              {user.role === 'technician' && '🔧 Techniker'}
-              {user.role === 'auditor' && '📋 Auditor'}
-              {user.role === 'viewer' && '👁️ Kunde'}
-              {user.role === 'partner' && '🤝 Partner'}
+              {user.role === 'admin' && (isSuperAdmin ? 'âš¡ Super-Admin' : 'ðŸ‘‘ Admin')}
+              {user.role === 'supervisor' && 'â­ Supervisor'}
+              {user.role === 'technician' && 'ðŸ”§ Techniker'}
+              {user.role === 'auditor' && 'ðŸ“‹ Auditor'}
+              {user.role === 'viewer' && 'ðŸ‘ï¸ Kunde'}
+              {user.role === 'partner' && 'ðŸ¤ Partner'}
             </div>
           </div>
         )}

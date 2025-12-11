@@ -5,7 +5,7 @@ const { supabase } = require("../config/supabase");
 // --------------------------------------------------------
 exports.getHistoryForBox = async (boxId, orgId) => {
   try {
-    console.log("🔍 Loading scans for box:", boxId);
+    console.log("📍 Loading scans for box:", boxId);
 
     const { data, error } = await supabase
       .from("scans")
@@ -39,7 +39,7 @@ exports.getHistoryForBox = async (boxId, orgId) => {
 // --------------------------------------------------------
 exports.getHistoryForObject = async (objectId, orgId) => {
   try {
-    console.log("🔍 Loading scans for object:", objectId);
+    console.log("📍 Loading scans for object:", objectId);
 
     const { data: boxes, error: boxErr } = await supabase
       .from("boxes")
@@ -93,6 +93,7 @@ exports.getHistoryForObject = async (objectId, orgId) => {
 
 // --------------------------------------------------------
 // CREATE SCAN
+// GPS nur für Boxen OHNE floor_plan_id aktualisieren!
 // --------------------------------------------------------
 exports.create = async (payload, orgId) => {
   try {
@@ -138,6 +139,12 @@ exports.create = async (payload, orgId) => {
       scanned_at: new Date().toISOString()
     };
 
+    // GPS-Koordinaten zum Scan hinzufügen falls vorhanden
+    if (payload.latitude && payload.longitude) {
+      scan.latitude = parseFloat(payload.latitude);
+      scan.longitude = parseFloat(payload.longitude);
+    }
+
     console.log("📝 Insert scan:", scan);
 
     const { data, error } = await supabase
@@ -151,20 +158,48 @@ exports.create = async (payload, orgId) => {
       throw error;
     }
 
-    // Update box status
+    // ============================================
+    // BOX UPDATE - GPS NUR für Boxen OHNE floor_plan_id!
+    // ============================================
+    
+    // Erst Box laden um floor_plan_id zu prüfen
+    const { data: boxData, error: boxFetchError } = await supabase
+      .from("boxes")
+      .select("id, floor_plan_id, pos_x, pos_y, grid_position")
+      .eq("id", parseInt(payload.box_id))
+      .eq("organisation_id", orgId)
+      .single();
+
+    if (boxFetchError) {
+      console.error("⚠️ Warning: Could not fetch box:", boxFetchError);
+    }
+
+    // Update-Objekt vorbereiten
+    const boxUpdate = {
+      current_status: payload.status,
+      last_scan: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    // GPS NUR aktualisieren wenn:
+    // 1. Box hat KEINE floor_plan_id (= GPS-Box auf Karte)
+    // 2. GPS-Koordinaten wurden mitgeschickt
+    if (boxData && !boxData.floor_plan_id && payload.latitude && payload.longitude) {
+      boxUpdate.latitude = parseFloat(payload.latitude);
+      boxUpdate.longitude = parseFloat(payload.longitude);
+      console.log(`📍 GPS-Update für Box ${payload.box_id}: ${payload.latitude}, ${payload.longitude}`);
+    } else if (boxData && boxData.floor_plan_id) {
+      console.log(`🗺️ Box ${payload.box_id} ist auf Lageplan - GPS wird NICHT aktualisiert`);
+    }
+
     const { error: boxError } = await supabase
       .from("boxes")
-      .update({
-        current_status: payload.status,
-        last_scan: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
+      .update(boxUpdate)
       .eq("id", parseInt(payload.box_id))
       .eq("organisation_id", orgId);
 
     if (boxError) {
       console.error("⚠️ Warning: Could not update box status:", boxError);
-      // Nicht abbrechen - Scan wurde erstellt
     } else {
       console.log("✅ Box status updated to:", payload.status);
     }

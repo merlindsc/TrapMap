@@ -1,6 +1,6 @@
 // ============================================
-// FLOOR PLANS SERVICE
-// Lagepläne verwalten + Boxen platzieren
+// FLOOR PLANS SERVICE V2
+// Lagepläne verwalten + Grid-Konfiguration
 // ============================================
 
 const { supabase } = require("../config/supabase");
@@ -47,16 +47,23 @@ exports.getById = async (id, organisationId) => {
 // CREATE FLOOR PLAN
 // ============================================
 exports.create = async (floorPlanData, organisationId) => {
+  const insertData = {
+    object_id: floorPlanData.object_id,
+    organisation_id: organisationId,
+    name: floorPlanData.name,
+    image_url: floorPlanData.image_url,
+    width: floorPlanData.width || null,
+    height: floorPlanData.height || null,
+    // Grid-Konfiguration (nur cols/rows - existieren sicher)
+    grid_cols: floorPlanData.grid_cols || 20,
+    grid_rows: floorPlanData.grid_rows || 20
+  };
+
+  console.log(`📐 Creating floor plan:`, insertData);
+
   const { data, error } = await supabase
     .from("floor_plans")
-    .insert({
-      object_id: floorPlanData.object_id,
-      organisation_id: organisationId,
-      name: floorPlanData.name,
-      image_url: floorPlanData.image_url,
-      width: floorPlanData.width || null,
-      height: floorPlanData.height || null
-    })
+    .insert(insertData)
     .select()
     .single();
 
@@ -65,7 +72,7 @@ exports.create = async (floorPlanData, organisationId) => {
     throw new Error(error.message);
   }
 
-  console.log(`✅ Lageplan erstellt: ${data.name} (ID: ${data.id})`);
+  console.log(`✅ Lageplan erstellt: ${data.name} (ID: ${data.id}) - Grid: ${data.grid_cols}x${data.grid_rows}`);
   return data;
 };
 
@@ -73,14 +80,23 @@ exports.create = async (floorPlanData, organisationId) => {
 // UPDATE FLOOR PLAN
 // ============================================
 exports.update = async (id, updateData, organisationId) => {
+  const updateFields = {};
+
+  // Standard-Felder
+  if (updateData.name !== undefined) updateFields.name = updateData.name;
+  if (updateData.image_url !== undefined) updateFields.image_url = updateData.image_url;
+  if (updateData.width !== undefined) updateFields.width = updateData.width;
+  if (updateData.height !== undefined) updateFields.height = updateData.height;
+  
+  // Grid-Spalten
+  if (updateData.grid_cols !== undefined) updateFields.grid_cols = updateData.grid_cols;
+  if (updateData.grid_rows !== undefined) updateFields.grid_rows = updateData.grid_rows;
+
+  console.log(`📐 Updating floor plan ${id}:`, updateFields);
+
   const { data, error } = await supabase
     .from("floor_plans")
-    .update({
-      name: updateData.name,
-      image_url: updateData.image_url,
-      width: updateData.width,
-      height: updateData.height
-    })
+    .update(updateFields)
     .eq("id", id)
     .eq("organisation_id", organisationId)
     .select()
@@ -91,6 +107,7 @@ exports.update = async (id, updateData, organisationId) => {
     throw new Error(error.message);
   }
 
+  console.log(`✅ Lageplan aktualisiert: ID ${id} - Grid: ${data.grid_cols}x${data.grid_rows}`);
   return data;
 };
 
@@ -104,7 +121,8 @@ exports.delete = async (id, organisationId) => {
     .update({ 
       floor_plan_id: null, 
       pos_x: null, 
-      pos_y: null 
+      pos_y: null,
+      grid_position: null
     })
     .eq("floor_plan_id", id)
     .eq("organisation_id", organisationId);
@@ -138,6 +156,7 @@ exports.getBoxesOnPlan = async (floorPlanId, organisationId) => {
       current_status,
       pos_x,
       pos_y,
+      grid_position,
       floor_plan_id,
       box_type_id,
       box_types:box_type_id (
@@ -192,17 +211,24 @@ exports.getUnplacedBoxes = async (objectId, organisationId) => {
 };
 
 // ============================================
-// PLACE BOX ON FLOOR PLAN
+// PLACE BOX ON FLOOR PLAN (mit Grid-Position)
 // ============================================
-exports.placeBox = async (floorPlanId, boxId, posX, posY, organisationId) => {
+exports.placeBox = async (floorPlanId, boxId, posX, posY, gridPosition, organisationId) => {
+  const updateData = {
+    floor_plan_id: parseInt(floorPlanId),
+    pos_x: parseFloat(posX),
+    pos_y: parseFloat(posY),
+    updated_at: new Date().toISOString()
+  };
+
+  // Grid-Position hinzufügen falls vorhanden
+  if (gridPosition) {
+    updateData.grid_position = gridPosition;
+  }
+
   const { data, error } = await supabase
     .from("boxes")
-    .update({
-      floor_plan_id: parseInt(floorPlanId),
-      pos_x: parseFloat(posX),
-      pos_y: parseFloat(posY),
-      updated_at: new Date().toISOString()
-    })
+    .update(updateData)
     .eq("id", parseInt(boxId))
     .eq("organisation_id", organisationId)
     .select()
@@ -213,7 +239,7 @@ exports.placeBox = async (floorPlanId, boxId, posX, posY, organisationId) => {
     throw new Error(error.message);
   }
 
-  console.log(`📍 Box ${boxId} auf Lageplan ${floorPlanId} platziert`);
+  console.log(`📍 Box ${boxId} auf Lageplan ${floorPlanId} platziert (${gridPosition || 'keine Grid-Position'})`);
   return data;
 };
 
@@ -227,6 +253,7 @@ exports.removeBoxFromPlan = async (boxId, organisationId) => {
       floor_plan_id: null,
       pos_x: null,
       pos_y: null,
+      grid_position: null,
       updated_at: new Date().toISOString()
     })
     .eq("id", parseInt(boxId))

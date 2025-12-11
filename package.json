@@ -11,7 +11,9 @@
     "lucide-react": "^0.556.0",
     "mapbox-gl": "^3.17.0",
     "mapbox-gl-leaflet": "^0.0.16",
+    "pdfkit": "^0.17.2",
     "qrcode": "^1.5.4",
-    "react-leaflet": "^5.0.0"
+    "react-leaflet": "^5.0.0",
+    "resend": "^6.6.0"
   }
 }

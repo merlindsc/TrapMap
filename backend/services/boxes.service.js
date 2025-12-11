@@ -1,5 +1,5 @@
 // ============================================
-// BOXES SERVICE - KOMPLETT
+// BOXES SERVICE - KOMPLETT MIT GRID_POSITION
 // Alle CRUD Operationen + GPS + Scans + Lageplan
 // ============================================
 
@@ -79,9 +79,7 @@ exports.getOne = async (id, organisationId) => {
     .eq("organisation_id", organisationId)
     .single();
 
-  if (error || !data) {
-    return { success: false, message: "Box not found" };
-  }
+  if (error) return { success: false, message: error.message };
 
   return {
     success: true,
@@ -96,7 +94,23 @@ exports.getOne = async (id, organisationId) => {
 };
 
 // ============================================
-// CREATE BOX
+// GET BOXES BY FLOOR PLAN
+// ============================================
+exports.getByFloorPlan = async (floorPlanId, organisationId) => {
+  const { data, error } = await supabase
+    .from("boxes")
+    .select("*")
+    .eq("floor_plan_id", floorPlanId)
+    .eq("organisation_id", organisationId)
+    .eq("active", true)
+    .order("number");
+
+  if (error) return { success: false, message: error.message };
+  return { success: true, data };
+};
+
+// ============================================
+// CREATE BOX (MIT GRID_POSITION)
 // ============================================
 exports.create = async (organisationId, payload) => {
   try {
@@ -114,6 +128,8 @@ exports.create = async (organisationId, payload) => {
       floor_plan_id: payload.floor_plan_id ? parseInt(payload.floor_plan_id) : null,
       pos_x: payload.pos_x || null,
       pos_y: payload.pos_y || null,
+      // Grid-Position (NEU!)
+      grid_position: payload.grid_position || null,
       // GPS-Position
       lat: payload.lat || null,
       lng: payload.lng || null,
@@ -134,7 +150,7 @@ exports.create = async (organisationId, payload) => {
       return { success: false, message: error.message };
     }
 
-    console.log("✅ Box erstellt:", data.id, data.number);
+    console.log("✅ Box erstellt:", data.id, data.number, "Grid:", data.grid_position);
     return { success: true, data };
   } catch (err) {
     console.error("❌ UNHANDLED ERROR in create:", err);
@@ -143,7 +159,7 @@ exports.create = async (organisationId, payload) => {
 };
 
 // ============================================
-// UPDATE BOX
+// UPDATE BOX (MIT GRID_POSITION)
 // ============================================
 exports.update = async (id, organisationId, payload) => {
   try {
@@ -157,11 +173,14 @@ exports.update = async (id, organisationId, payload) => {
     if (payload.number !== undefined) updateData.number = payload.number;
     if (payload.notes !== undefined) updateData.notes = payload.notes;
     if (payload.boxtype_id !== undefined) updateData.box_type_id = payload.boxtype_id ? parseInt(payload.boxtype_id) : null;
+    if (payload.box_type_id !== undefined) updateData.box_type_id = payload.box_type_id ? parseInt(payload.box_type_id) : null;
     if (payload.current_status !== undefined) updateData.current_status = payload.current_status;
     if (payload.active !== undefined) updateData.active = payload.active;
     if (payload.floor_plan_id !== undefined) updateData.floor_plan_id = payload.floor_plan_id ? parseInt(payload.floor_plan_id) : null;
     if (payload.pos_x !== undefined) updateData.pos_x = payload.pos_x;
     if (payload.pos_y !== undefined) updateData.pos_y = payload.pos_y;
+    // Grid-Position (NEU!)
+    if (payload.grid_position !== undefined) updateData.grid_position = payload.grid_position;
     if (payload.lat !== undefined) updateData.lat = payload.lat;
     if (payload.lng !== undefined) updateData.lng = payload.lng;
     if (payload.control_interval_days !== undefined) updateData.control_interval_days = payload.control_interval_days;
@@ -188,9 +207,71 @@ exports.update = async (id, organisationId, payload) => {
 };
 
 // ============================================
-// UPDATE LOCATION (GPS)
+// DELETE BOX (SOFT DELETE)
 // ============================================
-exports.updateLocation = async (id, organisationId, lat, lng) => {
+exports.remove = async (id, organisationId) => {
+  const { data, error } = await supabase
+    .from("boxes")
+    .update({ active: false, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("organisation_id", organisationId)
+    .select()
+    .single();
+
+  if (error) return { success: false, message: error.message };
+  return { success: true, data };
+};
+
+// ============================================
+// UPDATE STATUS (nach Scan)
+// ============================================
+exports.updateStatus = async (boxId, status) => {
+  const { data, error } = await supabase
+    .from("boxes")
+    .update({
+      current_status: status,
+      last_scan: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", boxId)
+    .select()
+    .single();
+
+  if (error) return { success: false, message: error.message };
+  console.log("✅ Box status updated to:", status);
+  return { success: true, data };
+};
+
+// ============================================
+// UPDATE POSITION (auf Lageplan)
+// ============================================
+exports.updatePosition = async (boxId, organisationId, posX, posY, floorPlanId = null) => {
+  const updateData = {
+    pos_x: posX,
+    pos_y: posY,
+    updated_at: new Date().toISOString()
+  };
+
+  if (floorPlanId) {
+    updateData.floor_plan_id = floorPlanId;
+  }
+
+  const { data, error } = await supabase
+    .from("boxes")
+    .update(updateData)
+    .eq("id", boxId)
+    .eq("organisation_id", organisationId)
+    .select()
+    .single();
+
+  if (error) return { success: false, message: error.message };
+  return { success: true, data };
+};
+
+// ============================================
+// UPDATE GPS LOCATION
+// ============================================
+exports.updateGPS = async (boxId, organisationId, lat, lng) => {
   const { data, error } = await supabase
     .from("boxes")
     .update({
@@ -198,7 +279,7 @@ exports.updateLocation = async (id, organisationId, lat, lng) => {
       lng,
       updated_at: new Date().toISOString()
     })
-    .eq("id", id)
+    .eq("id", boxId)
     .eq("organisation_id", organisationId)
     .select()
     .single();
@@ -208,31 +289,41 @@ exports.updateLocation = async (id, organisationId, lat, lng) => {
 };
 
 // ============================================
-// UNDO LOCATION (GPS zurücksetzen)
+// GET UNPLACED BOXES (für Objekt)
 // ============================================
-exports.undoLocation = async (id, organisationId) => {
-  const { data: box } = await supabase
+exports.getUnplaced = async (objectId, organisationId) => {
+  const { data, error } = await supabase
     .from("boxes")
-    .select(`
-      object_id,
-      objects:object_id (lat, lng)
-    `)
-    .eq("id", id)
+    .select("*")
+    .eq("object_id", objectId)
     .eq("organisation_id", organisationId)
-    .single();
+    .eq("active", true)
+    .is("floor_plan_id", null)
+    .order("number");
 
-  if (!box || !box.objects) {
-    return { success: false, message: "Box or Object not found" };
+  if (error) return { success: false, message: error.message };
+  return { success: true, data };
+};
+
+// ============================================
+// PLACE BOX ON FLOOR PLAN
+// ============================================
+exports.placeOnFloorPlan = async (boxId, organisationId, floorPlanId, posX, posY, gridPosition = null) => {
+  const updateData = {
+    floor_plan_id: floorPlanId,
+    pos_x: posX,
+    pos_y: posY,
+    updated_at: new Date().toISOString()
+  };
+
+  if (gridPosition) {
+    updateData.grid_position = gridPosition;
   }
 
   const { data, error } = await supabase
     .from("boxes")
-    .update({
-      lat: box.objects.lat,
-      lng: box.objects.lng,
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", id)
+    .update(updateData)
+    .eq("id", boxId)
     .eq("organisation_id", organisationId)
     .select()
     .single();
@@ -242,50 +333,22 @@ exports.undoLocation = async (id, organisationId) => {
 };
 
 // ============================================
-// DELETE BOX (Soft Delete)
+// REMOVE FROM FLOOR PLAN
 // ============================================
-exports.remove = async (id, organisationId) => {
-  const { error } = await supabase
+exports.removeFromFloorPlan = async (boxId, organisationId) => {
+  const { data, error } = await supabase
     .from("boxes")
     .update({
-      active: false,
+      floor_plan_id: null,
+      pos_x: null,
+      pos_y: null,
+      grid_position: null,
       updated_at: new Date().toISOString()
     })
-    .eq("id", id)
-    .eq("organisation_id", organisationId);
-
-  if (error) return { success: false, message: error.message };
-  return { success: true };
-};
-
-// ============================================
-// GET SCANS (Historie)
-// ============================================
-exports.getScans = async (boxId, organisationId, days = 90) => {
-  const since = new Date(Date.now() - days * 86400000).toISOString();
-
-  const { data, error } = await supabase
-    .from("scans")
-    .select(`
-      id,
-      status,
-      notes,
-      findings,
-      photo_url,
-      pest_found,
-      pest_count,
-      scanned_at,
-      created_at,
-      users:user_id (
-        id,
-        first_name,
-        last_name
-      )
-    `)
-    .eq("box_id", boxId)
+    .eq("id", boxId)
     .eq("organisation_id", organisationId)
-    .gte("scanned_at", since)
-    .order("scanned_at", { ascending: false });
+    .select()
+    .single();
 
   if (error) return { success: false, message: error.message };
   return { success: true, data };
