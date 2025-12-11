@@ -1,6 +1,6 @@
 // ============================================
-// FLOOR PLANS SERVICE V2
-// Lagepläne verwalten + Grid-Konfiguration
+// FLOOR PLANS SERVICE
+// Lagepläne verwalten + Boxen platzieren
 // ============================================
 
 const { supabase } = require("../config/supabase");
@@ -47,23 +47,24 @@ exports.getById = async (id, organisationId) => {
 // CREATE FLOOR PLAN
 // ============================================
 exports.create = async (floorPlanData, organisationId) => {
-  const insertData = {
-    object_id: floorPlanData.object_id,
-    organisation_id: organisationId,
-    name: floorPlanData.name,
-    image_url: floorPlanData.image_url,
-    width: floorPlanData.width || null,
-    height: floorPlanData.height || null,
-    // Grid-Konfiguration (nur cols/rows - existieren sicher)
-    grid_cols: floorPlanData.grid_cols || 20,
-    grid_rows: floorPlanData.grid_rows || 20
-  };
-
-  console.log(`📐 Creating floor plan:`, insertData);
-
   const { data, error } = await supabase
     .from("floor_plans")
-    .insert(insertData)
+    .insert({
+      object_id: floorPlanData.object_id,
+      organisation_id: organisationId,
+      name: floorPlanData.name,
+      image_url: floorPlanData.image_url,
+      width: floorPlanData.width || null,
+      height: floorPlanData.height || null,
+      // Grid-Einstellungen
+      grid_mode: floorPlanData.grid_mode || 'preset',
+      grid_preset: floorPlanData.grid_preset || 'medium',
+      grid_cols: floorPlanData.grid_cols || 20,
+      grid_rows: floorPlanData.grid_rows || 20,
+      real_width_m: floorPlanData.real_width_m || null,
+      real_height_m: floorPlanData.real_height_m || null,
+      cell_size_m: floorPlanData.cell_size_m || null
+    })
     .select()
     .single();
 
@@ -72,7 +73,7 @@ exports.create = async (floorPlanData, organisationId) => {
     throw new Error(error.message);
   }
 
-  console.log(`✅ Lageplan erstellt: ${data.name} (ID: ${data.id}) - Grid: ${data.grid_cols}x${data.grid_rows}`);
+  console.log(`✅ Lageplan erstellt: ${data.name} (ID: ${data.id})`);
   return data;
 };
 
@@ -80,19 +81,22 @@ exports.create = async (floorPlanData, organisationId) => {
 // UPDATE FLOOR PLAN
 // ============================================
 exports.update = async (id, updateData, organisationId) => {
+  // Build update object dynamically
   const updateFields = {};
-
-  // Standard-Felder
+  
   if (updateData.name !== undefined) updateFields.name = updateData.name;
   if (updateData.image_url !== undefined) updateFields.image_url = updateData.image_url;
   if (updateData.width !== undefined) updateFields.width = updateData.width;
   if (updateData.height !== undefined) updateFields.height = updateData.height;
   
-  // Grid-Spalten
+  // Grid-Einstellungen
+  if (updateData.grid_mode !== undefined) updateFields.grid_mode = updateData.grid_mode;
+  if (updateData.grid_preset !== undefined) updateFields.grid_preset = updateData.grid_preset;
   if (updateData.grid_cols !== undefined) updateFields.grid_cols = updateData.grid_cols;
   if (updateData.grid_rows !== undefined) updateFields.grid_rows = updateData.grid_rows;
-
-  console.log(`📐 Updating floor plan ${id}:`, updateFields);
+  if (updateData.real_width_m !== undefined) updateFields.real_width_m = updateData.real_width_m;
+  if (updateData.real_height_m !== undefined) updateFields.real_height_m = updateData.real_height_m;
+  if (updateData.cell_size_m !== undefined) updateFields.cell_size_m = updateData.cell_size_m;
 
   const { data, error } = await supabase
     .from("floor_plans")
@@ -107,7 +111,6 @@ exports.update = async (id, updateData, organisationId) => {
     throw new Error(error.message);
   }
 
-  console.log(`✅ Lageplan aktualisiert: ID ${id} - Grid: ${data.grid_cols}x${data.grid_rows}`);
   return data;
 };
 
@@ -145,6 +148,7 @@ exports.delete = async (id, organisationId) => {
 
 // ============================================
 // GET BOXES ON FLOOR PLAN
+// Mit box_type_name als flaches Feld!
 // ============================================
 exports.getBoxesOnPlan = async (floorPlanId, organisationId) => {
   const { data, error } = await supabase
@@ -159,6 +163,8 @@ exports.getBoxesOnPlan = async (floorPlanId, organisationId) => {
       grid_position,
       floor_plan_id,
       box_type_id,
+      control_interval_days,
+      object_id,
       box_types:box_type_id (
         id,
         name,
@@ -175,11 +181,19 @@ exports.getBoxesOnPlan = async (floorPlanId, organisationId) => {
     throw new Error(error.message);
   }
 
-  return data || [];
+  // Flatten box_type_name for frontend
+  const flattenedData = (data || []).map(box => ({
+    ...box,
+    box_type_name: box.box_types?.name || null,
+    box_type_category: box.box_types?.category || null
+  }));
+
+  return flattenedData;
 };
 
 // ============================================
 // GET UNPLACED BOXES
+// Mit box_type_name als flaches Feld!
 // ============================================
 exports.getUnplacedBoxes = async (objectId, organisationId) => {
   const { data, error } = await supabase
@@ -190,6 +204,8 @@ exports.getUnplacedBoxes = async (objectId, organisationId) => {
       notes,
       current_status,
       box_type_id,
+      control_interval_days,
+      object_id,
       box_types:box_type_id (
         id,
         name,
@@ -207,11 +223,18 @@ exports.getUnplacedBoxes = async (objectId, organisationId) => {
     throw new Error(error.message);
   }
 
-  return data || [];
+  // Flatten box_type_name for frontend
+  const flattenedData = (data || []).map(box => ({
+    ...box,
+    box_type_name: box.box_types?.name || null,
+    box_type_category: box.box_types?.category || null
+  }));
+
+  return flattenedData;
 };
 
 // ============================================
-// PLACE BOX ON FLOOR PLAN (mit Grid-Position)
+// PLACE BOX ON FLOOR PLAN
 // ============================================
 exports.placeBox = async (floorPlanId, boxId, posX, posY, gridPosition, organisationId) => {
   const updateData = {
@@ -220,8 +243,8 @@ exports.placeBox = async (floorPlanId, boxId, posX, posY, gridPosition, organisa
     pos_y: parseFloat(posY),
     updated_at: new Date().toISOString()
   };
-
-  // Grid-Position hinzufügen falls vorhanden
+  
+  // Grid position optional
   if (gridPosition) {
     updateData.grid_position = gridPosition;
   }
@@ -239,7 +262,7 @@ exports.placeBox = async (floorPlanId, boxId, posX, posY, gridPosition, organisa
     throw new Error(error.message);
   }
 
-  console.log(`📍 Box ${boxId} auf Lageplan ${floorPlanId} platziert (${gridPosition || 'keine Grid-Position'})`);
+  console.log(`📍 Box ${boxId} auf Lageplan ${floorPlanId} platziert`);
   return data;
 };
 

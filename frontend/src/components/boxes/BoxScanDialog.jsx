@@ -1,21 +1,90 @@
 /* ============================================================
    UNIFIED BOX SCAN DIALOG
    Für Maps UND Lageplan - mit Typ-spezifischen Kontrollen
-   
-   WICHTIG: GPS wird NUR für Boxen OHNE floor_plan_id geholt!
-   Lageplan-Boxen behalten ihre Position.
+   MIT EMOJI ICONS + BEARBEITEN BUTTON
    ============================================================ */
 
 import { useState, useEffect } from "react";
-import { X, CheckCircle, Clock, Camera, AlertCircle, History, Save, MapPin, Navigation } from "lucide-react";
+import { X, CheckCircle, Clock, Camera, AlertCircle, History, Save, Edit } from "lucide-react";
 
 const API = import.meta.env.VITE_API_URL;
 
 const STATUS_CONFIG = {
-  green: { label: "OK", icon: "✔", color: "#10b981", bg: "#10b98120" },
+  green: { label: "OK", icon: "✓", color: "#10b981", bg: "#10b98120" },
   yellow: { label: "Auffällig", icon: "!", color: "#eab308", bg: "#eab30820" },
   orange: { label: "Erhöht", icon: "!!", color: "#f97316", bg: "#f9731620" },
   red: { label: "Befall", icon: "✗", color: "#ef4444", bg: "#ef444420" }
+};
+
+// ============================================
+// BOX TYPE EMOJI ICONS
+// ============================================
+const BOX_TYPE_EMOJIS = {
+  rat: '🐀',
+  mouse: '🐁',
+  snapTrap: '⚠️',
+  tunnel: '🔶',
+  bait: '🟢',
+  liveTrap: '🔵',
+  monitoring: '👁️',
+  moth: '🦋',
+  cockroach: '🪳',
+  beetle: '🪲',
+  insect: '🪰',
+  uvLight: '☀️',
+};
+
+// Bestimme Emojis basierend auf box_type Name
+const getBoxTypeEmojis = (boxTypeName) => {
+  if (!boxTypeName) return '';
+  
+  const name = boxTypeName.toLowerCase();
+  let icons = [];
+  
+  // Schlagfallen-Tunnel
+  if ((name.includes('schlagfall') || name.includes('snap')) && name.includes('tunnel')) {
+    if (name.includes('ratte') || name.includes('rat')) icons = ['rat', 'tunnel'];
+    else if (name.includes('maus') || name.includes('mouse')) icons = ['mouse', 'tunnel'];
+    else icons = ['tunnel'];
+  }
+  // Schlagfalle normal
+  else if (name.includes('schlagfall') || name.includes('snap')) {
+    if (name.includes('ratte') || name.includes('rat')) icons = ['rat', 'snapTrap'];
+    else if (name.includes('maus') || name.includes('mouse')) icons = ['mouse', 'snapTrap'];
+    else icons = ['snapTrap'];
+  }
+  // Köderstation
+  else if (name.includes('köder') || name.includes('koeder') || name.includes('bait')) {
+    if (name.includes('ratte') || name.includes('rat')) icons = ['rat', 'bait'];
+    else if (name.includes('maus') || name.includes('mouse')) icons = ['mouse', 'bait'];
+    else icons = ['bait'];
+  }
+  // Lebendfalle
+  else if (name.includes('lebend') || name.includes('live')) {
+    if (name.includes('ratte') || name.includes('rat')) icons = ['rat', 'liveTrap'];
+    else if (name.includes('maus') || name.includes('mouse')) icons = ['mouse', 'liveTrap'];
+    else icons = ['liveTrap'];
+  }
+  // Monitoring (auch "monitor" für "Käfermonitor" etc.)
+  else if (name.includes('monitoring') || name.includes('monitor')) {
+    if (name.includes('käfer') || name.includes('kaefer') || name.includes('beetle')) icons = ['beetle', 'monitoring'];
+    else if (name.includes('motte') || name.includes('moth')) icons = ['moth', 'monitoring'];
+    else if (name.includes('schabe') || name.includes('cockroach')) icons = ['cockroach', 'monitoring'];
+    else if (name.includes('ratte') || name.includes('rat')) icons = ['rat', 'monitoring'];
+    else if (name.includes('maus') || name.includes('mouse')) icons = ['mouse', 'monitoring'];
+    else icons = ['monitoring'];
+  }
+  // Spezial-Monitore
+  else if (name.includes('motte') || name.includes('moth')) icons = ['moth'];
+  else if (name.includes('schabe') || name.includes('cockroach')) icons = ['cockroach'];
+  else if (name.includes('käfer') || name.includes('kaefer') || name.includes('beetle')) icons = ['beetle'];
+  else if (name.includes('insekt') || name.includes('insect')) icons = ['insect'];
+  else if (name.includes('uv') || name.includes('licht') || name.includes('light')) icons = ['uvLight'];
+  // Fallback Tier
+  else if (name.includes('ratte') || name.includes('rat')) icons = ['rat'];
+  else if (name.includes('maus') || name.includes('mouse')) icons = ['mouse'];
+  
+  return icons.map(key => BOX_TYPE_EMOJIS[key] || '').join(' ');
 };
 
 export default function BoxScanDialog({ box, onClose, onScanCreated, onSave, onEdit }) {
@@ -34,34 +103,28 @@ export default function BoxScanDialog({ box, onClose, onScanCreated, onSave, onE
   const [photo, setPhoto] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   
-  // GPS State - NUR für Boxen ohne floor_plan_id
-  const [gpsPosition, setGpsPosition] = useState(null);
-  const [gpsLoading, setGpsLoading] = useState(false);
-  const [gpsError, setGpsError] = useState(null);
-  const [updateGps, setUpdateGps] = useState(false); // User entscheidet ob GPS aktualisiert wird
-  
   // Type-specific state
   const [consumption, setConsumption] = useState(0);
   const [trapState, setTrapState] = useState(0);
   const [quantity, setQuantity] = useState("none");
 
   // ============================================
-  // Check if this is a GPS box (not on floor plan)
+  // Get Box Type Name and Emoji
   // ============================================
-  const isGpsBox = !box.floor_plan_id;
-  const isFloorPlanBox = !!box.floor_plan_id;
-
+  const typeName = box.box_type_name || box.box_types?.name || "";
+  const typeEmoji = getBoxTypeEmojis(typeName);
+  
   // ============================================
-  // Determine Box Type
+  // Determine Box Type Category
   // ============================================
-  const typeName = (box.box_type_name || box.box_types?.name || "").toLowerCase();
+  const typeNameLower = typeName.toLowerCase();
   
   let boxType = "default";
-  if (typeName.includes("schlag") || typeName.includes("trap") || typeName.includes("falle")) {
+  if (typeNameLower.includes("schlag") || typeNameLower.includes("trap") || typeNameLower.includes("falle")) {
     boxType = "schlagfalle";
-  } else if (typeName.includes("gift") || typeName.includes("bait") || typeName.includes("köder") || typeName.includes("rodent") || typeName.includes("ratte") || typeName.includes("maus")) {
+  } else if (typeNameLower.includes("gift") || typeNameLower.includes("bait") || typeNameLower.includes("köder") || typeNameLower.includes("koeder") || typeNameLower.includes("rodent") || typeNameLower.includes("ratte") || typeNameLower.includes("maus")) {
     boxType = "koeder";
-  } else if (typeName.includes("insekt") || typeName.includes("insect") || typeName.includes("fliege") || typeName.includes("schabe")) {
+  } else if (typeNameLower.includes("insekt") || typeNameLower.includes("insect") || typeNameLower.includes("fliege") || typeNameLower.includes("schabe") || typeNameLower.includes("motte") || typeNameLower.includes("käfer") || typeNameLower.includes("kaefer") || typeNameLower.includes("monitor")) {
     boxType = "insekt";
   }
 
@@ -85,42 +148,6 @@ export default function BoxScanDialog({ box, onClose, onScanCreated, onSave, onE
       else setStatus("red");
     }
   }, [consumption, trapState, quantity, boxType]);
-
-  // ============================================
-  // Get GPS Position - Manuell aufrufen!
-  // ============================================
-  const fetchGpsPosition = () => {
-    if (!("geolocation" in navigator)) {
-      setGpsError("GPS nicht verfügbar");
-      return;
-    }
-    
-    setGpsLoading(true);
-    setGpsError(null);
-    
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setGpsPosition({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy
-        });
-        setGpsLoading(false);
-        setUpdateGps(true); // Aktiviere GPS-Update
-        console.log("📍 GPS Position erhalten:", position.coords.latitude, position.coords.longitude);
-      },
-      (error) => {
-        console.warn("📍 GPS Fehler:", error.message);
-        setGpsError(error.message);
-        setGpsLoading(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000
-      }
-    );
-  };
 
   // ============================================
   // Load History
@@ -185,20 +212,12 @@ export default function BoxScanDialog({ box, onClose, onScanCreated, onSave, onE
       if (findings) formData.append("findings", findings);
       if (photo) formData.append("photo", photo);
       
-      // Type-specific data
       if (boxType === "koeder") {
         formData.append("consumption", consumption);
       } else if (boxType === "schlagfalle") {
         formData.append("trap_state", trapState);
       } else if (boxType === "insekt") {
         formData.append("quantity", quantity);
-      }
-
-      // GPS NUR senden wenn User es aktiviert hat
-      if (isGpsBox && updateGps && gpsPosition) {
-        formData.append("latitude", gpsPosition.latitude);
-        formData.append("longitude", gpsPosition.longitude);
-        console.log("📍 Sende GPS mit Scan:", gpsPosition.latitude, gpsPosition.longitude);
       }
 
       const res = await fetch(`${API}/scans`, {
@@ -229,72 +248,84 @@ export default function BoxScanDialog({ box, onClose, onScanCreated, onSave, onE
     return d.toLocaleDateString("de-DE") + ", " + d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
   };
 
+  // ============================================
+  // Handle Edit Click
+  // ============================================
+  const handleEditClick = () => {
+    onClose();
+    if (onEdit) {
+      onEdit(box);
+    }
+  };
+
   return (
     <>
       {/* Toast */}
       {toast && (
         <div style={{
           position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)",
-          padding: "12px 24px", borderRadius: 8, zIndex: 10001,
+          padding: "12px 24px", borderRadius: 8, zIndex: 1100,
           background: toast.type === "success" ? "#10b981" : "#ef4444",
-          color: "#fff", fontWeight: 600, boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
+          color: "#fff", fontWeight: 500, display: "flex", alignItems: "center", gap: 8,
+          boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
         }}>
+          {toast.type === "success" ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
           {toast.message}
         </div>
       )}
 
-      {/* Spinner Animation */}
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-
-      {/* Dialog */}
-      <div style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)",
-        display: "flex", alignItems: "flex-end", justifyContent: "center",
-        zIndex: 10000, padding: 0
-      }} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-        <div style={{
-          width: "100%", maxWidth: 500, maxHeight: "90vh",
-          background: "#1e293b", borderRadius: "16px 16px 0 0",
-          display: "flex", flexDirection: "column", overflow: "hidden"
-        }} onClick={(e) => e.stopPropagation()}>
+      {/* Overlay */}
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
+          zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 16
+        }}
+      >
+        {/* Dialog */}
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            background: "#1e293b", borderRadius: 12, width: "100%", maxWidth: 420,
+            maxHeight: "90vh", display: "flex", flexDirection: "column",
+            boxShadow: "0 8px 32px rgba(0,0,0,0.4)"
+          }}
+        >
           {/* Header */}
           <div style={{
             padding: 16, borderBottom: "1px solid #334155",
-            display: "flex", justifyContent: "space-between", alignItems: "center"
+            display: "flex", alignItems: "center", justifyContent: "space-between"
           }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{
-                  width: 12, height: 12, borderRadius: "50%",
-                  background: STATUS_CONFIG[box.current_status]?.color || "#6b7280"
-                }} />
-                <span style={{ color: "#fff", fontWeight: 600, fontSize: 18 }}>
-                  Box {box.number}
-                </span>
-                {/* Position Info */}
-                {isFloorPlanBox && box.grid_position && (
-                  <span style={{
-                    background: "#3b82f6", color: "#fff", padding: "2px 8px",
-                    borderRadius: 4, fontSize: 12, fontFamily: "monospace"
-                  }}>
-                    📍 {box.grid_position}
-                  </span>
-                )}
-                {isGpsBox && (
-                  <span style={{
-                    background: "#22c55e", color: "#fff", padding: "2px 8px",
-                    borderRadius: 4, fontSize: 12
-                  }}>
-                    🛰️ GPS
-                  </span>
+                <h2 style={{ color: "#fff", fontSize: 18, fontWeight: 600, margin: 0 }}>
+                  ✓ Kontrolle: {box.number || box.id}
+                </h2>
+                {/* Bearbeiten Button */}
+                {onEdit && (
+                  <button
+                    onClick={handleEditClick}
+                    style={{
+                      padding: "6px 12px",
+                      background: "#334155",
+                      border: "none",
+                      borderRadius: 6,
+                      color: "#94a3b8",
+                      fontSize: 13,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4
+                    }}
+                  >
+                    Bearbeiten
+                  </button>
                 )}
               </div>
-              <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 4 }}>
-                {box.box_types?.name || box.box_type_name || "Unbekannter Typ"}
+              <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
+                {typeEmoji && <span style={{ fontSize: 16 }}>{typeEmoji}</span>}
+                <span>Typ: {typeName || "Unbekannt"}</span>
               </div>
             </div>
             <button
@@ -304,98 +335,9 @@ export default function BoxScanDialog({ box, onClose, onScanCreated, onSave, onE
                 cursor: "pointer", padding: 4
               }}
             >
-              <X size={24} />
+              <X size={22} />
             </button>
           </div>
-
-          {/* GPS Button für GPS-Boxen (optional) */}
-          {isGpsBox && (
-            <div style={{
-              padding: "8px 16px",
-              background: updateGps && gpsPosition ? "#22c55e20" : gpsError ? "#ef444420" : "#1e293b",
-              borderBottom: "1px solid #334155",
-              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
-                {gpsLoading ? (
-                  <>
-                    <div style={{ width: 14, height: 14, border: "2px solid #3b82f6", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 1s linear infinite", flexShrink: 0 }} />
-                    <span style={{ color: "#93c5fd", fontSize: 13 }}>GPS wird ermittelt...</span>
-                  </>
-                ) : gpsError ? (
-                  <>
-                    <AlertCircle size={14} style={{ color: "#f87171", flexShrink: 0 }} />
-                    <span style={{ color: "#fca5a5", fontSize: 12 }}>GPS-Fehler: {gpsError}</span>
-                  </>
-                ) : updateGps && gpsPosition ? (
-                  <>
-                    <Navigation size={14} style={{ color: "#22c55e", flexShrink: 0 }} />
-                    <span style={{ color: "#86efac", fontSize: 12 }}>
-                      Neu: {gpsPosition.latitude.toFixed(5)}, {gpsPosition.longitude.toFixed(5)}
-                      {gpsPosition.accuracy && ` (±${Math.round(gpsPosition.accuracy)}m)`}
-                    </span>
-                  </>
-                ) : (
-                  <span style={{ color: "#94a3b8", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    📍 {box.latitude ? `${box.latitude.toFixed(5)}, ${box.longitude.toFixed(5)}` : "Keine Position"}
-                  </span>
-                )}
-              </div>
-              
-              {!gpsLoading && (
-                <button
-                  onClick={() => {
-                    if (updateGps) {
-                      setUpdateGps(false);
-                      setGpsPosition(null);
-                      setGpsError(null);
-                    } else {
-                      fetchGpsPosition();
-                    }
-                  }}
-                  style={{
-                    padding: "6px 10px",
-                    background: updateGps ? "#ef4444" : "#3b82f6",
-                    border: "none",
-                    borderRadius: 6,
-                    color: "#fff",
-                    fontSize: 11,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                    whiteSpace: "nowrap",
-                    flexShrink: 0
-                  }}
-                >
-                  {updateGps ? (
-                    <>
-                      <X size={12} /> Abbrechen
-                    </>
-                  ) : (
-                    <>
-                      <Navigation size={12} /> GPS neu
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Lageplan-Info für Floorplan-Boxen */}
-          {isFloorPlanBox && (
-            <div style={{
-              padding: "8px 16px",
-              background: "#3b82f620",
-              borderBottom: "1px solid #334155",
-              display: "flex", alignItems: "center", gap: 8
-            }}>
-              <MapPin size={16} style={{ color: "#60a5fa" }} />
-              <span style={{ color: "#93c5fd", fontSize: 13 }}>
-                Position auf Lageplan: {box.grid_position || `${box.pos_x?.toFixed(1)}%, ${box.pos_y?.toFixed(1)}%`}
-              </span>
-            </div>
-          )}
 
           {/* Tabs */}
           <div style={{ display: "flex", borderBottom: "1px solid #334155" }}>
@@ -405,10 +347,11 @@ export default function BoxScanDialog({ box, onClose, onScanCreated, onSave, onE
                 flex: 1, padding: 12, background: "none", border: "none",
                 color: activeTab === "scan" ? "#3b82f6" : "#94a3b8",
                 borderBottom: activeTab === "scan" ? "2px solid #3b82f6" : "2px solid transparent",
-                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6
+                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                fontWeight: activeTab === "scan" ? 600 : 400
               }}
             >
-              <CheckCircle size={16} /> Kontrolle
+              <CheckCircle size={16} /> Neue Kontrolle
             </button>
             <button
               onClick={() => setActiveTab("history")}
@@ -416,15 +359,16 @@ export default function BoxScanDialog({ box, onClose, onScanCreated, onSave, onE
                 flex: 1, padding: 12, background: "none", border: "none",
                 color: activeTab === "history" ? "#3b82f6" : "#94a3b8",
                 borderBottom: activeTab === "history" ? "2px solid #3b82f6" : "2px solid transparent",
-                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6
+                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                fontWeight: activeTab === "history" ? 600 : 400
               }}
             >
               <History size={16} /> Verlauf ({history.length})
             </button>
           </div>
 
-          {/* Content */}
-          <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
+          {/* Body */}
+          <div style={{ padding: 16, overflowY: "auto", flex: 1 }}>
             {activeTab === "scan" ? (
               <>
                 {/* Type-specific controls */}
@@ -438,15 +382,14 @@ export default function BoxScanDialog({ box, onClose, onScanCreated, onSave, onE
                           type="button"
                           onClick={() => setConsumption(val)}
                           style={{
-                            padding: "16px 8px", borderRadius: 8, cursor: "pointer",
+                            padding: "12px 8px", borderRadius: 8, cursor: "pointer",
                             border: consumption === val ? "2px solid #3b82f6" : "1px solid #334155",
                             background: consumption === val ? "#3b82f620" : "#0f172a",
-                            color: consumption === val ? "#60a5fa" : "#94a3b8",
+                            color: consumption === val ? "#3b82f6" : "#94a3b8",
                             display: "flex", flexDirection: "column", alignItems: "center", gap: 4
                           }}
                         >
-                          <span style={{ fontSize: 18 }}>{val * 25}%</span>
-                          <span style={{ fontSize: 10 }}>{["Voll", "¼", "½", "¾", "Leer"][val]}</span>
+                          <span style={{ fontSize: 16, fontWeight: 600 }}>{val * 25}%</span>
                         </button>
                       ))}
                     </div>
@@ -455,27 +398,27 @@ export default function BoxScanDialog({ box, onClose, onScanCreated, onSave, onE
 
                 {boxType === "schlagfalle" && (
                   <>
-                    <label style={{ display: "block", color: "#e2e8f0", marginBottom: 8, fontSize: 14 }}>Fallenstatus *</label>
+                    <label style={{ display: "block", color: "#e2e8f0", marginBottom: 8, fontSize: 14 }}>Fallenzustand *</label>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 20 }}>
                       {[
                         { val: 0, label: "Nicht ausgelöst", icon: "✓" },
-                        { val: 1, label: "Ausgelöst", icon: "⚡" },
-                        { val: 2, label: "Tier gefunden", icon: "🐭" }
+                        { val: 1, label: "Ausgelöst", icon: "⚠" },
+                        { val: 2, label: "Tier gefunden", icon: "🐀" }
                       ].map(({ val, label, icon }) => (
                         <button
                           key={val}
                           type="button"
                           onClick={() => setTrapState(val)}
                           style={{
-                            padding: "16px 8px", borderRadius: 8, cursor: "pointer",
+                            padding: "12px 8px", borderRadius: 8, cursor: "pointer",
                             border: trapState === val ? "2px solid #3b82f6" : "1px solid #334155",
                             background: trapState === val ? "#3b82f620" : "#0f172a",
-                            color: trapState === val ? "#60a5fa" : "#94a3b8",
+                            color: trapState === val ? "#3b82f6" : "#94a3b8",
                             display: "flex", flexDirection: "column", alignItems: "center", gap: 4
                           }}
                         >
-                          <span style={{ fontSize: 22 }}>{icon}</span>
-                          <span style={{ fontSize: 11, textAlign: "center" }}>{label}</span>
+                          <span style={{ fontSize: 20 }}>{icon}</span>
+                          <span style={{ fontSize: 11 }}>{label}</span>
                         </button>
                       ))}
                     </div>
@@ -530,12 +473,14 @@ export default function BoxScanDialog({ box, onClose, onScanCreated, onSave, onE
 
                 {/* Current Status Display */}
                 <div style={{
-                  padding: 12, background: STATUS_CONFIG[status]?.bg || "#0f172a",
-                  borderRadius: 8, marginBottom: 16, display: "flex", alignItems: "center", gap: 8
+                  padding: 12, borderRadius: 8, marginBottom: 16,
+                  background: STATUS_CONFIG[status]?.bg || "#0f172a",
+                  border: `1px solid ${STATUS_CONFIG[status]?.color || "#334155"}`,
+                  display: "flex", alignItems: "center", gap: 8
                 }}>
                   <span style={{
                     width: 12, height: 12, borderRadius: "50%",
-                    background: STATUS_CONFIG[status]?.color || "#6b7280"
+                    background: STATUS_CONFIG[status]?.color || "#94a3b8"
                   }} />
                   <span style={{ color: STATUS_CONFIG[status]?.color || "#94a3b8", fontWeight: 500 }}>
                     Status: {STATUS_CONFIG[status]?.label || status}
@@ -630,7 +575,6 @@ export default function BoxScanDialog({ box, onClose, onScanCreated, onSave, onE
                         👤 {scan.users?.first_name || "Unbekannt"} {scan.users?.last_name || ""}
                       </div>
                       
-                      {/* Type-specific info */}
                       {scan.consumption !== null && scan.consumption !== undefined && (
                         <div style={{ color: "#e2e8f0", fontSize: 13, marginTop: 4 }}>
                           🧀 Köderverbrauch: {scan.consumption * 25}%

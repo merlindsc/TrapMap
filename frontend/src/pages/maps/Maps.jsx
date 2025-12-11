@@ -44,7 +44,8 @@ const MAPBOX_STREETS = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tile
 const MAPBOX_SAT = `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
 
 /* ============================================================
-   ICONS - Different per Box Type
+   ICONS - Different per Box Type with Animal Symbols
+   Alle Box-Typen mit eindeutigen Icons
    ============================================================ */
 
 const createObjectIcon = () => {
@@ -58,7 +59,100 @@ const createObjectIcon = () => {
   });
 };
 
-const createBoxIcon = (boxNumber, status = "green") => {
+// SVG Icons - ALLE TYPEN
+const BOX_TYPE_ICONS = {
+  // Emojis statt SVG - klar erkennbar!
+  rat: '🐀',
+  mouse: '🐁',
+  snapTrap: '⚠️',
+  tunnel: '🔶',
+  bait: '🟢',
+  liveTrap: '🔵',
+  monitoring: '👁️',
+  moth: '🦋',
+  cockroach: '🪳',
+  beetle: '🪲',
+  insect: '🪰',
+  uvLight: '☀️',
+};
+
+// Bestimme Icons basierend auf box_type Name - ERWEITERT
+const getBoxTypeIconConfig = (boxTypeName) => {
+  if (!boxTypeName) return null;
+  
+  const name = boxTypeName.toLowerCase();
+  
+  // === SCHLAGFALLEN ===
+  // Schlagfallen-Tunnel Ratte
+  if ((name.includes('schlagfall') || name.includes('snap')) && name.includes('tunnel') && (name.includes('ratte') || name.includes('rat'))) {
+    return { icons: ['rat', 'tunnel'], color: '#f97316' };
+  }
+  // Schlagfallen-Tunnel Maus
+  if ((name.includes('schlagfall') || name.includes('snap')) && name.includes('tunnel') && (name.includes('maus') || name.includes('mouse'))) {
+    return { icons: ['mouse', 'tunnel'], color: '#f97316' };
+  }
+  // Schlagfalle Ratte (normal)
+  if ((name.includes('schlagfall') || name.includes('snap')) && (name.includes('ratte') || name.includes('rat'))) {
+    return { icons: ['rat', 'snapTrap'], color: '#ef4444' };
+  }
+  // Schlagfalle Maus (normal)
+  if ((name.includes('schlagfall') || name.includes('snap')) && (name.includes('maus') || name.includes('mouse'))) {
+    return { icons: ['mouse', 'snapTrap'], color: '#ef4444' };
+  }
+  
+  // === KOEDERSTATIONEN ===
+  if ((name.includes('koeder') || name.includes('koeder') || name.includes('bait')) && (name.includes('ratte') || name.includes('rat'))) {
+    return { icons: ['rat', 'bait'], color: '#22c55e' };
+  }
+  if ((name.includes('koeder') || name.includes('koeder') || name.includes('bait')) && (name.includes('maus') || name.includes('mouse'))) {
+    return { icons: ['mouse', 'bait'], color: '#22c55e' };
+  }
+  
+  // === LEBENDFALLEN ===
+  if ((name.includes('lebend') || name.includes('live')) && (name.includes('ratte') || name.includes('rat'))) {
+    return { icons: ['rat', 'liveTrap'], color: '#3b82f6' };
+  }
+  if ((name.includes('lebend') || name.includes('live')) && (name.includes('maus') || name.includes('mouse'))) {
+    return { icons: ['mouse', 'liveTrap'], color: '#3b82f6' };
+  }
+  
+  // === MONITORING ===
+  if (name.includes('monitoring') && (name.includes('ratte') || name.includes('rat'))) {
+    return { icons: ['rat', 'monitoring'], color: '#8b5cf6' };
+  }
+  if (name.includes('monitoring') && (name.includes('maus') || name.includes('mouse'))) {
+    return { icons: ['mouse', 'monitoring'], color: '#8b5cf6' };
+  }
+  
+  // === SPEZIAL-MONITORE ===
+  if (name.includes('motten')) {
+    return { icons: ['moth'], color: '#d97706' };
+  }
+  if (name.includes('schaben')) {
+    return { icons: ['cockroach'], color: '#78716c' };
+  }
+  if (name.includes('kaefer') || name.includes('kaefer')) {
+    return { icons: ['beetle'], color: '#92400e' };
+  }
+  if (name.includes('insekt') || name.includes('insect')) {
+    return { icons: ['insect'], color: '#65a30d' };
+  }
+  if (name.includes('uv') || name.includes('licht') || name.includes('light')) {
+    return { icons: ['uvLight'], color: '#a855f7' };
+  }
+  
+  // === FALLBACK: Nur Tier ===
+  if (name.includes('ratte') || name.includes('rat')) {
+    return { icons: ['rat'], color: '#6b7280' };
+  }
+  if (name.includes('maus') || name.includes('mouse')) {
+    return { icons: ['mouse'], color: '#6b7280' };
+  }
+  
+  return null;
+};
+
+const createBoxIcon = (boxNumber, status = "green", boxTypeName = null) => {
   const colors = {
     green: "#10b981",
     yellow: "#eab308",
@@ -70,7 +164,33 @@ const createBoxIcon = (boxNumber, status = "green") => {
 
   const color = colors[status] || colors.green;
   const displayNum = String(boxNumber || "?").slice(-3);
-
+  
+  // Hole Icon-Config
+  const iconConfig = getBoxTypeIconConfig(boxTypeName);
+  
+  if (iconConfig && iconConfig.icons && iconConfig.icons.length > 0) {
+    // Erzeuge Emoji Icons
+    const emojis = iconConfig.icons.map(iconKey => BOX_TYPE_ICONS[iconKey] || '').join('');
+    const iconWidth = iconConfig.icons.length > 1 ? 52 : 40;
+    
+    const iconHtml = `
+      <div style="position: relative; width: ${iconWidth}px; height: 56px;">
+        <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); display: flex; gap: 1px; background: rgba(0,0,0,0.85); border-radius: 8px; padding: 3px 6px; border: 1px solid rgba(255,255,255,0.3); box-shadow: 0 2px 8px rgba(0,0,0,0.4);">
+          <span style="font-size: 16px; line-height: 1;">${emojis}</span>
+        </div>
+        <div style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); background: ${color}; width: 28px; height: 28px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: bold;">${displayNum}</div>
+      </div>
+    `;
+    
+    return L.divIcon({
+      html: iconHtml,
+      className: "custom-box-marker",
+      iconSize: [iconWidth, 54],
+      iconAnchor: [iconWidth / 2, 54],
+    });
+  }
+  
+  // Standard: Nur Nummer
   return L.divIcon({
     html: `<div style="background: ${color}; width: 28px; height: 28px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: bold;">${displayNum}</div>`,
     className: "custom-box-marker",
@@ -83,10 +203,16 @@ const createBoxIcon = (boxNumber, status = "green") => {
    BOX MARKER - NO POPUP, only onClick
    ============================================================ */
 function BoxMarker({ box, onClick }) {
+  // Guard: keine ungueltigen Koordinaten
+  if (!box?.lat || !box?.lng) return null;
+  
+  // box_type_name kann von verschiedenen Stellen kommen
+  const boxTypeName = box.box_type_name || box.box_type?.name || box.type_name || null;
+  
   return (
     <Marker
       position={[box.lat, box.lng]}
-      icon={createBoxIcon(box.number || box.id, box.current_status || box.status)}
+      icon={createBoxIcon(box.number || box.id, box.current_status || box.status, boxTypeName)}
       eventHandlers={{
         click: () => onClick(box),
       }}
@@ -98,6 +224,9 @@ function BoxMarker({ box, onClick }) {
    OBJECT MARKER - NO POPUP, only onClick
    ============================================================ */
 function ObjectMarkerComponent({ object, isSelected, onSelect }) {
+  // Guard: keine ungueltigen Koordinaten
+  if (!object?.lat || !object?.lng) return null;
+  
   return (
     <Marker
       position={[object.lat, object.lng]}
@@ -294,7 +423,7 @@ export default function Maps() {
     if (selectedObject) {
       console.log("B Loading boxes for object:", selectedObject.id);
       loadBoxes(selectedObject.id);
-      setSidebarOpen(true); // - Sidebar Ã¶ffnet automatisch
+      setSidebarOpen(true); // - Sidebar oeffnet automatisch
     } else {
       setBoxes([]);
       setSidebarOpen(false);
@@ -308,7 +437,7 @@ export default function Maps() {
   const handleBoxClick = (box) => {
     console.log("B Box clicked:", box);
     setSelectedBox(box);
-    setControlDialogOpen(true); // - Kontrolle Ã¶ffnet, NICHT Bearbeiten!
+    setControlDialogOpen(true); // - Kontrolle oeffnet, NICHT Bearbeiten!
   };
 
   const handleObjectClick = (obj) => {
@@ -317,7 +446,8 @@ export default function Maps() {
     loadBoxes(obj.id);
     setSidebarOpen(true);
     
-    if (mapRef.current) {
+    // Nur flyTo wenn Koordinaten gueltig sind
+    if (mapRef.current && obj.lat && obj.lng) {
       mapRef.current.flyTo([obj.lat, obj.lng], 18, {
         duration: 1.0,
       });
@@ -346,7 +476,8 @@ export default function Maps() {
   };
 
   const selectAddress = (result) => {
-    if (mapRef.current) {
+    // Nur flyTo wenn Koordinaten gueltig sind
+    if (mapRef.current && result?.lat && result?.lon) {
       mapRef.current.flyTo([parseFloat(result.lat), parseFloat(result.lon)], 16, {
         duration: 1.0,
       });
@@ -522,7 +653,7 @@ export default function Maps() {
                   setStyleOpen(false);
                 }}
               >
-                B StraÃŸen
+                Strassen
               </button>
 
               <button
@@ -532,7 +663,7 @@ export default function Maps() {
                   setStyleOpen(false);
                 }}
               >
-                B Satellit
+                Satellit
               </button>
 
               <button
@@ -542,7 +673,7 @@ export default function Maps() {
                   setStyleOpen(false);
                 }}
               >
-                B Hybrid
+                Hybrid
               </button>
             </div>
           )}
@@ -586,7 +717,7 @@ export default function Maps() {
           <MapReadyHandler />
           <MapEventsHandler />
 
-          {/* Objects */}
+          {/* Objects - nur mit gueltigen Koordinaten */}
           {objects.filter(obj => obj.lat && obj.lng).map((obj) => (
             <ObjectMarkerComponent
               key={obj.id}

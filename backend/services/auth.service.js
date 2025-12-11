@@ -1,53 +1,113 @@
 // ============================================
 // AUTH SERVICE
 // Business logic for authentication
+// MIT security.js und validation.js Kompatibilität
 // ============================================
 
 const bcrypt = require('bcryptjs');
-const crypto = require('crypto');
 const { supabase } = require('../config/supabase');
 const { sign, signRefresh, verify } = require('../utils/jwt');
 
-/**
- * Login User
- */
-const login = async (email, password) => {
+// Versuche security.js zu laden (optional)
+let logSecurityEvent = (event, data) => console.log(`🔐 ${event}:`, JSON.stringify(data));
+let clearFailedLogins = () => {};
+try {
+  const security = require('../middleware/security');
+  if (security.logSecurityEvent) logSecurityEvent = security.logSecurityEvent;
+  if (security.clearFailedLogins) clearFailedLogins = security.clearFailedLogins;
+} catch (e) {
+  console.log('Security middleware not found - using console logging');
+}
+
+// Einfache Email-Validierung
+const isValidEmail = (email) => {
+  if (!email || typeof email !== 'string') return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+};
+
+// ============================================
+// LOGIN
+// ============================================
+const login = async (email, password, ip = null) => {
   try {
-    console.log('[LOGIN] Attempting login for:', email);
-    
+    console.log('🔐 Login attempt for:', email);
+
+    // Input Validation
+    if (!email || !isValidEmail(email)) {
+      return { success: false, message: 'Ungültige E-Mail-Adresse' };
+    }
+
+    if (!password) {
+      return { success: false, message: 'Passwort erforderlich' };
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // User suchen
     const { data: user, error } = await supabase
       .from('users')
       .select('id, organisation_id, email, password_hash, role, first_name, last_name, active, must_change_password')
-      .eq('email', email.toLowerCase())
+      .eq('email', normalizedEmail)
       .single();
 
-    if (error || !user) {
-      console.log('[LOGIN] User not found or error:', error);
-      return { success: false, message: 'Ungültige E-Mail oder Passwort' };
+    if (error) {
+      console.error('Login DB error:', error);
+      return { success: false, message: 'Login fehlgeschlagen' };
     }
 
-    if (!user.active) {
-      return { success: false, message: 'Account ist deaktiviert. Bitte kontaktieren Sie Ihren Administrator.' };
+    if (!user) {
+      console.log('❌ User not found');
+      logSecurityEvent('LOGIN_USER_NOT_FOUND', { email: normalizedEmail, ip });
+      return { success: false, message: 'Ungültige Anmeldedaten' };
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-    if (!isPasswordValid) {
-      return { success: false, message: 'Ungültige E-Mail oder Passwort' };
+    // Account aktiv?
+    if (user.active === false) {
+      console.log('❌ User inactive');
+      logSecurityEvent('LOGIN_INACTIVE_ACCOUNT', { email: normalizedEmail, userId: user.id, ip });
+      return { success: false, message: 'Ihr Account ist deaktiviert' };
     }
 
-    // Generate tokens
+    // Passwort prüfen
+    const validPassword = await bcrypt.compare(password, user.password_hash);
+
+    if (!validPassword) {
+      console.log('❌ Invalid password');
+      logSecurityEvent('LOGIN_WRONG_PASSWORD', { email: normalizedEmail, userId: user.id, ip });
+      return { success: false, message: 'Ungültige Anmeldedaten' };
+    }
+
+    // Erfolgreicher Login
+    if (ip) {
+      clearFailedLogins(ip, normalizedEmail);
+    }
+
+    // Token erstellen
     const payload = {
       user_id: user.id,
       organisation_id: user.organisation_id,
-      email: user.email,
-      role: user.role
+      role: user.role,
+      email: user.email
     };
 
     const token = sign(payload);
     const refreshToken = signRefresh(payload);
 
-    console.log('[LOGIN] Success for user:', user.id, 'must_change_password:', user.must_change_password);
+    // Last login updaten
+    await supabase
+      .from('users')
+      .update({ last_login: new Date().toISOString() })
+      .eq('id', user.id);
 
+    console.log('✅ Login successful for:', normalizedEmail);
+    logSecurityEvent('LOGIN_SUCCESS', {
+      email: normalizedEmail,
+      userId: user.id,
+      role: user.role,
+      ip
+    });
+
+    // WICHTIG: success: true muss dabei sein!
     return {
       success: true,
       token,
@@ -63,24 +123,25 @@ const login = async (email, password) => {
       }
     };
   } catch (error) {
-    console.error('[LOGIN] Service error:', error);
+    console.error('Login service error:', error);
     return { success: false, message: 'Login fehlgeschlagen' };
   }
 };
 
-/**
- * Refresh Access Token
- */
-const refreshToken = async (refreshTokenStr) => {
+// ============================================
+// REFRESH TOKEN
+// ============================================
+const refreshToken = async (token) => {
   try {
-    const decoded = verify(refreshTokenStr);
+    const decoded = verify(token);
+
     if (!decoded) {
       return { success: false, message: 'Invalid or expired refresh token' };
     }
 
     const { data: user, error } = await supabase
       .from('users')
-      .select('id, organisation_id, email, role, active')
+      .select('id, organisation_id, role, active, email')
       .eq('id', decoded.user_id)
       .single();
 
@@ -91,219 +152,160 @@ const refreshToken = async (refreshTokenStr) => {
     const payload = {
       user_id: user.id,
       organisation_id: user.organisation_id,
-      email: user.email,
-      role: user.role
+      role: user.role,
+      email: user.email
     };
 
-    const token = sign(payload);
-    return { success: true, token };
+    const newToken = sign(payload);
+
+    return { success: true, token: newToken };
   } catch (error) {
-    console.error('Token refresh service error:', error);
+    console.error('Token refresh error:', error);
     return { success: false, message: 'Token refresh failed' };
   }
 };
 
-/**
- * Change Password (eingeloggt)
- */
+// ============================================
+// CHANGE PASSWORD
+// ============================================
 const changePassword = async (userId, currentPassword, newPassword) => {
   try {
-    console.log('[CHANGE-PASSWORD] userId:', userId);
-    
-    // User holen
     const { data: user, error } = await supabase
       .from('users')
-      .select('id, password_hash')
+      .select('id, password_hash, email')
       .eq('id', userId)
       .single();
 
     if (error || !user) {
-      console.log('[CHANGE-PASSWORD] User not found:', error);
-      return { success: false, message: 'Benutzer nicht gefunden' };
+      return { success: false, message: 'User nicht gefunden' };
     }
 
-    // Aktuelles Passwort prüfen
     const isValid = await bcrypt.compare(currentPassword, user.password_hash);
     if (!isValid) {
-      console.log('[CHANGE-PASSWORD] Current password invalid');
+      logSecurityEvent('PASSWORD_CHANGE_WRONG_CURRENT', { userId, email: user.email });
       return { success: false, message: 'Aktuelles Passwort ist falsch' };
     }
 
-    // Neues Passwort hashen und speichern
-    const newHash = await bcrypt.hash(newPassword, 12);
-    
+    const newHash = await bcrypt.hash(newPassword, 10);
+
     const { error: updateError } = await supabase
       .from('users')
-      .update({ 
+      .update({
         password_hash: newHash,
-        must_change_password: false 
+        must_change_password: false
       })
       .eq('id', userId);
 
     if (updateError) {
-      console.log('[CHANGE-PASSWORD] Update error:', updateError);
-      return { success: false, message: 'Fehler beim Speichern' };
+      return { success: false, message: 'Passwort konnte nicht geändert werden' };
     }
 
-    console.log('[CHANGE-PASSWORD] Success');
+    logSecurityEvent('PASSWORD_CHANGED', { userId, email: user.email });
     return { success: true, message: 'Passwort erfolgreich geändert' };
   } catch (error) {
-    console.error('[CHANGE-PASSWORD] Catch error:', error);
+    console.error('Change password error:', error);
     return { success: false, message: 'Fehler beim Ändern des Passworts' };
   }
 };
 
-/**
- * Set New Password (für must_change_password, ohne altes Passwort)
- */
+// ============================================
+// SET NEW PASSWORD (first login)
+// ============================================
 const setNewPassword = async (userId, newPassword) => {
   try {
-    console.log('[SET-PASSWORD] ====== START ======');
-    console.log('[SET-PASSWORD] userId:', userId);
-    console.log('[SET-PASSWORD] userId type:', typeof userId);
-    console.log('[SET-PASSWORD] newPassword exists:', !!newPassword);
-    console.log('[SET-PASSWORD] newPassword length:', newPassword?.length);
-    
-    const newHash = await bcrypt.hash(newPassword, 12);
-    console.log('[SET-PASSWORD] Hash created successfully');
-    
-    const { data, error } = await supabase
-      .from('users')
-      .update({ 
-        password_hash: newHash,
-        must_change_password: false 
-      })
-      .eq('id', userId)
-      .select();
+    const newHash = await bcrypt.hash(newPassword, 10);
 
-    console.log('[SET-PASSWORD] Supabase response data:', data);
-    console.log('[SET-PASSWORD] Supabase error:', error);
+    const { error } = await supabase
+      .from('users')
+      .update({
+        password_hash: newHash,
+        must_change_password: false
+      })
+      .eq('id', userId);
 
     if (error) {
-      console.log('[SET-PASSWORD] Returning error response');
-      return { success: false, message: 'Fehler beim Speichern' };
+      return { success: false, message: 'Passwort konnte nicht gesetzt werden' };
     }
 
-    if (!data || data.length === 0) {
-      console.log('[SET-PASSWORD] No rows updated - user not found?');
-      return { success: false, message: 'Benutzer nicht gefunden' };
-    }
-
-    console.log('[SET-PASSWORD] ====== SUCCESS ======');
     return { success: true, message: 'Passwort erfolgreich gesetzt' };
   } catch (error) {
-    console.error('[SET-PASSWORD] ====== CATCH ERROR ======');
-    console.error('[SET-PASSWORD] Error:', error);
+    console.error('Set password error:', error);
     return { success: false, message: 'Fehler beim Setzen des Passworts' };
   }
 };
 
-/**
- * Forgot Password - Sendet Reset-Email
- */
-const forgotPassword = async (email, sendEmailFn) => {
+// ============================================
+// FORGOT PASSWORD
+// ============================================
+const forgotPassword = async (email, sendEmailFn = null) => {
   try {
-    console.log('[FORGOT-PASSWORD] Email:', email);
-    
-    const { data: user, error } = await supabase
+    const { data: user } = await supabase
       .from('users')
       .select('id, email, first_name')
       .eq('email', email.toLowerCase())
       .single();
 
-    // Immer "Erfolg" zurückgeben um Email-Enumeration zu verhindern
-    if (error || !user) {
-      console.log('[FORGOT-PASSWORD] User not found (returning success anyway)');
-      return { success: true, message: 'Falls ein Account existiert, wurde eine E-Mail gesendet' };
+    // Always return success (security)
+    if (!user) {
+      return { success: true, message: 'Falls die E-Mail existiert, erhalten Sie einen Reset-Link.' };
     }
 
-    // Reset Token generieren
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetExpires = new Date(Date.now() + 3600000).toISOString(); // 1 Stunde
+    const resetToken = sign({ user_id: user.id, type: 'reset' });
 
-    console.log('[FORGOT-PASSWORD] Generated token for user:', user.id);
-
-    // Token in DB speichern
-    const { error: updateError } = await supabase
+    await supabase
       .from('users')
-      .update({ 
-        reset_token: resetToken,
-        reset_token_expires: resetExpires 
-      })
+      .update({ reset_token: resetToken })
       .eq('id', user.id);
 
-    if (updateError) {
-      console.error('[FORGOT-PASSWORD] Token save error:', updateError);
-      return { success: false, message: 'Fehler beim Erstellen des Reset-Links' };
-    }
-
-    // Email senden
     if (sendEmailFn) {
-      console.log('[FORGOT-PASSWORD] Sending email...');
-      await sendEmailFn(user.email, {
-        name: user.first_name,
-        resetToken: resetToken
-      });
-      console.log('[FORGOT-PASSWORD] Email sent');
-    } else {
-      console.log('[FORGOT-PASSWORD] No email function provided');
+      await sendEmailFn(user.email, user.first_name, resetToken);
     }
 
-    return { success: true, message: 'Falls ein Account existiert, wurde eine E-Mail gesendet' };
+    logSecurityEvent('PASSWORD_RESET_REQUESTED', { userId: user.id, email: user.email });
+    return { success: true, message: 'Falls die E-Mail existiert, erhalten Sie einen Reset-Link.' };
   } catch (error) {
-    console.error('[FORGOT-PASSWORD] Catch error:', error);
-    return { success: false, message: 'Fehler beim Zurücksetzen' };
+    console.error('Forgot password error:', error);
+    return { success: true, message: 'Falls die E-Mail existiert, erhalten Sie einen Reset-Link.' };
   }
 };
 
-/**
- * Reset Password with Token
- */
+// ============================================
+// RESET PASSWORD WITH TOKEN
+// ============================================
 const resetPasswordWithToken = async (token, newPassword) => {
   try {
-    console.log('[RESET-PASSWORD] Token provided:', !!token);
-    
-    // User mit Token finden
-    const { data: user, error } = await supabase
+    const decoded = verify(token);
+
+    if (!decoded || decoded.type !== 'reset') {
+      return { success: false, message: 'Ungültiger oder abgelaufener Reset-Link' };
+    }
+
+    const { data: user } = await supabase
       .from('users')
-      .select('id, reset_token_expires')
-      .eq('reset_token', token)
+      .select('id, reset_token, email')
+      .eq('id', decoded.user_id)
       .single();
 
-    if (error || !user) {
-      console.log('[RESET-PASSWORD] Invalid token:', error);
-      return { success: false, message: 'Ungültiger oder abgelaufener Link' };
+    if (!user || user.reset_token !== token) {
+      return { success: false, message: 'Ungültiger Reset-Link' };
     }
 
-    // Token-Ablauf prüfen
-    if (new Date(user.reset_token_expires) < new Date()) {
-      console.log('[RESET-PASSWORD] Token expired');
-      return { success: false, message: 'Link ist abgelaufen. Bitte erneut anfordern.' };
-    }
+    const newHash = await bcrypt.hash(newPassword, 10);
 
-    // Neues Passwort setzen
-    const newHash = await bcrypt.hash(newPassword, 12);
-    
-    const { error: updateError } = await supabase
+    await supabase
       .from('users')
-      .update({ 
+      .update({
         password_hash: newHash,
         reset_token: null,
-        reset_token_expires: null,
         must_change_password: false
       })
-      .eq('id', user.id);
+      .eq('id', decoded.user_id);
 
-    if (updateError) {
-      console.log('[RESET-PASSWORD] Update error:', updateError);
-      return { success: false, message: 'Fehler beim Speichern' };
-    }
-
-    console.log('[RESET-PASSWORD] Success for user:', user.id);
-    return { success: true, message: 'Passwort erfolgreich geändert. Sie können sich jetzt einloggen.' };
+    logSecurityEvent('PASSWORD_RESET_COMPLETED', { userId: user.id, email: user.email });
+    return { success: true, message: 'Passwort erfolgreich zurückgesetzt' };
   } catch (error) {
-    console.error('[RESET-PASSWORD] Catch error:', error);
-    return { success: false, message: 'Fehler beim Zurücksetzen' };
+    console.error('Reset password error:', error);
+    return { success: false, message: 'Fehler beim Zurücksetzen des Passworts' };
   }
 };
 

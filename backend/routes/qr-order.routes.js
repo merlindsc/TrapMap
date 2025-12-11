@@ -1,115 +1,69 @@
 // ============================================
 // QR-ORDER ROUTES
-// Für QR-Code Bestellungen (Admin-Bereich)
+// Für QR-Code Bestellungen (Super-Admin Bereich)
 // ============================================
 
 const express = require("express");
 const router = express.Router();
 const { authenticate } = require("../middleware/auth");
+const qrOrderController = require("../controllers/qr-order.controller");
+
+// Super-Admin Check Middleware mit DEBUG
+const superAdminOnly = (req, res, next) => {
+  const allowedEmails = [
+    "admin@demo.trapmap.de",
+    "merlin@trapmap.de",
+    "hilfe@die-schaedlingsexperten.de"
+  ];
+  
+  // DEBUG: Was ist im req.user?
+  console.log("🔍 SuperAdmin Check:");
+  console.log("   req.user:", JSON.stringify(req.user, null, 2));
+  console.log("   email:", req.user?.email);
+  console.log("   allowed:", allowedEmails.includes(req.user?.email));
+  
+  if (!req.user?.email || !allowedEmails.includes(req.user.email)) {
+    console.log("   ❌ REJECTED - email not in allowedEmails");
+    return res.status(403).json({ error: "Keine Berechtigung" });
+  }
+  
+  console.log("   ✅ ALLOWED");
+  next();
+};
+
+// Alle Routes brauchen Auth + SuperAdmin
+router.use(authenticate);
+router.use(superAdminOnly);
 
 // ============================================
-// GET /api/qr-orders/stats
-// Statistiken für QR-Code Bestellungen
+// PREIS BERECHNUNG
 // ============================================
-router.get("/stats", authenticate, async (req, res) => {
-  try {
-    // Placeholder - später mit echten Daten ersetzen
-    res.json({
-      totalOrders: 0,
-      pendingOrders: 0,
-      completedOrders: 0,
-      totalRevenue: 0,
-      thisMonth: 0
-    });
-  } catch (err) {
-    console.error("QR Orders Stats Error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
+router.get("/price", qrOrderController.calculatePrice);
 
 // ============================================
-// GET /api/qr-orders/orders
-// Liste aller QR-Code Bestellungen
+// STATISTIKEN
 // ============================================
-router.get("/orders", authenticate, async (req, res) => {
-  try {
-    const { limit = 20, offset = 0, status } = req.query;
-    
-    // Placeholder - später mit echten Daten ersetzen
-    res.json({
-      data: [],
-      total: 0,
-      limit: parseInt(limit),
-      offset: parseInt(offset)
-    });
-  } catch (err) {
-    console.error("QR Orders List Error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
+router.get("/stats", qrOrderController.getAllOrganisationsStats);
+router.get("/stats/:organisationId", qrOrderController.getOrganisationStats);
 
 // ============================================
-// POST /api/qr-orders
-// Neue QR-Code Bestellung erstellen
+// ORGANISATIONS-PRÄFIX
 // ============================================
-router.post("/", authenticate, async (req, res) => {
-  try {
-    const { quantity, type, notes } = req.body;
-    
-    // Placeholder
-    res.status(201).json({
-      id: Date.now(),
-      quantity,
-      type,
-      notes,
-      status: "pending",
-      created_at: new Date().toISOString()
-    });
-  } catch (err) {
-    console.error("QR Order Create Error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
+router.get("/prefix/:organisationId", qrOrderController.getOrganisationPrefix);
+router.put("/prefix/:organisationId", qrOrderController.setOrganisationPrefix);
 
 // ============================================
-// PUT /api/qr-orders/:id
-// Bestellung aktualisieren
+// BESTELLUNGEN
 // ============================================
-router.put("/:id", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status, notes } = req.body;
-    
-    // Placeholder
-    res.json({
-      id: parseInt(id),
-      status,
-      notes,
-      updated_at: new Date().toISOString()
-    });
-  } catch (err) {
-    console.error("QR Order Update Error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
+router.get("/orders", qrOrderController.getOrders);
+router.post("/", qrOrderController.createOrder);
+router.post("/generate/:orderId", qrOrderController.generateCodes);
+router.get("/download/:orderId", qrOrderController.downloadPDF);
+router.post("/send/:orderId", qrOrderController.sendByEmail);
 
 // ============================================
-// DELETE /api/qr-orders/:id
-// Bestellung löschen
+// ⭐ KOMPLETTER WORKFLOW (Ein-Klick!)
 // ============================================
-router.delete("/:id", authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    // Placeholder
-    res.json({
-      success: true,
-      deleted_id: parseInt(id)
-    });
-  } catch (err) {
-    console.error("QR Order Delete Error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
+router.post("/process", qrOrderController.processCompleteOrder);
 
 module.exports = router;

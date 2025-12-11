@@ -4,6 +4,7 @@
    ============================================================ */
 
 const qrOrderService = require('../services/qr-order.service');
+const { supabase } = require('../config/supabase');
 
 // ============================================
 // PREIS BERECHNEN
@@ -188,7 +189,7 @@ exports.getAllOrganisationsStats = async (req, res) => {
 // ============================================
 exports.getOrders = async (req, res) => {
   try {
-    const { organisationId } = req.query;
+    const { organisationId, limit = 100 } = req.query;
     
     let query = supabase
       .from('qr_orders')
@@ -199,10 +200,11 @@ exports.getOrders = async (req, res) => {
       query = query.eq('organisation_id', organisationId);
     }
 
-    const { data, error } = await query.limit(100);
+    const { data, error } = await query.limit(parseInt(limit));
+    
     if (error) throw new Error(error.message);
 
-    res.json(data);
+    res.json(data || []);
   } catch (err) {
     console.error('Get orders error:', err);
     res.status(500).json({ error: err.message });

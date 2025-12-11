@@ -1,281 +1,689 @@
 /* ============================================================
-   TRAPMAP – ADMIN.JSX (Super-Admin Dashboard)
-   Mit integriertem QR-Order System
+   TRAPMAP – SUPER ADMIN DASHBOARD
+   Komplettes Admin-Panel mit allen Funktionen inkl. QR-Codes
    ============================================================ */
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
-  Users, Building2, Settings, QrCode, Shield, 
-  ChevronRight, AlertTriangle
+  QrCode, Building2, Users, Settings, Shield, Plus, Trash2,
+  Edit2, Loader, Check, X, AlertCircle, Mail, Phone, MapPin,
+  Eye, EyeOff, RefreshCw, UserPlus, UserCheck,
+  BarChart3, Database, Server, Activity
 } from "lucide-react";
 
-// Import der Sub-Komponenten
+// QR-Codes Tab als separate Komponente importieren
 import SuperAdminQROrders from "./SuperAdminQROrders";
-// Falls du die anderen Admin-Komponenten hast:
-// import SuperAdminUsers from "./SuperAdminUsers";
-// import SuperAdminOrganisations from "./SuperAdminOrganisations";
 
 const API = import.meta.env.VITE_API_URL;
 
 // Super-Admin E-Mails
 const SUPER_ADMINS = [
   "admin@demo.trapmap.de",
-  "merlin@trapmap.de",
+  "merlin@trapmap.de", 
   "hilfe@die-schaedlingsexperten.de"
 ];
 
 export default function Admin() {
   const token = localStorage.getItem("trapmap_token");
-  const user = JSON.parse(localStorage.getItem("trapmap_user") || "{}");
-  
-  const [activeTab, setActiveTab] = useState("qr-orders"); // Default: QR-Orders
-  const [stats, setStats] = useState(null);
+  const headers = { Authorization: `Bearer ${token}` };
+  const jsonHeaders = { ...headers, "Content-Type": "application/json" };
 
-  // Check Super-Admin Status
-  const isSuperAdmin = SUPER_ADMINS.includes(user.email);
+  // Tab State
+  const [activeTab, setActiveTab] = useState("qr");
+
+  // Data States
+  const [organisations, setOrganisations] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [partners, setPartners] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(false);
+  
+  // UI States
+  const [message, setMessage] = useState(null);
+
+  // ============================================
+  // HEADER STATS
+  // ============================================
+  const [headerStats, setHeaderStats] = useState({ orgs: 0, users: 0, qr: 0 });
 
   useEffect(() => {
-    if (isSuperAdmin) {
-      loadStats();
-    }
+    loadHeaderStats();
   }, []);
 
-  const loadStats = async () => {
+  const loadHeaderStats = async () => {
     try {
-      const headers = { Authorization: `Bearer ${token}` };
-      
-      // Lade verschiedene Stats
-      const [orgsRes, usersRes] = await Promise.all([
-        fetch(`${API}/qr-orders/stats`, { headers }),
-        fetch(`${API}/users`, { headers })
-      ]);
-
-      const orgs = orgsRes.ok ? await orgsRes.json() : [];
-      const users = usersRes.ok ? await usersRes.json() : [];
-
-      setStats({
-        organisations: Array.isArray(orgs) ? orgs.length : 0,
-        users: Array.isArray(users) ? users.length : (users.data?.length || 0),
-        totalQRCodes: Array.isArray(orgs) 
-          ? orgs.reduce((sum, o) => sum + (o.qr_codes_ordered || 0), 0) 
-          : 0
-      });
+      const res = await fetch(`${API}/admin/stats`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setHeaderStats({
+          orgs: data.organisations || 0,
+          users: data.users || 0,
+          qr: data.boxes || 0
+        });
+      }
     } catch (err) {
       console.error("Stats error:", err);
     }
   };
 
-  // Kein Super-Admin → Kein Zugang
-  if (!isSuperAdmin) {
-    return (
-      <div style={styles.accessDenied}>
-        <AlertTriangle size={64} color="#ef4444" />
-        <h1>Zugang verweigert</h1>
-        <p>Du hast keine Super-Admin Berechtigung.</p>
-        <p style={{ color: "#6b7280", fontSize: "14px" }}>
-          Eingeloggt als: {user.email}
-        </p>
-      </div>
-    );
-  }
+  // ============================================
+  // DATA LOADING
+  // ============================================
+  useEffect(() => {
+    if (activeTab !== "qr") {
+      loadData();
+    }
+  }, [activeTab]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      switch (activeTab) {
+        case "organisations":
+          await loadOrganisations();
+          break;
+        case "users":
+          await loadAllUsers();
+          await loadOrganisations(); // Für Dropdown
+          break;
+        case "partners":
+          await loadAllPartners();
+          await loadOrganisations(); // Für Dropdown
+          break;
+        case "system":
+          await loadSystemStats();
+          break;
+      }
+    } catch (err) {
+      console.error("Load error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadOrganisations = async () => {
+    const res = await fetch(`${API}/admin/organisations`, { headers });
+    if (res.ok) {
+      const data = await res.json();
+      setOrganisations(Array.isArray(data) ? data : []);
+    }
+  };
+
+  const loadAllUsers = async () => {
+    const res = await fetch(`${API}/admin/users`, { headers });
+    if (res.ok) {
+      const data = await res.json();
+      setUsers(Array.isArray(data) ? data : []);
+    }
+  };
+
+  const loadAllPartners = async () => {
+    const res = await fetch(`${API}/admin/partners`, { headers });
+    if (res.ok) {
+      const data = await res.json();
+      setPartners(Array.isArray(data) ? data : []);
+    }
+  };
+
+  const loadSystemStats = async () => {
+    const res = await fetch(`${API}/admin/stats`, { headers });
+    if (res.ok) {
+      const data = await res.json();
+      setStats(data);
+    }
+  };
 
   // ============================================
-  // TABS
+  // MESSAGE HELPER
+  // ============================================
+  const showMessage = (type, text) => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage(null), 4000);
+  };
+
+  // ============================================
+  // TABS CONFIG
   // ============================================
   const tabs = [
-    { 
-      id: "qr-orders", 
-      label: "QR-Codes", 
-      icon: QrCode,
-      description: "QR-Code Bestellungen & Versand"
-    },
-    { 
-      id: "organisations", 
-      label: "Organisationen", 
-      icon: Building2,
-      description: "Alle Organisationen verwalten"
-    },
-    { 
-      id: "users", 
-      label: "Benutzer", 
-      icon: Users,
-      description: "Alle Benutzer verwalten"
-    },
-    { 
-      id: "settings", 
-      label: "System", 
-      icon: Settings,
-      description: "Systemeinstellungen"
-    }
+    { id: "qr", label: "QR-Codes", icon: QrCode, color: "bg-purple-600" },
+    { id: "organisations", label: "Organisationen", icon: Building2, color: "bg-indigo-600" },
+    { id: "users", label: "Benutzer", icon: Users, color: "bg-blue-600" },
+    { id: "partners", label: "Partner", icon: UserCheck, color: "bg-amber-600" },
+    { id: "system", label: "System", icon: Settings, color: "bg-gray-600" }
   ];
 
   // ============================================
   // RENDER
   // ============================================
   return (
-    <div style={styles.container}>
-      {/* HEADER */}
-      <div style={styles.header}>
-        <div style={styles.headerContent}>
-          <Shield size={32} color="#6366f1" />
+    <div className="max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl">
+            <Shield size={28} className="text-white" />
+          </div>
           <div>
-            <h1 style={styles.title}>Super-Admin Dashboard</h1>
-            <p style={styles.subtitle}>TrapMap Systemverwaltung</p>
+            <h1 className="text-2xl font-bold text-white">Super-Admin Dashboard</h1>
+            <p className="text-gray-400 text-sm">TrapMap Systemverwaltung</p>
           </div>
         </div>
 
-        {/* Quick Stats */}
-        {stats && (
-          <div style={styles.quickStats}>
-            <div style={styles.quickStat}>
-              <span>{stats.organisations}</span>
-              <small>Organisationen</small>
-            </div>
-            <div style={styles.quickStat}>
-              <span>{stats.users}</span>
-              <small>Benutzer</small>
-            </div>
-            <div style={styles.quickStat}>
-              <span>{stats.totalQRCodes}</span>
-              <small>QR-Codes</small>
-            </div>
-          </div>
-        )}
+        {/* Header Stats */}
+        <div className="hidden md:flex gap-4 text-sm">
+          <div className="text-gray-400">{headerStats.orgs}<span className="text-gray-600">Organisationen</span></div>
+          <div className="text-gray-400">{headerStats.users}<span className="text-gray-600">Benutzer</span></div>
+          <div className="text-gray-400">{headerStats.qr}<span className="text-gray-600">QR-Codes</span></div>
+        </div>
       </div>
 
-      {/* TAB NAVIGATION */}
-      <div style={styles.tabNav}>
+      {/* Message */}
+      {message && (
+        <div className={`mb-4 p-4 rounded-lg flex items-center gap-2 ${
+          message.type === 'success' 
+            ? 'bg-green-900/30 border border-green-500/30 text-green-400'
+            : 'bg-red-900/30 border border-red-500/30 text-red-400'
+        }`}>
+          {message.type === 'success' ? <Check size={18} /> : <AlertCircle size={18} />}
+          {message.text}
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="flex gap-2 mb-6 flex-wrap">
         {tabs.map(tab => (
           <button
             key={tab.id}
-            style={{
-              ...styles.tabButton,
-              background: activeTab === tab.id ? "#6366f1" : "transparent",
-              borderColor: activeTab === tab.id ? "#6366f1" : "#374151"
-            }}
             onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+              activeTab === tab.id
+                ? `${tab.color} text-white`
+                : 'bg-[#1a1a2e] text-gray-400 hover:bg-[#252542] hover:text-white'
+            }`}
           >
-            <tab.icon size={20} />
-            <span>{tab.label}</span>
+            <tab.icon size={18} />
+            {tab.label}
           </button>
         ))}
       </div>
 
-      {/* TAB CONTENT */}
-      <div style={styles.content}>
-        {activeTab === "qr-orders" && (
-          <SuperAdminQROrders />
-        )}
+      {/* Content */}
+      {activeTab === "qr" ? (
+        // QR-Tab: Nutze die separate Komponente
+        <SuperAdminQROrders />
+      ) : (
+        <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-6">
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader className="animate-spin text-indigo-400" size={32} />
+            </div>
+          ) : (
+            <>
+              {activeTab === "organisations" && (
+                <OrganisationsTab 
+                  organisations={organisations}
+                  onRefresh={loadOrganisations}
+                  showMessage={showMessage}
+                  headers={headers}
+                  jsonHeaders={jsonHeaders}
+                />
+              )}
+              {activeTab === "users" && (
+                <UsersTab 
+                  users={users}
+                  organisations={organisations}
+                  onRefresh={loadAllUsers}
+                  showMessage={showMessage}
+                  headers={headers}
+                  jsonHeaders={jsonHeaders}
+                />
+              )}
+              {activeTab === "partners" && (
+                <PartnersTab 
+                  partners={partners}
+                  organisations={organisations}
+                  onRefresh={loadAllPartners}
+                  showMessage={showMessage}
+                  headers={headers}
+                  jsonHeaders={jsonHeaders}
+                />
+              )}
+              {activeTab === "system" && (
+                <SystemTab 
+                  stats={stats}
+                  onRefresh={loadSystemStats}
+                />
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
-        {activeTab === "organisations" && (
-          <div style={styles.placeholder}>
-            <Building2 size={48} />
-            <h2>Organisationen</h2>
-            <p>Hier werden alle Organisationen verwaltet.</p>
-            {/* <SuperAdminOrganisations /> */}
-          </div>
-        )}
+// ============================================
+// ORGANISATIONEN TAB
+// ============================================
+function OrganisationsTab({ organisations, onRefresh, showMessage, headers, jsonHeaders }) {
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    name: "", email: "", address: "", zip: "", city: "", phone: ""
+  });
 
-        {activeTab === "users" && (
-          <div style={styles.placeholder}>
-            <Users size={48} />
-            <h2>Benutzer</h2>
-            <p>Hier werden alle Benutzer verwaltet.</p>
-            {/* <SuperAdminUsers /> */}
-          </div>
-        )}
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!form.name.trim()) return showMessage("error", "Name erforderlich");
 
-        {activeTab === "settings" && (
-          <div style={styles.placeholder}>
-            <Settings size={48} />
-            <h2>Systemeinstellungen</h2>
-            <p>Globale Konfiguration und Einstellungen.</p>
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/admin/organisations`, {
+        method: "POST",
+        headers: jsonHeaders,
+        body: JSON.stringify(form)
+      });
+
+      if (res.ok) {
+        showMessage("success", `Organisation "${form.name}" erstellt!`);
+        setForm({ name: "", email: "", address: "", zip: "", city: "", phone: "" });
+        setShowForm(false);
+        onRefresh();
+      } else {
+        const err = await res.json();
+        showMessage("error", err.error || "Fehler beim Erstellen");
+      }
+    } catch (err) {
+      showMessage("error", "Netzwerkfehler");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (org) => {
+    if (!confirm(`"${org.name}" wirklich löschen?\n\nAlle Daten werden gelöscht!`)) return;
+
+    try {
+      const res = await fetch(`${API}/admin/organisations/${org.id}`, {
+        method: "DELETE",
+        headers
+      });
+      if (res.ok) {
+        showMessage("success", "Organisation gelöscht");
+        onRefresh();
+      }
+    } catch (err) {
+      showMessage("error", "Fehler beim Löschen");
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+          <Building2 size={20} className="text-indigo-400" />
+          Organisationen ({organisations.length})
+        </h2>
+        <div className="flex gap-2">
+          <button onClick={onRefresh} className="p-2 bg-[#0d0d1a] hover:bg-[#252542] rounded-lg text-gray-400">
+            <RefreshCw size={18} />
+          </button>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg"
+          >
+            <Plus size={18} />
+            Neue Organisation
+          </button>
+        </div>
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleCreate} className="bg-[#0d0d1a] rounded-lg p-4 mb-6 border border-white/10">
+          <div className="grid md:grid-cols-2 gap-4 mb-4">
+            <input type="text" placeholder="Name *" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" required />
+            <input type="email" placeholder="E-Mail" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
+            <input type="text" placeholder="Straße" value={form.address} onChange={e => setForm({...form, address: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
+            <div className="flex gap-2">
+              <input type="text" placeholder="PLZ" value={form.zip} onChange={e => setForm({...form, zip: e.target.value})} className="w-24 bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
+              <input type="text" placeholder="Ort" value={form.city} onChange={e => setForm({...form, city: e.target.value})} className="flex-1 bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
+            </div>
           </div>
-        )}
+          <div className="flex gap-2">
+            <button type="submit" disabled={saving} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50">
+              {saving ? <Loader size={18} className="animate-spin" /> : "Erstellen"}
+            </button>
+            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">Abbrechen</button>
+          </div>
+        </form>
+      )}
+
+      <div className="space-y-2">
+        {organisations.map(org => (
+          <div key={org.id} className="flex items-center justify-between p-4 bg-[#0d0d1a] rounded-lg border border-white/5 hover:border-white/10">
+            <div className="flex-1">
+              <div className="flex items-center gap-3">
+                <span className="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded">#{org.id}</span>
+                <h3 className="font-medium text-white">{org.name}</h3>
+              </div>
+              <div className="flex gap-4 mt-1 text-sm text-gray-400">
+                {org.email && <span className="flex items-center gap-1"><Mail size={12} />{org.email}</span>}
+                {org.city && <span className="flex items-center gap-1"><MapPin size={12} />{org.city}</span>}
+              </div>
+            </div>
+            <button onClick={() => handleDelete(org)} className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg">
+              <Trash2 size={18} />
+            </button>
+          </div>
+        ))}
+        {organisations.length === 0 && <p className="text-center text-gray-500 py-8">Keine Organisationen</p>}
       </div>
     </div>
   );
 }
 
 // ============================================
-// STYLES
+// BENUTZER TAB
 // ============================================
-const styles = {
-  container: {
-    minHeight: "100vh",
-    background: "#0f172a",
-    color: "#fff"
-  },
-  accessDenied: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: "100vh",
-    textAlign: "center",
-    padding: "20px"
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: "20px",
-    padding: "24px",
-    background: "#1e293b",
-    borderBottom: "1px solid #334155"
-  },
-  headerContent: {
-    display: "flex",
-    alignItems: "center",
-    gap: "16px"
-  },
-  title: {
-    fontSize: "24px",
-    fontWeight: "bold",
-    margin: 0
-  },
-  subtitle: {
-    color: "#9ca3af",
-    margin: 0
-  },
-  quickStats: {
-    display: "flex",
-    gap: "24px"
-  },
-  quickStat: {
-    textAlign: "center"
-  },
-  tabNav: {
-    display: "flex",
-    gap: "8px",
-    padding: "16px 24px",
-    background: "#1e293b",
-    overflowX: "auto"
-  },
-  tabButton: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    padding: "10px 20px",
-    background: "transparent",
-    border: "1px solid #374151",
-    borderRadius: "8px",
-    color: "#fff",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-    transition: "all 0.2s"
-  },
-  content: {
-    padding: "0"
-  },
-  placeholder: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "80px 20px",
-    textAlign: "center",
-    color: "#6b7280"
-  }
-};
+function UsersTab({ users, organisations, onRefresh, showMessage, headers, jsonHeaders }) {
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [form, setForm] = useState({ email: "", password: "", first_name: "", last_name: "", role: "technician", organisation_id: "" });
+
+  const roles = [
+    { value: "admin", label: "Admin", color: "bg-purple-500/20 text-purple-400" },
+    { value: "supervisor", label: "Supervisor", color: "bg-blue-500/20 text-blue-400" },
+    { value: "technician", label: "Techniker", color: "bg-green-500/20 text-green-400" },
+    { value: "auditor", label: "Auditor", color: "bg-yellow-500/20 text-yellow-400" },
+    { value: "viewer", label: "Viewer", color: "bg-gray-500/20 text-gray-400" }
+  ];
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!form.email || !form.password || !form.organisation_id) return showMessage("error", "Alle Pflichtfelder ausfüllen");
+
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/admin/users`, { method: "POST", headers: jsonHeaders, body: JSON.stringify(form) });
+      if (res.ok) {
+        showMessage("success", `Benutzer "${form.email}" erstellt!`);
+        setForm({ email: "", password: "", first_name: "", last_name: "", role: "technician", organisation_id: "" });
+        setShowForm(false);
+        onRefresh();
+      } else {
+        const err = await res.json();
+        showMessage("error", err.error || "Fehler");
+      }
+    } catch (err) {
+      showMessage("error", "Netzwerkfehler");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (user) => {
+    if (!confirm(`Benutzer "${user.email}" wirklich löschen?`)) return;
+    try {
+      const res = await fetch(`${API}/admin/users/${user.id}`, { method: "DELETE", headers });
+      if (res.ok) { showMessage("success", "Benutzer gelöscht"); onRefresh(); }
+    } catch (err) { showMessage("error", "Fehler"); }
+  };
+
+  const toggleActive = async (user) => {
+    try {
+      const res = await fetch(`${API}/admin/users/${user.id}`, { method: "PUT", headers: jsonHeaders, body: JSON.stringify({ active: !user.active }) });
+      if (res.ok) { showMessage("success", user.active ? "Benutzer deaktiviert" : "Benutzer aktiviert"); onRefresh(); }
+    } catch (err) { showMessage("error", "Fehler"); }
+  };
+
+  const getRoleStyle = (role) => roles.find(r => r.value === role)?.color || "bg-gray-500/20 text-gray-400";
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+          <Users size={20} className="text-blue-400" />
+          Alle Benutzer ({users.length})
+        </h2>
+        <div className="flex gap-2">
+          <button onClick={onRefresh} className="p-2 bg-[#0d0d1a] hover:bg-[#252542] rounded-lg text-gray-400"><RefreshCw size={18} /></button>
+          <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+            <UserPlus size={18} />Neuer Benutzer
+          </button>
+        </div>
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleCreate} className="bg-[#0d0d1a] rounded-lg p-4 mb-6 border border-white/10">
+          <div className="grid md:grid-cols-2 gap-4 mb-4">
+            <select value={form.organisation_id} onChange={e => setForm({...form, organisation_id: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" required>
+              <option value="">Organisation wählen *</option>
+              {organisations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
+            </select>
+            <select value={form.role} onChange={e => setForm({...form, role: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white">
+              {roles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+            <input type="email" placeholder="E-Mail *" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" required />
+            <div className="relative">
+              <input type={showPassword ? "text" : "password"} placeholder="Passwort *" value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="w-full bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 pr-10 text-white" required />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+            <input type="text" placeholder="Vorname" value={form.first_name} onChange={e => setForm({...form, first_name: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
+            <input type="text" placeholder="Nachname" value={form.last_name} onChange={e => setForm({...form, last_name: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
+          </div>
+          <div className="flex gap-2">
+            <button type="submit" disabled={saving} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50">
+              {saving ? <Loader size={18} className="animate-spin" /> : "Erstellen"}
+            </button>
+            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">Abbrechen</button>
+          </div>
+        </form>
+      )}
+
+      <div className="space-y-2">
+        {users.map(user => (
+          <div key={user.id} className={`flex items-center justify-between p-4 rounded-lg border ${user.active ? 'bg-[#0d0d1a] border-white/5' : 'bg-red-900/10 border-red-500/20'}`}>
+            <div className="flex-1">
+              <div className="flex items-center gap-3">
+                <span className={`text-xs px-2 py-0.5 rounded ${getRoleStyle(user.role)}`}>{user.role}</span>
+                <h3 className="font-medium text-white">{user.email}</h3>
+                {!user.active && <span className="text-xs text-red-400">(Inaktiv)</span>}
+              </div>
+              <div className="flex gap-4 mt-1 text-sm text-gray-400">
+                <span>{user.first_name} {user.last_name}</span>
+                <span className="text-gray-600">|</span>
+                <span className="text-indigo-400">{user.organisation_name || `Org #${user.organisation_id}`}</span>
+              </div>
+            </div>
+            <div className="flex gap-1">
+              <button onClick={() => toggleActive(user)} className={`p-2 rounded-lg ${user.active ? 'text-yellow-400 hover:bg-yellow-500/20' : 'text-green-400 hover:bg-green-500/20'}`} title={user.active ? "Deaktivieren" : "Aktivieren"}>
+                {user.active ? <X size={18} /> : <Check size={18} />}
+              </button>
+              <button onClick={() => handleDelete(user)} className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg"><Trash2 size={18} /></button>
+            </div>
+          </div>
+        ))}
+        {users.length === 0 && <p className="text-center text-gray-500 py-8">Keine Benutzer</p>}
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// PARTNER TAB
+// ============================================
+function PartnersTab({ partners, organisations, onRefresh, showMessage, headers, jsonHeaders }) {
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ email: "", password: "", name: "", company: "", phone: "", organisation_id: "" });
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!form.email || !form.password || !form.name || !form.organisation_id) return showMessage("error", "Alle Pflichtfelder ausfüllen");
+
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/admin/partners`, { method: "POST", headers: jsonHeaders, body: JSON.stringify(form) });
+      if (res.ok) {
+        showMessage("success", `Partner "${form.name}" erstellt!`);
+        setForm({ email: "", password: "", name: "", company: "", phone: "", organisation_id: "" });
+        setShowForm(false);
+        onRefresh();
+      } else {
+        const err = await res.json();
+        showMessage("error", err.error || "Fehler");
+      }
+    } catch (err) {
+      showMessage("error", "Netzwerkfehler");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (partner) => {
+    if (!confirm(`Partner "${partner.name}" wirklich löschen?`)) return;
+    try {
+      const res = await fetch(`${API}/admin/partners/${partner.id}`, { method: "DELETE", headers });
+      if (res.ok) { showMessage("success", "Partner gelöscht"); onRefresh(); }
+    } catch (err) { showMessage("error", "Fehler"); }
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+          <UserCheck size={20} className="text-amber-400" />
+          Externe Partner ({partners.length})
+        </h2>
+        <div className="flex gap-2">
+          <button onClick={onRefresh} className="p-2 bg-[#0d0d1a] hover:bg-[#252542] rounded-lg text-gray-400"><RefreshCw size={18} /></button>
+          <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg">
+            <Plus size={18} />Neuer Partner
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 mb-6 text-amber-200 text-sm">
+        <strong>Partner</strong> sind externe Kunden-Mitarbeiter die nur ihre zugewiesenen Objekte sehen und Kontrollen durchführen können.
+      </div>
+
+      {showForm && (
+        <form onSubmit={handleCreate} className="bg-[#0d0d1a] rounded-lg p-4 mb-6 border border-white/10">
+          <div className="grid md:grid-cols-2 gap-4 mb-4">
+            <select value={form.organisation_id} onChange={e => setForm({...form, organisation_id: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" required>
+              <option value="">Organisation wählen *</option>
+              {organisations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
+            </select>
+            <input type="text" placeholder="Firma (z.B. BMW)" value={form.company} onChange={e => setForm({...form, company: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
+            <input type="text" placeholder="Name *" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" required />
+            <input type="email" placeholder="E-Mail *" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" required />
+            <input type="password" placeholder="Passwort *" value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" required />
+            <input type="tel" placeholder="Telefon" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
+          </div>
+          <div className="flex gap-2">
+            <button type="submit" disabled={saving} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg disabled:opacity-50">
+              {saving ? <Loader size={18} className="animate-spin" /> : "Erstellen"}
+            </button>
+            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">Abbrechen</button>
+          </div>
+        </form>
+      )}
+
+      <div className="space-y-2">
+        {partners.map(partner => (
+          <div key={partner.id} className={`flex items-center justify-between p-4 rounded-lg border ${partner.is_active !== false ? 'bg-[#0d0d1a] border-white/5' : 'bg-red-900/10 border-red-500/20'}`}>
+            <div className="flex-1">
+              <div className="flex items-center gap-3">
+                <UserCheck size={16} className="text-amber-400" />
+                <h3 className="font-medium text-white">{partner.name}</h3>
+                {partner.company && <span className="text-sm text-gray-400">({partner.company})</span>}
+              </div>
+              <div className="flex gap-4 mt-1 text-sm text-gray-400">
+                <span className="flex items-center gap-1"><Mail size={12} />{partner.email}</span>
+                {partner.phone && <span className="flex items-center gap-1"><Phone size={12} />{partner.phone}</span>}
+                <span className="text-indigo-400">{partner.organisation_name || `Org #${partner.organisation_id}`}</span>
+              </div>
+            </div>
+            <button onClick={() => handleDelete(partner)} className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg"><Trash2 size={18} /></button>
+          </div>
+        ))}
+        {partners.length === 0 && <p className="text-center text-gray-500 py-8">Keine Partner angelegt</p>}
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// SYSTEM TAB
+// ============================================
+function SystemTab({ stats, onRefresh }) {
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+          <Settings size={20} className="text-gray-400" />
+          System-Übersicht
+        </h2>
+        <button onClick={onRefresh} className="p-2 bg-[#0d0d1a] hover:bg-[#252542] rounded-lg text-gray-400"><RefreshCw size={18} /></button>
+      </div>
+
+      <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        <StatCard icon={Building2} label="Organisationen" value={stats?.organisations || 0} color="indigo" />
+        <StatCard icon={Users} label="Benutzer" value={stats?.users || 0} color="blue" />
+        <StatCard icon={UserCheck} label="Partner" value={stats?.partners || 0} color="amber" />
+        <StatCard icon={Database} label="Objekte" value={stats?.objects || 0} color="green" />
+        <StatCard icon={QrCode} label="Boxen" value={stats?.boxes || 0} color="purple" />
+        <StatCard icon={BarChart3} label="Scans" value={stats?.scans || 0} color="pink" />
+      </div>
+
+      <div className="bg-[#0d0d1a] rounded-lg p-6 border border-white/10">
+        <h3 className="text-white font-medium mb-4 flex items-center gap-2">
+          <Server size={18} className="text-gray-400" />
+          System-Information
+        </h3>
+        <div className="grid md:grid-cols-2 gap-4 text-sm">
+          <div className="flex justify-between py-2 border-b border-white/5">
+            <span className="text-gray-400">Version</span>
+            <span className="text-white">TrapMap 1.0.0</span>
+          </div>
+          <div className="flex justify-between py-2 border-b border-white/5">
+            <span className="text-gray-400">Umgebung</span>
+            <span className="text-green-400">Production</span>
+          </div>
+          <div className="flex justify-between py-2 border-b border-white/5">
+            <span className="text-gray-400">API Status</span>
+            <span className="text-green-400 flex items-center gap-1"><Activity size={14} /> Online</span>
+          </div>
+          <div className="flex justify-between py-2 border-b border-white/5">
+            <span className="text-gray-400">Datenbank</span>
+            <span className="text-green-400">Supabase</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ icon: Icon, label, value, color }) {
+  const colors = {
+    indigo: "from-indigo-500 to-indigo-600",
+    blue: "from-blue-500 to-blue-600",
+    green: "from-green-500 to-green-600",
+    purple: "from-purple-500 to-purple-600",
+    amber: "from-amber-500 to-amber-600",
+    pink: "from-pink-500 to-pink-600",
+  };
+
+  return (
+    <div className="bg-[#0d0d1a] rounded-lg p-4 border border-white/10">
+      <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${colors[color]} flex items-center justify-center mb-3`}>
+        <Icon size={20} className="text-white" />
+      </div>
+      <div className="text-2xl font-bold text-white">{value}</div>
+      <div className="text-sm text-gray-400">{label}</div>
+    </div>
+  );
+}

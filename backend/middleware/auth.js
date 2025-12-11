@@ -1,130 +1,173 @@
-/* ============================================================
-   TRAPMAP – AUTH MIDDLEWARE
-   Mit Super-Admin Check und requireEditor
-   ============================================================ */
+// ============================================
+// AUTHENTICATION MIDDLEWARE (MIT SECURITY)
+// JWT Verification & User Context
+// ============================================
 
-const jwt = require('jsonwebtoken');
-const { supabase } = require('../config/supabase');
+const { verify } = require('../utils/jwt');
 
-// Super-Admin E-Mails
-const SUPER_ADMINS = [
-  'admin@demo.trapmap.de',
-  'merlin@trapmap.de',
-  'hilfe@die-schaedlingsexperten.de'
-];
+// Security Features laden (optional)
+let logSecurityEvent = (event, data) => console.log(`🔐 ${event}:`, JSON.stringify(data));
+try {
+  const security = require('./security');
+  if (security.logSecurityEvent) logSecurityEvent = security.logSecurityEvent;
+} catch (e) {
+  // Security middleware nicht vorhanden - kein Problem
+}
 
 /**
- * Standard Authentication Middleware
+ * Verify JWT Token and attach user to request
  */
-exports.authenticate = async (req, res, next) => {
+const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Kein Token vorhanden' });
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'No token provided'
+      });
     }
 
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const token = authHeader.substring(7);
+    const decoded = verify(token);
 
-    // User aus DB laden - verschiedene Formate unterstützen
-    const userId = decoded.userId || decoded.user_id || decoded.id;
-    
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('id, email, role, organisation_id, first_name, last_name')
-      .eq('id', userId)
-      .single();
-
-    if (error || !user) {
-      return res.status(401).json({ error: 'Ungültiger Token' });
+    if (!decoded) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid or expired token'
+      });
     }
 
-    // Super-Admin Status hinzufügen
-    user.isSuperAdmin = SUPER_ADMINS.includes(user.email);
+    req.user = {
+      id: decoded.user_id || decoded.id,
+      role: decoded.role,
+      organisation_id: decoded.organisation_id,
+      email: decoded.email
+    };
 
-    req.user = user;
     next();
-  } catch (err) {
-    console.error('Auth error:', err);
-    return res.status(401).json({ error: 'Token ungültig oder abgelaufen' });
+  } catch (error) {
+    console.error('Auth middleware error:', error.message);
+    return res.status(401).json({
+      error: 'Unauthorized',
+      message: 'Authentication failed'
+    });
   }
 };
 
 /**
- * Super-Admin Check Middleware
+ * Authenticate Partner Token
  */
-exports.requireSuperAdmin = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Nicht authentifiziert' });
-  }
+const authenticatePartner = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
 
-  if (!SUPER_ADMINS.includes(req.user.email)) {
-    return res.status(403).json({ error: 'Keine Super-Admin Berechtigung' });
-  }
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'No token provided'
+      });
+    }
 
-  next();
+    const token = authHeader.substring(7);
+    const decoded = verify(token);
+
+    if (!decoded) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid or expired token'
+      });
+    }
+
+    if (decoded.type !== 'partner') {
+      logSecurityEvent('PARTNER_ACCESS_DENIED', { userId: decoded.id, type: decoded.type });
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Partner access required'
+      });
+    }
+
+    req.partner = {
+      id: decoded.id,
+      email: decoded.email,
+      name: decoded.name,
+      company: decoded.company,
+      organisation_id: decoded.organisation_id,
+      objectIds: decoded.objectIds || []
+    };
+
+    next();
+  } catch (error) {
+    console.error('Partner auth error:', error.message);
+    return res.status(401).json({
+      error: 'Unauthorized',
+      message: 'Authentication failed'
+    });
+  }
 };
 
 /**
- * Admin Check Middleware (Organisation-Admin oder Super-Admin)
+ * Check if user has required role
  */
-exports.requireAdmin = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Nicht authentifiziert' });
-  }
-
-  if (req.user.role !== 'admin' && !SUPER_ADMINS.includes(req.user.email)) {
-    return res.status(403).json({ error: 'Keine Admin-Berechtigung' });
-  }
-
-  next();
-};
-
-/**
- * Editor Check Middleware (Admin, Supervisor, oder Super-Admin)
- * Für Bearbeitung von Objekten, Boxen, etc.
- */
-exports.requireEditor = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Nicht authentifiziert' });
-  }
-
-  // Super-Admins haben immer Zugriff
-  if (SUPER_ADMINS.includes(req.user.email)) {
-    return next();
-  }
-
-  // Admin und Supervisor dürfen bearbeiten
-  const editorRoles = ['admin', 'supervisor'];
-  if (!editorRoles.includes(req.user.role)) {
-    return res.status(403).json({ error: 'Keine Bearbeitungsberechtigung' });
-  }
-
-  next();
-};
-
-/**
- * Role Check Middleware
- */
-exports.requireRole = (...roles) => {
+const requireRole = (allowedRoles) => {
   return (req, res, next) => {
     if (!req.user) {
-      return res.status(401).json({ error: 'Nicht authentifiziert' });
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Authentication required'
+      });
     }
 
-    // Super-Admins haben immer Zugriff
-    if (SUPER_ADMINS.includes(req.user.email)) {
-      return next();
-    }
-
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Keine Berechtigung' });
+    if (!allowedRoles.includes(req.user.role)) {
+      logSecurityEvent('ACCESS_DENIED', {
+        userId: req.user.id,
+        userRole: req.user.role,
+        requiredRoles: allowedRoles,
+        path: req.path
+      });
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Keine Berechtigung für diese Aktion'
+      });
     }
 
     next();
   };
 };
 
-// Export SUPER_ADMINS für andere Module
-exports.SUPER_ADMINS = SUPER_ADMINS;
+/**
+ * Super Admin Check
+ */
+const requireSuperAdmin = (req, res, next) => {
+  if (!req.user || !req.user.email) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const SUPER_ADMINS = (process.env.SUPER_ADMIN_EMAILS || 'admin@demo.trapmap.de,merlin@trapmap.de,hilfe@die-schaedlingsexperten.de')
+    .split(',')
+    .map(e => e.trim().toLowerCase());
+
+  if (!SUPER_ADMINS.includes(req.user.email.toLowerCase())) {
+    logSecurityEvent('SUPER_ADMIN_DENIED', { email: req.user.email, path: req.path });
+    return res.status(403).json({ error: 'Forbidden', message: 'Super-Admin Rechte erforderlich' });
+  }
+
+  next();
+};
+
+// Convenience Middlewares
+const requireAdmin = requireRole(['admin']);
+const requireEditor = requireRole(['admin', 'supervisor']);
+const requireScanner = requireRole(['admin', 'supervisor', 'technician', 'partner']);
+const requireViewer = requireRole(['admin', 'supervisor', 'technician', 'auditor', 'viewer', 'partner']);
+
+module.exports = {
+  authenticate,
+  authenticatePartner,
+  requireRole,
+  requireAdmin,
+  requireEditor,
+  requireScanner,
+  requireViewer,
+  requireSuperAdmin
+};

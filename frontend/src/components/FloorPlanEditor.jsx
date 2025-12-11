@@ -4,6 +4,7 @@
    - Festes Grid pro Lageplan (ändert sich nicht beim Zoomen)
    - Original Dialog-Style wie Maps
    - Passive Event Listener Fix
+   - MIT EMOJI ICONS
    ============================================================ */
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -27,6 +28,68 @@ const STATUS_COLORS = {
   red: { bg: "#ef4444", label: "Befall" },
   gray: { bg: "#6b7280", label: "Nicht geprüft" }
 };
+
+// ============================================
+// BOX TYPE EMOJI ICONS
+// ============================================
+const BOX_TYPE_EMOJIS = {
+  rat: '🐀',
+  mouse: '🐁',
+  snapTrap: '⚠️',
+  tunnel: '🔶',
+  bait: '🟢',
+  liveTrap: '🔵',
+  monitoring: '👁️',
+  moth: '🦋',
+  cockroach: '🪳',
+  beetle: '🪲',
+  insect: '🪰',
+  uvLight: '☀️',
+};
+
+function getBoxTypeEmojis(boxTypeName) {
+  if (!boxTypeName) return '';
+  const name = boxTypeName.toLowerCase();
+  let icons = [];
+  
+  if ((name.includes('schlagfall') || name.includes('snap')) && name.includes('tunnel')) {
+    if (name.includes('ratte') || name.includes('rat')) icons = ['rat', 'tunnel'];
+    else if (name.includes('maus') || name.includes('mouse')) icons = ['mouse', 'tunnel'];
+    else icons = ['tunnel'];
+  }
+  else if (name.includes('schlagfall') || name.includes('snap')) {
+    if (name.includes('ratte') || name.includes('rat')) icons = ['rat', 'snapTrap'];
+    else if (name.includes('maus') || name.includes('mouse')) icons = ['mouse', 'snapTrap'];
+    else icons = ['snapTrap'];
+  }
+  else if (name.includes('köder') || name.includes('koeder') || name.includes('bait')) {
+    if (name.includes('ratte') || name.includes('rat')) icons = ['rat', 'bait'];
+    else if (name.includes('maus') || name.includes('mouse')) icons = ['mouse', 'bait'];
+    else icons = ['bait'];
+  }
+  else if (name.includes('lebend') || name.includes('live')) {
+    if (name.includes('ratte') || name.includes('rat')) icons = ['rat', 'liveTrap'];
+    else if (name.includes('maus') || name.includes('mouse')) icons = ['mouse', 'liveTrap'];
+    else icons = ['liveTrap'];
+  }
+  else if (name.includes('monitoring') || name.includes('monitor')) {
+    if (name.includes('käfer') || name.includes('kaefer') || name.includes('beetle')) icons = ['beetle', 'monitoring'];
+    else if (name.includes('motte') || name.includes('moth')) icons = ['moth', 'monitoring'];
+    else if (name.includes('schabe') || name.includes('cockroach')) icons = ['cockroach', 'monitoring'];
+    else if (name.includes('ratte') || name.includes('rat')) icons = ['rat', 'monitoring'];
+    else if (name.includes('maus') || name.includes('mouse')) icons = ['mouse', 'monitoring'];
+    else icons = ['monitoring'];
+  }
+  else if (name.includes('motte') || name.includes('moth')) icons = ['moth'];
+  else if (name.includes('schabe') || name.includes('cockroach')) icons = ['cockroach'];
+  else if (name.includes('käfer') || name.includes('kaefer') || name.includes('beetle')) icons = ['beetle'];
+  else if (name.includes('insekt') || name.includes('insect')) icons = ['insect'];
+  else if (name.includes('uv') || name.includes('licht') || name.includes('light')) icons = ['uvLight'];
+  else if (name.includes('ratte') || name.includes('rat')) icons = ['rat'];
+  else if (name.includes('maus') || name.includes('mouse')) icons = ['mouse'];
+  
+  return icons.map(key => BOX_TYPE_EMOJIS[key] || '').join('');
+}
 
 // ============================================
 // GRID PRESETS
@@ -800,7 +863,7 @@ export default function FloorPlanEditor({ objectId, objectName }) {
                   <GridLabels gridConfig={gridConfig} zoom={zoom} />
                 )}
 
-                {/* Boxes */}
+                {/* Boxes - MIT EMOJI ICONS */}
                 {boxesOnPlan.map(box => (
                   <BoxMarker
                     key={box.id}
@@ -832,7 +895,7 @@ export default function FloorPlanEditor({ objectId, objectName }) {
           </div>
         </div>
 
-        {/* SIDEBAR */}
+        {/* SIDEBAR - MIT EMOJI ICONS */}
         <Sidebar
           open={sidebarOpen}
           boxesOnPlan={boxesOnPlan}
@@ -1627,24 +1690,50 @@ function GridLabels({ gridConfig, zoom }) {
   );
 }
 
+// ============================================
+// BOX MARKER - MIT EMOJI ICONS
+// ============================================
 function BoxMarker({ box, onClick, disabled, zoom }) {
   const colors = { green: "#10b981", yellow: "#eab308", orange: "#f97316", red: "#ef4444", gray: "#6b7280" };
   const color = colors[box.current_status] || colors.gray;
   const size = Math.max(16, Math.min(26, 22 / zoom));
   const fontSize = Math.max(6, Math.min(9, 8 / zoom));
 
+  // Get emoji icons for this box type
+  const emojis = getBoxTypeEmojis(box.box_type_name);
+  const hasEmojis = emojis && emojis.length > 0;
+
   return (
     <div
       onClick={disabled ? undefined : onClick}
-      className={`absolute transform -translate-x-1/2 -translate-y-1/2 ${disabled ? "" : "cursor-pointer hover:scale-110"} transition-transform z-10`}
-      style={{ left: `${box.pos_x}%`, top: `${box.pos_y}%` }}
+      className={`absolute ${disabled ? "" : "cursor-pointer hover:scale-110"} transition-transform z-10`}
+      style={{ 
+        left: `${box.pos_x}%`, 
+        top: `${box.pos_y}%`,
+        transform: hasEmojis ? 'translate(-50%, -100%)' : 'translate(-50%, -50%)'
+      }}
     >
+      {/* Emoji Badge - über dem Kreis */}
+      {hasEmojis && (
+        <div className="flex justify-center mb-1">
+          <div 
+            className="bg-black/90 rounded px-1.5 py-0.5 border border-white/30 shadow-lg"
+            style={{ fontSize: Math.max(8, Math.min(12, 10 / zoom)) }}
+          >
+            {emojis}
+          </div>
+        </div>
+      )}
+
+      {/* Status Kreis mit Nummer */}
       <div
         className="rounded-full flex items-center justify-center text-white font-bold shadow-lg border-2 border-white"
         style={{ backgroundColor: color, width: size, height: size, fontSize }}
       >
         {box.number?.toString().slice(0, 3) || "?"}
       </div>
+
+      {/* Grid Position Label */}
       {box.grid_position && (
         <div 
           className="absolute left-1/2 -translate-x-1/2 bg-black/80 text-white px-1 rounded whitespace-nowrap font-mono"
@@ -1685,6 +1774,9 @@ function Annotation({ data }) {
   return null;
 }
 
+// ============================================
+// SIDEBAR - MIT EMOJI ICONS
+// ============================================
 function Sidebar({ open, boxesOnPlan, unplacedBoxes, draggedBox, setDraggedBox, setMode, setSelectedBox, setScanDialogOpen, onToggle }) {
   return (
     <>
@@ -1699,20 +1791,24 @@ function Sidebar({ open, boxesOnPlan, unplacedBoxes, draggedBox, setDraggedBox, 
             <div>
               <h4 className="text-xs font-semibold text-gray-400 mb-1">Nicht platziert ({unplacedBoxes.length})</h4>
               <div className="space-y-1 max-h-28 overflow-y-auto">
-                {unplacedBoxes.map(box => (
-                  <div
-                    key={box.id}
-                    className={`p-1.5 rounded text-xs cursor-pointer transition ${
-                      draggedBox?.id === box.id ? "bg-yellow-600 text-white" : "bg-gray-900 text-gray-300 hover:bg-gray-700"
-                    }`}
-                    onClick={() => { setDraggedBox(box); setMode("place"); }}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <StatusDot status={box.current_status} />
-                      <span>{box.number || `Box ${box.id}`}</span>
+                {unplacedBoxes.map(box => {
+                  const emojis = getBoxTypeEmojis(box.box_type_name);
+                  return (
+                    <div
+                      key={box.id}
+                      className={`p-1.5 rounded text-xs cursor-pointer transition ${
+                        draggedBox?.id === box.id ? "bg-yellow-600 text-white" : "bg-gray-900 text-gray-300 hover:bg-gray-700"
+                      }`}
+                      onClick={() => { setDraggedBox(box); setMode("place"); }}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <StatusDot status={box.current_status} />
+                        <span>{box.number || `Box ${box.id}`}</span>
+                        {emojis && <span className="text-xs">{emojis}</span>}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1720,23 +1816,27 @@ function Sidebar({ open, boxesOnPlan, unplacedBoxes, draggedBox, setDraggedBox, 
           <div>
             <h4 className="text-xs font-semibold text-gray-400 mb-1">Auf Plan ({boxesOnPlan.length})</h4>
             <div className="space-y-1 max-h-40 overflow-y-auto">
-              {boxesOnPlan.map(box => (
-                <div
-                  key={box.id}
-                  className="p-1.5 rounded text-xs bg-gray-900 text-gray-300 hover:bg-gray-700 cursor-pointer flex items-center justify-between"
-                  onClick={() => { setSelectedBox(box); setScanDialogOpen(true); }}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <StatusDot status={box.current_status} />
-                    <span>{box.number || `Box ${box.id}`}</span>
+              {boxesOnPlan.map(box => {
+                const emojis = getBoxTypeEmojis(box.box_type_name);
+                return (
+                  <div
+                    key={box.id}
+                    className="p-1.5 rounded text-xs bg-gray-900 text-gray-300 hover:bg-gray-700 cursor-pointer flex items-center justify-between"
+                    onClick={() => { setSelectedBox(box); setScanDialogOpen(true); }}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <StatusDot status={box.current_status} />
+                      <span>{box.number || `Box ${box.id}`}</span>
+                      {emojis && <span className="text-xs">{emojis}</span>}
+                    </div>
+                    {box.grid_position && (
+                      <span className="text-[9px] bg-blue-600/30 text-blue-300 px-1 rounded font-mono">
+                        {box.grid_position}
+                      </span>
+                    )}
                   </div>
-                  {box.grid_position && (
-                    <span className="text-[9px] bg-blue-600/30 text-blue-300 px-1 rounded font-mono">
-                      {box.grid_position}
-                    </span>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

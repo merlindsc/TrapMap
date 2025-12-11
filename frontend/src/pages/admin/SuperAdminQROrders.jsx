@@ -17,7 +17,7 @@ export default function SuperAdminQROrders() {
   const token = localStorage.getItem("trapmap_token");
   const headers = { Authorization: `Bearer ${token}` };
 
-  // Data State
+  // Data State - organisations als leeres Array initialisieren!
   const [organisations, setOrganisations] = useState([]);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -44,22 +44,35 @@ export default function SuperAdminQROrders() {
 
   const loadData = async () => {
     setLoading(true);
+    setError(null);
+    
     try {
       // Organisationen mit Stats laden
       const statsRes = await fetch(`${API}/qr-orders/stats`, { headers });
       if (statsRes.ok) {
         const data = await statsRes.json();
-        setOrganisations(data);
+        // Sicherstellen dass es ein Array ist
+        setOrganisations(Array.isArray(data) ? data : []);
+      } else {
+        console.error("Stats fetch failed:", statsRes.status);
+        setOrganisations([]);
       }
 
       // Letzte Bestellungen laden
       const ordersRes = await fetch(`${API}/qr-orders/orders?limit=20`, { headers });
       if (ordersRes.ok) {
         const data = await ordersRes.json();
-        setOrders(data);
+        // Sicherstellen dass es ein Array ist
+        setOrders(Array.isArray(data) ? data : []);
+      } else {
+        console.error("Orders fetch failed:", ordersRes.status);
+        setOrders([]);
       }
     } catch (err) {
       console.error("Load error:", err);
+      setError("Fehler beim Laden der Daten");
+      setOrganisations([]);
+      setOrders([]);
     } finally {
       setLoading(false);
     }
@@ -80,6 +93,16 @@ export default function SuperAdminQROrders() {
       if (res.ok) {
         const data = await res.json();
         setPricing(data);
+      } else {
+        // Fallback: Lokale Berechnung
+        setPricing({
+          quantity,
+          pricePerCode: quantity >= 1000 ? 0.025 : quantity >= 500 ? 0.03 : quantity >= 100 ? 0.04 : 0.05,
+          subtotal: quantity * (quantity >= 1000 ? 0.025 : quantity >= 500 ? 0.03 : quantity >= 100 ? 0.04 : 0.05),
+          shipping: 0,
+          total: quantity * (quantity >= 1000 ? 0.025 : quantity >= 500 ? 0.03 : quantity >= 100 ? 0.04 : 0.05),
+          discount: quantity >= 100 ? `${Math.round((1 - (quantity >= 1000 ? 0.025 : quantity >= 500 ? 0.03 : 0.04) / 0.05) * 100)}%` : null
+        });
       }
     } catch (err) {
       console.error("Price calc error:", err);
@@ -164,6 +187,14 @@ export default function SuperAdminQROrders() {
   };
 
   // ============================================
+  // HELPER: Sichere Summenberechnung
+  // ============================================
+  const safeSum = (arr, key) => {
+    if (!Array.isArray(arr)) return 0;
+    return arr.reduce((sum, item) => sum + (item?.[key] || 0), 0);
+  };
+
+  // ============================================
   // RENDER
   // ============================================
   if (loading) {
@@ -202,9 +233,9 @@ export default function SuperAdminQROrders() {
           <div>
             <strong>Bestellung erfolgreich versendet!</strong>
             <p>
-              {result.generatedCodes} Codes ({result.order.codes}) wurden an {result.email} gesendet.
+              {result.generatedCodes} Codes ({result.order?.codes}) wurden an {result.email} gesendet.
               <br />
-              Gesamtpreis: {result.order.price.toFixed(2)} €
+              Gesamtpreis: {result.order?.price?.toFixed(2)} €
             </p>
           </div>
           <button onClick={() => setResult(null)} style={styles.closeButton}>×</button>
@@ -234,7 +265,7 @@ export default function SuperAdminQROrders() {
           <QrCode size={24} style={{ color: "#10b981" }} />
           <div>
             <span style={styles.statValue}>
-              {organisations.reduce((sum, o) => sum + (o.qr_codes_ordered || 0), 0)}
+              {safeSum(organisations, 'qr_codes_ordered')}
             </span>
             <span style={styles.statLabel}>Codes generiert</span>
           </div>
@@ -244,7 +275,7 @@ export default function SuperAdminQROrders() {
           <Package size={24} style={{ color: "#f59e0b" }} />
           <div>
             <span style={styles.statValue}>
-              {organisations.reduce((sum, o) => sum + (o.usedCodes || 0), 0)}
+              {safeSum(organisations, 'usedCodes')}
             </span>
             <span style={styles.statLabel}>Codes verwendet</span>
           </div>
@@ -351,8 +382,8 @@ export default function SuperAdminQROrders() {
             <div style={styles.pricingCard}>
               <h4><Euro size={18} /> Kostenübersicht</h4>
               <div style={styles.pricingRow}>
-                <span>{pricing.quantity} Codes × {pricing.pricePerCode.toFixed(4)} €</span>
-                <span>{pricing.subtotal.toFixed(2)} €</span>
+                <span>{pricing.quantity} Codes × {pricing.pricePerCode?.toFixed(4)} €</span>
+                <span>{pricing.subtotal?.toFixed(2)} €</span>
               </div>
               {pricing.discount && (
                 <div style={styles.discountBadge}>
@@ -365,7 +396,7 @@ export default function SuperAdminQROrders() {
               </div>
               <div style={styles.pricingTotal}>
                 <span>Gesamtpreis</span>
-                <span>{pricing.total.toFixed(2)} €</span>
+                <span>{pricing.total?.toFixed(2)} €</span>
               </div>
             </div>
           )}
@@ -413,76 +444,80 @@ export default function SuperAdminQROrders() {
           Organisationen
         </h2>
 
-        <div style={styles.orgList}>
-          {organisations.map(org => (
-            <div key={org.id} style={styles.orgCard}>
-              <div style={styles.orgHeader}>
-                <div style={styles.orgMain}>
-                  <strong>{org.name}</strong>
-                  <div style={styles.orgMeta}>
-                    <span><Hash size={14} /> {org.qr_prefix || "—"}</span>
-                    <span><Mail size={14} /> {org.contact_email || "Keine E-Mail"}</span>
+        {organisations.length === 0 ? (
+          <p style={styles.emptyText}>Keine Organisationen gefunden</p>
+        ) : (
+          <div style={styles.orgList}>
+            {organisations.map(org => (
+              <div key={org.id} style={styles.orgCard}>
+                <div style={styles.orgHeader}>
+                  <div style={styles.orgMain}>
+                    <strong>{org.name}</strong>
+                    <div style={styles.orgMeta}>
+                      <span><Hash size={14} /> {org.qr_prefix || "—"}</span>
+                      <span><Mail size={14} /> {org.contact_email || "Keine E-Mail"}</span>
+                    </div>
+                  </div>
+
+                  <div style={styles.orgStats}>
+                    <div style={styles.orgStat}>
+                      <span style={styles.orgStatValue}>{org.qr_codes_ordered || 0}</span>
+                      <span style={styles.orgStatLabel}>Bestellt</span>
+                    </div>
+                    <div style={styles.orgStat}>
+                      <span style={styles.orgStatValue}>{org.usedCodes || 0}</span>
+                      <span style={styles.orgStatLabel}>Verwendet</span>
+                    </div>
+                    <div style={styles.orgStat}>
+                      <span style={{
+                        ...styles.orgStatValue,
+                        color: org.availableCodes > 20 ? "#10b981" : org.availableCodes > 0 ? "#f59e0b" : "#ef4444"
+                      }}>
+                        {org.availableCodes || 0}
+                      </span>
+                      <span style={styles.orgStatLabel}>Verfügbar</span>
+                    </div>
                   </div>
                 </div>
 
-                <div style={styles.orgStats}>
-                  <div style={styles.orgStat}>
-                    <span style={styles.orgStatValue}>{org.qr_codes_ordered || 0}</span>
-                    <span style={styles.orgStatLabel}>Bestellt</span>
-                  </div>
-                  <div style={styles.orgStat}>
-                    <span style={styles.orgStatValue}>{org.usedCodes || 0}</span>
-                    <span style={styles.orgStatLabel}>Verwendet</span>
-                  </div>
-                  <div style={styles.orgStat}>
-                    <span style={{
-                      ...styles.orgStatValue,
-                      color: org.availableCodes > 20 ? "#10b981" : org.availableCodes > 0 ? "#f59e0b" : "#ef4444"
-                    }}>
-                      {org.availableCodes || 0}
-                    </span>
-                    <span style={styles.orgStatLabel}>Verfügbar</span>
-                  </div>
+                {/* Schnell-Buttons */}
+                <div style={styles.quickButtons}>
+                  <button
+                    style={styles.quickBtn}
+                    onClick={() => handleQuickOrder(org, 50)}
+                    disabled={processing || !org.contact_email}
+                  >
+                    +50
+                  </button>
+                  <button
+                    style={styles.quickBtn}
+                    onClick={() => handleQuickOrder(org, 100)}
+                    disabled={processing || !org.contact_email}
+                  >
+                    +100
+                  </button>
+                  <button
+                    style={styles.quickBtn}
+                    onClick={() => handleQuickOrder(org, 250)}
+                    disabled={processing || !org.contact_email}
+                  >
+                    +250
+                  </button>
+                  <button
+                    style={{...styles.quickBtn, background: "#6366f1"}}
+                    onClick={() => {
+                      setSelectedOrg(org);
+                      setCustomEmail(org.contact_email || "");
+                      setShowOrderForm(true);
+                    }}
+                  >
+                    Individuell
+                  </button>
                 </div>
               </div>
-
-              {/* Schnell-Buttons */}
-              <div style={styles.quickButtons}>
-                <button
-                  style={styles.quickBtn}
-                  onClick={() => handleQuickOrder(org, 50)}
-                  disabled={processing || !org.contact_email}
-                >
-                  +50
-                </button>
-                <button
-                  style={styles.quickBtn}
-                  onClick={() => handleQuickOrder(org, 100)}
-                  disabled={processing || !org.contact_email}
-                >
-                  +100
-                </button>
-                <button
-                  style={styles.quickBtn}
-                  onClick={() => handleQuickOrder(org, 250)}
-                  disabled={processing || !org.contact_email}
-                >
-                  +250
-                </button>
-                <button
-                  style={{...styles.quickBtn, background: "#6366f1"}}
-                  onClick={() => {
-                    setSelectedOrg(org);
-                    setCustomEmail(org.contact_email || "");
-                    setShowOrderForm(true);
-                  }}
-                >
-                  Individuell
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* LETZTE BESTELLUNGEN */}
@@ -675,7 +710,8 @@ const styles = {
     borderRadius: "8px",
     color: "#fff",
     fontSize: "16px",
-    marginTop: "8px"
+    marginTop: "8px",
+    boxSizing: "border-box"
   },
   orgInfo: {
     padding: "16px",

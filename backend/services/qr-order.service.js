@@ -231,10 +231,19 @@ exports.generateCodesForOrder = async (orderId) => {
     .eq('id', orderId);
 
   // 4. Organisation Statistik aktualisieren
+  // Erst aktuellen Wert holen, dann inkrementieren
+  const { data: orgData } = await supabase
+    .from('organisations')
+    .select('qr_codes_ordered')
+    .eq('id', order.organisation_id)
+    .single();
+
+  const currentOrdered = orgData?.qr_codes_ordered || 0;
+  
   await supabase
     .from('organisations')
     .update({ 
-      qr_codes_ordered: supabase.raw(`qr_codes_ordered + ${codes.length}`)
+      qr_codes_ordered: currentOrdered + codes.length
     })
     .eq('id', order.organisation_id);
 
@@ -566,26 +575,48 @@ exports.getOrganisationStats = async (organisationId) => {
  * Alle Organisationen mit QR-Statistiken (für Super-Admin)
  */
 exports.getAllOrganisationsStats = async () => {
-  const { data: organisations } = await supabase
+  // Erst alle Organisations-Spalten abfragen die existieren könnten
+  const { data: organisations, error } = await supabase
     .from('organisations')
-    .select(`
-      id, name, contact_email,
-      qr_prefix, qr_next_number, qr_codes_ordered
-    `)
+    .select('*')  // Alle Spalten um Fehler zu vermeiden
     .order('name');
+
+  // Defensive Check - wenn keine Daten, leeres Array zurückgeben
+  if (error) {
+    console.error('Error fetching organisations:', error);
+    return [];
+  }
+
+  if (!organisations || organisations.length === 0) {
+    console.log('No organisations found');
+    return [];
+  }
 
   // Für jede Organisation die Anzahl verwendeter Codes holen
   const stats = await Promise.all(organisations.map(async (org) => {
-    const { count: usedCodes } = await supabase
-      .from('qr_codes')
-      .select('id', { count: 'exact' })
-      .eq('organisation_id', org.id)
-      .eq('assigned', true);
+    // Versuche qr_codes zu zählen (Tabelle existiert möglicherweise nicht)
+    let usedCodes = 0;
+    try {
+      const { count } = await supabase
+        .from('qr_codes')
+        .select('id', { count: 'exact' })
+        .eq('organisation_id', org.id)
+        .eq('assigned', true);
+      usedCodes = count || 0;
+    } catch (e) {
+      // qr_codes Tabelle existiert vielleicht nicht
+    }
 
     return {
-      ...org,
-      usedCodes: usedCodes || 0,
-      availableCodes: (org.qr_codes_ordered || 0) - (usedCodes || 0)
+      id: org.id,
+      name: org.name,
+      // Nutze contact_email oder email (je nachdem was existiert)
+      contact_email: org.contact_email || org.email || null,
+      qr_prefix: org.qr_prefix || null,
+      qr_next_number: org.qr_next_number || 1,
+      qr_codes_ordered: org.qr_codes_ordered || 0,
+      usedCodes: usedCodes,
+      availableCodes: (org.qr_codes_ordered || 0) - usedCodes
     };
   }));
 
