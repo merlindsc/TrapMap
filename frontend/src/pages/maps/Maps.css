@@ -1,9 +1,9 @@
 /* ============================================================
    TRAPMAP - MAPS.CSS V6 PROFESSIONAL
-   ✅ 48px kompakter Header
-   ✅ Kein Scrollen
-   ✅ Sidebar 350px
-   ✅ Zoom mittig rechts
+   âœ… 48px kompakter Header
+   âœ… Kein Scrollen
+   âœ… Sidebar 350px
+   âœ… Zoom mittig rechts
    ============================================================ */
 
 /* ============================================================
@@ -17,7 +17,7 @@
   display: flex;
   flex-direction: column;
   background: #1a1a1a;
-  overflow: hidden; /* ✅ KEIN SCROLLEN! */
+  overflow: hidden; /* âœ… KEIN SCROLLEN! */
 }
 
 /* ============================================================
@@ -26,12 +26,12 @@
 
 .maps-header-v6 {
   position: relative;
-  z-index: 1000;
+  z-index: 500;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 12px;
-  height: 48px; /* ✅ Kompakt */
+  height: 48px;
   background: #2b2b2b;
   border-bottom: 1px solid #404040;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
@@ -230,7 +230,7 @@
   position: relative;
   flex: 1;
   width: 100%;
-  overflow: hidden; /* ✅ KEIN SCROLLEN! */
+  overflow: hidden; /* âœ… KEIN SCROLLEN! */
 }
 
 .map-wrapper-v6 .leaflet-container {
@@ -278,19 +278,19 @@
 }
 
 /* ============================================================
-   SIDEBAR - 350px, slide-in from right
+   SIDEBAR - 350px, slide-in from right, ÜBER ALLEM
    ============================================================ */
 
 .object-sidebar-v6 {
   position: fixed;
-  top: 48px; /* Below header */
+  top: 0;
   right: 0;
   width: 350px;
-  height: calc(100vh - 48px);
+  height: 100vh;
   background: #2d2d2d;
   border-left: 1px solid #404040;
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.4);
-  z-index: 900;
+  z-index: 9999;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -356,7 +356,7 @@
 .sidebar-content-v6 {
   flex: 1;
   padding: 16px;
-  overflow-y: auto; /* ✅ Only content scrolls */
+  overflow-y: auto; /* âœ… Only content scrolls */
 }
 
 .sidebar-actions-v6 {
@@ -584,7 +584,7 @@
 .dialog-body-v6 {
   flex: 1;
   padding: 20px;
-  overflow-y: auto; /* ✅ Only body scrolls */
+  overflow-y: auto; /* âœ… Only body scrolls */
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -751,21 +751,75 @@
     flex-wrap: wrap;
     height: auto;
     padding: 8px;
+    gap: 6px;
   }
 
   .search-group {
-    flex: 1 1 100%;
+    flex: 1 1 calc(50% - 4px);
     max-width: none;
   }
 
+  .action-btn-v6 {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  /* MOBILE: Sidebar als Bottom-Sheet - NUR 50% der Hoehe! */
   .object-sidebar-v6 {
-    width: 100%;
-    max-width: 90vw;
+    position: fixed !important;
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    height: 50vh !important;
+    max-height: 400px !important;
+    border-radius: 16px 16px 0 0;
+    border-left: none;
+    border-top: 1px solid #404040;
+    animation: slideInUp 0.3s ease-out;
+  }
+
+  @keyframes slideInUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  .sidebar-header-v6 {
+    padding: 12px 16px;
+    border-radius: 16px 16px 0 0;
+    position: relative;
+  }
+
+  /* Drag Handle fuer Mobile */
+  .sidebar-header-v6::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 4px;
+    background: #4b5563;
+    border-radius: 2px;
+  }
+
+  .sidebar-title-v6 h2 {
+    font-size: 15px;
+    margin-top: 8px;
+  }
+
+  .sidebar-content-v6 {
+    padding: 12px;
+  }
+
+  .box-item-v6 {
+    padding: 8px;
   }
 
   .zoom-buttons-v6 {
     top: auto;
-    bottom: 80px;
+    bottom: calc(50vh + 20px);
     right: 12px;
     transform: none;
   }
@@ -774,13 +828,19 @@
     max-width: 95%;
     max-height: 90vh;
   }
-}.object-sidebar-v6 {
-  position: fixed !important;
-  top: 48px !important;
-  right: 0 !important;
-  height: calc(100vh - 48px) !important;
-  overflow-y: auto !important;
-  z-index: 9999 !important;
+}
+
+/* Desktop Sidebar - ÜBER ALLEM (volle Höhe) */
+@media (min-width: 769px) {
+  .object-sidebar-v6 {
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    width: 350px !important;
+    height: 100vh !important;
+    overflow-y: auto !important;
+    z-index: 9999 !important;
+  }
 }
 /* ============================================================
    OBJECT LIST STYLES

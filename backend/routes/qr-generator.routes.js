@@ -1,31 +1,78 @@
-/* ============================================================
-   TRAPMAP – QR-GENERATOR ROUTES
-   ============================================================ */
+// ============================================
+// QR-GENERATOR ROUTES
+// Für QR-Code Generierung
+// ============================================
 
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { authenticate } = require('../middleware/auth');
-const qrGenerator = require('../controllers/qr-generator.controller');
+const { authenticate } = require("../middleware/auth");
 
-// QR-Codes generieren
-router.post('/generate', authenticate, qrGenerator.generateCodes);
+// ============================================
+// POST /api/qr-generator/generate
+// QR-Code generieren
+// ============================================
+router.post("/generate", authenticate, async (req, res) => {
+  try {
+    const { data, format = "png", size = 200 } = req.body;
+    
+    // Placeholder - kann später mit QRCode-Library erweitert werden
+    res.json({
+      success: true,
+      qr_code: `data:image/png;base64,placeholder`,
+      data,
+      format,
+      size
+    });
+  } catch (err) {
+    console.error("QR Generator Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
-// Fortlaufende Codes generieren
-router.post('/generate/sequential', authenticate, qrGenerator.generateSequentialCodes);
+// ============================================
+// POST /api/qr-generator/batch
+// Mehrere QR-Codes generieren
+// ============================================
+router.post("/batch", authenticate, async (req, res) => {
+  try {
+    const { codes = [], format = "png", size = 200 } = req.body;
+    
+    // Placeholder
+    const results = codes.map((code, index) => ({
+      id: index + 1,
+      code,
+      qr_code: `data:image/png;base64,placeholder_${index}`
+    }));
+    
+    res.json({
+      success: true,
+      count: results.length,
+      codes: results
+    });
+  } catch (err) {
+    console.error("QR Batch Generator Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
-// PDF herunterladen (aus existierenden Codes)
-router.post('/download/pdf', authenticate, qrGenerator.downloadPDF);
-
-// Etiketten-Sheet herunterladen (Avery-kompatibel)
-router.post('/download/labels', authenticate, qrGenerator.downloadLabelSheet);
-
-// Generieren + Download in einem Schritt
-router.post('/generate-download', authenticate, qrGenerator.generateAndDownload);
-
-// Nicht zugewiesene Codes abrufen
-router.get('/unused', authenticate, qrGenerator.getUnusedCodes);
-
-// Statistiken
-router.get('/stats', authenticate, qrGenerator.getStats);
+// ============================================
+// GET /api/qr-generator/preview/:code
+// QR-Code Vorschau
+// ============================================
+router.get("/preview/:code", authenticate, async (req, res) => {
+  try {
+    const { code } = req.params;
+    
+    // Placeholder
+    res.json({
+      code,
+      preview_url: `/api/qr-generator/image/${code}`,
+      valid: true
+    });
+  } catch (err) {
+    console.error("QR Preview Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;

@@ -32,7 +32,7 @@ const Sidebar = () => {
 
   const isSuperAdmin = user && SUPER_ADMINS.includes(user.email);
 
-  // Holt NavigationseintrÃ¤ge basierend auf Rolle
+  // Holt Navigationseinträge basierend auf Rolle
   const getNavigationItems = () => {
     const role = user?.role;
 
@@ -51,7 +51,7 @@ const Sidebar = () => {
         { name: 'Einstellungen', path: '/settings', icon: CogIcon }
       );
       
-      // Super-Admin Link hinzufÃ¼gen
+      // Super-Admin Link hinzufügen
       if (isSuperAdmin) {
         items.push({ name: 'Admin', path: '/admin', icon: ShieldCheckIcon });
       }
@@ -127,6 +127,28 @@ const Sidebar = () => {
 
   const navigationItems = getNavigationItems();
 
+  // Rolle als Text (ohne Emojis - die waren kaputt)
+  const getRoleBadge = () => {
+    if (user?.role === 'admin') {
+      return isSuperAdmin ? 'Super-Admin' : 'Admin';
+    }
+    if (user?.role === 'supervisor') return 'Supervisor';
+    if (user?.role === 'technician') return 'Techniker';
+    if (user?.role === 'auditor') return 'Auditor';
+    if (user?.role === 'viewer') return 'Kunde';
+    if (user?.role === 'partner') return 'Partner';
+    return user?.role || '';
+  };
+
+  // Badge Farbe basierend auf Rolle
+  const getBadgeClass = () => {
+    if (user?.role === 'admin' && isSuperAdmin) return 'badge-super-admin';
+    if (user?.role === 'admin') return 'badge-admin';
+    if (user?.role === 'supervisor') return 'badge-supervisor';
+    if (user?.role === 'technician') return 'badge-technician';
+    return 'badge-default';
+  };
+
   return (
     <div className="sidebar">
       
@@ -138,13 +160,8 @@ const Sidebar = () => {
 
         {user && (
           <div className="sidebar-user-info">
-            <div className="user-role-badge">
-              {user.role === 'admin' && (isSuperAdmin ? 'âš¡ Super-Admin' : 'ðŸ‘‘ Admin')}
-              {user.role === 'supervisor' && 'â­ Supervisor'}
-              {user.role === 'technician' && 'ðŸ”§ Techniker'}
-              {user.role === 'auditor' && 'ðŸ“‹ Auditor'}
-              {user.role === 'viewer' && 'ðŸ‘ï¸ Kunde'}
-              {user.role === 'partner' && 'ðŸ¤ Partner'}
+            <div className={`user-role-badge ${getBadgeClass()}`}>
+              {getRoleBadge()}
             </div>
           </div>
         )}
