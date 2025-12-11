@@ -1,263 +1,448 @@
-/* ============================================================
-   TRAPMAP – BOXES SERVICE ERWEITERUNG
-   
-   Zusätzliche Funktionen für Box-Management:
-   - Box zu anderem Objekt verschieben (mit QR-Code)
-   - QR-Code einer Box zuweisen
-   - QR-Code von Box entfernen
-   
-   Diese Funktionen zu boxes_service.js hinzufügen!
-   ============================================================ */
+// ============================================
+// BOXES SERVICE - KOMPLETT
+// Alle CRUD Operationen + GPS + Scans + QR-Codes
+// ============================================
 
 const { supabase } = require("../config/supabase");
 
 // ============================================
-// BOX ZU ANDEREM OBJEKT VERSCHIEBEN
+// GET ALL BOXES
 // ============================================
-exports.moveToObject = async (boxId, newObjectId, organisationId) => {
-  // 1. Box laden und prüfen
-  const { data: box, error: boxError } = await supabase
+exports.getAll = async (organisationId, objectId = null) => {
+  let query = supabase
     .from("boxes")
-    .select("id, organisation_id, object_id, qr_code, number")
-    .eq("id", parseInt(boxId))
-    .eq("organisation_id", parseInt(organisationId))
+    .select(`
+      *,
+      box_types:box_type_id (
+        id,
+        name,
+        category,
+        border_color,
+        requires_symbol
+      )
+    `)
+    .eq("organisation_id", organisationId)
+    .eq("active", true);
+
+  if (objectId) query = query.eq("object_id", objectId);
+
+  const { data, error } = await query.order("number", { ascending: true });
+  if (error) return { success: false, message: error.message };
+
+  const now = new Date();
+
+  const enriched = data.map((box) => {
+    const interval = box.control_interval_days || 30;
+    const lastScan = box.last_scan
+      ? new Date(box.last_scan)
+      : new Date(box.created_at);
+
+    const nextControl = new Date(lastScan.getTime() + interval * 86400000);
+    const diffDays = Math.ceil((nextControl - now) / 86400000);
+
+    let due_status = "green";
+    if (diffDays <= 0) due_status = "red";
+    else if (diffDays <= 5) due_status = "yellow";
+
+    return {
+      ...box,
+      box_type_name: box.box_types?.name || null,
+      box_type_category: box.box_types?.category || null,
+      box_type_border: box.box_types?.border_color || null,
+      requires_symbol: box.box_types?.requires_symbol || false,
+      next_control: nextControl.toISOString(),
+      due_in_days: diffDays,
+      due_status
+    };
+  });
+
+  return { success: true, data: enriched };
+};
+
+// ============================================
+// GET ONE BOX
+// ============================================
+exports.getOne = async (id, organisationId) => {
+  const { data, error } = await supabase
+    .from("boxes")
+    .select(`
+      *,
+      box_types:box_type_id (
+        id,
+        name,
+        category,
+        border_color,
+        requires_symbol
+      )
+    `)
+    .eq("id", id)
+    .eq("organisation_id", organisationId)
     .single();
 
-  if (boxError || !box) {
-    return { success: false, message: "Box nicht gefunden" };
+  if (error || !data) {
+    return { success: false, message: "Box not found" };
   }
 
-  if (box.object_id === parseInt(newObjectId)) {
-    return { success: false, message: "Box ist bereits diesem Objekt zugewiesen" };
-  }
-
-  // 2. Neues Objekt prüfen (muss zur gleichen Org gehören!)
-  const { data: newObject, error: objError } = await supabase
-    .from("objects")
-    .select("id, organisation_id, name")
-    .eq("id", parseInt(newObjectId))
-    .eq("organisation_id", parseInt(organisationId))
-    .single();
-
-  if (objError || !newObject) {
-    return { success: false, message: "Ziel-Objekt nicht gefunden oder gehört nicht zur Organisation" };
-  }
-
-  // 3. Box verschieben
-  const { error: updateError } = await supabase
-    .from("boxes")
-    .update({
-      object_id: parseInt(newObjectId),
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", parseInt(boxId));
-
-  if (updateError) {
-    return { success: false, message: updateError.message };
-  }
-
-  // 4. QR-Code auch updaten (falls vorhanden)
-  if (box.qr_code) {
-    await supabase
-      .from("qr_codes")
-      .update({ object_id: parseInt(newObjectId) })
-      .eq("id", box.qr_code);
-  }
-
-  console.log(`✅ Box ${box.number} verschoben zu Objekt: ${newObject.name}`);
-
-  return { 
-    success: true, 
+  return {
+    success: true,
     data: {
-      box_id: boxId,
-      box_number: box.number,
-      old_object_id: box.object_id,
-      new_object_id: newObjectId,
-      new_object_name: newObject.name,
-      qr_code: box.qr_code
+      ...data,
+      box_type_name: data.box_types?.name || null,
+      box_type_category: data.box_types?.category || null,
+      box_type_border: data.box_types?.border_color || null,
+      requires_symbol: data.box_types?.requires_symbol || false
     }
   };
 };
 
 // ============================================
-// QR-CODE EINER BOX ZUWEISEN
+// CREATE BOX
 // ============================================
-exports.assignQrCode = async (boxId, qrCode, organisationId) => {
-  const upperCode = qrCode.toUpperCase();
+exports.create = async (organisationId, payload) => {
+  try {
+    console.log("📦 Creating box:", payload);
 
-  // 1. Box laden
-  const { data: box } = await supabase
+    const boxData = {
+      organisation_id: organisationId,
+      object_id: parseInt(payload.object_id),
+      number: payload.number,
+      notes: payload.notes || null,
+      box_type_id: payload.box_type_id ? parseInt(payload.box_type_id) : (payload.boxtype_id ? parseInt(payload.boxtype_id) : null),
+      current_status: payload.current_status || "green",
+      active: payload.active !== false,
+      floor_plan_id: payload.floor_plan_id ? parseInt(payload.floor_plan_id) : null,
+      pos_x: payload.pos_x || null,
+      pos_y: payload.pos_y || null,
+      lat: payload.lat || null,
+      lng: payload.lng || null,
+      control_interval_days: payload.control_interval_days || 30,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from("boxes")
+      .insert(boxData)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("❌ Supabase ERROR (create box):", error);
+      return { success: false, message: error.message };
+    }
+
+    console.log("✅ Box erstellt:", data.id, data.number);
+    return { success: true, data };
+  } catch (err) {
+    console.error("❌ UNHANDLED ERROR in create:", err);
+    return { success: false, message: err.message };
+  }
+};
+
+// ============================================
+// UPDATE BOX
+// ============================================
+exports.update = async (id, organisationId, payload) => {
+  try {
+    console.log("📦 Updating box:", id, payload);
+
+    const updateData = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (payload.number !== undefined) updateData.number = payload.number;
+    if (payload.notes !== undefined) updateData.notes = payload.notes;
+    if (payload.boxtype_id !== undefined) updateData.box_type_id = payload.boxtype_id ? parseInt(payload.boxtype_id) : null;
+    if (payload.box_type_id !== undefined) updateData.box_type_id = payload.box_type_id ? parseInt(payload.box_type_id) : null;
+    if (payload.current_status !== undefined) updateData.current_status = payload.current_status;
+    if (payload.active !== undefined) updateData.active = payload.active;
+    if (payload.floor_plan_id !== undefined) updateData.floor_plan_id = payload.floor_plan_id ? parseInt(payload.floor_plan_id) : null;
+    if (payload.pos_x !== undefined) updateData.pos_x = payload.pos_x;
+    if (payload.pos_y !== undefined) updateData.pos_y = payload.pos_y;
+    if (payload.lat !== undefined) updateData.lat = payload.lat;
+    if (payload.lng !== undefined) updateData.lng = payload.lng;
+    if (payload.control_interval_days !== undefined) updateData.control_interval_days = payload.control_interval_days;
+
+    const { data, error } = await supabase
+      .from("boxes")
+      .update(updateData)
+      .eq("id", id)
+      .eq("organisation_id", organisationId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("❌ Supabase ERROR (update box):", error);
+      return { success: false, message: error.message };
+    }
+
+    console.log("✅ Box aktualisiert:", data.id);
+    return { success: true, data };
+  } catch (err) {
+    console.error("❌ UNHANDLED ERROR in update:", err);
+    return { success: false, message: err.message };
+  }
+};
+
+// ============================================
+// UPDATE LOCATION (GPS)
+// ============================================
+exports.updateLocation = async (id, organisationId, lat, lng) => {
+  const { data, error } = await supabase
     .from("boxes")
-    .select("id, organisation_id, object_id, qr_code")
-    .eq("id", parseInt(boxId))
-    .eq("organisation_id", parseInt(organisationId))
+    .update({
+      lat,
+      lng,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", id)
+    .eq("organisation_id", organisationId)
+    .select()
     .single();
 
-  if (!box) {
-    return { success: false, message: "Box nicht gefunden" };
+  if (error) return { success: false, message: error.message };
+  return { success: true, data };
+};
+
+// ============================================
+// UNDO LOCATION (GPS zurücksetzen)
+// ============================================
+exports.undoLocation = async (id, organisationId) => {
+  const { data: box } = await supabase
+    .from("boxes")
+    .select(`
+      object_id,
+      objects:object_id (lat, lng)
+    `)
+    .eq("id", id)
+    .eq("organisation_id", organisationId)
+    .single();
+
+  if (!box || !box.objects) {
+    return { success: false, message: "Box or Object not found" };
   }
 
-  if (box.qr_code) {
-    return { success: false, message: `Box hat bereits QR-Code: ${box.qr_code}` };
+  const { data, error } = await supabase
+    .from("boxes")
+    .update({
+      lat: box.objects.lat,
+      lng: box.objects.lng,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", id)
+    .eq("organisation_id", organisationId)
+    .select()
+    .single();
+
+  if (error) return { success: false, message: error.message };
+  return { success: true, data };
+};
+
+// ============================================
+// DELETE BOX (Soft Delete)
+// ============================================
+exports.remove = async (id, organisationId) => {
+  const { error } = await supabase
+    .from("boxes")
+    .update({
+      active: false,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", id)
+    .eq("organisation_id", organisationId);
+
+  if (error) return { success: false, message: error.message };
+  return { success: true };
+};
+
+// ============================================
+// GET SCANS (Historie)
+// ============================================
+exports.getScans = async (boxId, organisationId, days = 90) => {
+  const since = new Date(Date.now() - days * 86400000).toISOString();
+
+  const { data, error } = await supabase
+    .from("scans")
+    .select(`
+      id,
+      status,
+      notes,
+      findings,
+      photo_url,
+      pest_found,
+      pest_count,
+      scanned_at,
+      created_at,
+      users:user_id (
+        id,
+        first_name,
+        last_name
+      )
+    `)
+    .eq("box_id", boxId)
+    .eq("organisation_id", organisationId)
+    .gte("scanned_at", since)
+    .order("scanned_at", { ascending: false });
+
+  if (error) return { success: false, message: error.message };
+  return { success: true, data };
+};
+
+// ============================================
+// ERWEITERUNGEN - Box verschieben & QR-Codes
+// ============================================
+
+// Box zu anderem Objekt verschieben
+exports.moveToObject = async (boxId, newObjectId, organisationId) => {
+  // Prüfe ob Objekt zur Organisation gehört
+  const { data: obj } = await supabase
+    .from("objects")
+    .select("id, lat, lng")
+    .eq("id", newObjectId)
+    .eq("organisation_id", organisationId)
+    .single();
+
+  if (!obj) {
+    return { success: false, message: "Ziel-Objekt nicht gefunden" };
   }
 
-  // 2. QR-Code prüfen
+  const { data, error } = await supabase
+    .from("boxes")
+    .update({
+      object_id: newObjectId,
+      lat: obj.lat,
+      lng: obj.lng,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", boxId)
+    .eq("organisation_id", organisationId)
+    .select()
+    .single();
+
+  if (error) return { success: false, message: error.message };
+  return { success: true, data };
+};
+
+// QR-Code zuweisen
+exports.assignQrCode = async (boxId, qrCode, organisationId) => {
+  // Prüfe ob Code existiert und zur Organisation gehört
   const { data: code } = await supabase
     .from("qr_codes")
-    .select("id, organisation_id, assigned, box_id")
-    .eq("id", upperCode)
+    .select("id, organisation_id, box_id")
+    .eq("id", qrCode)
     .single();
 
   if (!code) {
     return { success: false, message: "QR-Code nicht gefunden" };
   }
 
-  if (code.organisation_id !== parseInt(organisationId)) {
-    return { success: false, message: "QR-Code gehört nicht zu dieser Organisation" };
+  if (code.organisation_id !== organisationId) {
+    return { success: false, message: "QR-Code gehört zu anderer Organisation" };
   }
 
-  if (code.assigned && code.box_id) {
+  if (code.box_id && code.box_id !== boxId) {
     return { success: false, message: "QR-Code ist bereits einer anderen Box zugewiesen" };
   }
 
-  // 3. Zuweisung durchführen
-  // QR-Code updaten
-  const { error: qrError } = await supabase
+  // Code der Box zuweisen
+  await supabase
     .from("qr_codes")
     .update({
-      box_id: parseInt(boxId),
-      object_id: box.object_id,
+      box_id: boxId,
       assigned: true,
       assigned_at: new Date().toISOString()
     })
-    .eq("id", upperCode);
+    .eq("id", qrCode);
 
-  if (qrError) {
-    return { success: false, message: qrError.message };
-  }
-
-  // Box updaten
-  const { error: boxError } = await supabase
+  // Box aktualisieren
+  const { data, error } = await supabase
     .from("boxes")
     .update({
-      qr_code: upperCode,
+      qr_code: qrCode,
       updated_at: new Date().toISOString()
     })
-    .eq("id", parseInt(boxId));
+    .eq("id", boxId)
+    .eq("organisation_id", organisationId)
+    .select()
+    .single();
 
-  if (boxError) {
-    // Rollback QR-Code
-    await supabase
-      .from("qr_codes")
-      .update({ box_id: null, assigned: false, assigned_at: null })
-      .eq("id", upperCode);
-    return { success: false, message: boxError.message };
-  }
-
-  console.log(`✅ QR-Code ${upperCode} zugewiesen an Box ${boxId}`);
-
-  return { success: true, data: { box_id: boxId, qr_code: upperCode } };
+  if (error) return { success: false, message: error.message };
+  return { success: true, data };
 };
 
-// ============================================
-// QR-CODE VON BOX ENTFERNEN
-// ============================================
+// QR-Code entfernen
 exports.removeQrCode = async (boxId, organisationId) => {
-  // Box laden
+  // Hole aktuelle Box
   const { data: box } = await supabase
     .from("boxes")
-    .select("id, qr_code")
-    .eq("id", parseInt(boxId))
-    .eq("organisation_id", parseInt(organisationId))
+    .select("qr_code")
+    .eq("id", boxId)
+    .eq("organisation_id", organisationId)
     .single();
 
   if (!box) {
     return { success: false, message: "Box nicht gefunden" };
   }
 
-  if (!box.qr_code) {
-    return { success: false, message: "Box hat keinen QR-Code" };
+  if (box.qr_code) {
+    // Code freigeben
+    await supabase
+      .from("qr_codes")
+      .update({
+        box_id: null,
+        assigned: false,
+        assigned_at: null
+      })
+      .eq("id", box.qr_code);
   }
 
-  const qrCode = box.qr_code;
-
-  // QR-Code freigeben (bleibt bei Organisation!)
-  await supabase
-    .from("qr_codes")
-    .update({
-      box_id: null,
-      object_id: null,
-      assigned: false,
-      assigned_at: null
-    })
-    .eq("id", qrCode);
-
-  // Box updaten
-  await supabase
+  // Box aktualisieren
+  const { data, error } = await supabase
     .from("boxes")
     .update({
       qr_code: null,
       updated_at: new Date().toISOString()
     })
-    .eq("id", parseInt(boxId));
+    .eq("id", boxId)
+    .eq("organisation_id", organisationId)
+    .select()
+    .single();
 
-  console.log(`✅ QR-Code ${qrCode} von Box ${boxId} entfernt`);
-
-  return { success: true, data: { box_id: boxId, removed_code: qrCode } };
+  if (error) return { success: false, message: error.message };
+  return { success: true, data };
 };
 
-// ============================================
-// BULK: MEHRERE BOXEN VERSCHIEBEN
-// ============================================
+// Mehrere Boxen verschieben
 exports.bulkMoveToObject = async (boxIds, newObjectId, organisationId) => {
-  const results = {
-    success: [],
-    failed: []
-  };
+  // Prüfe Objekt
+  const { data: obj } = await supabase
+    .from("objects")
+    .select("id, lat, lng")
+    .eq("id", newObjectId)
+    .eq("organisation_id", organisationId)
+    .single();
 
+  if (!obj) {
+    return { success: false, message: "Ziel-Objekt nicht gefunden" };
+  }
+
+  const results = [];
   for (const boxId of boxIds) {
-    const result = await exports.moveToObject(boxId, newObjectId, organisationId);
-    if (result.success) {
-      results.success.push(boxId);
-    } else {
-      results.failed.push({ boxId, error: result.message });
-    }
+    const { data, error } = await supabase
+      .from("boxes")
+      .update({
+        object_id: newObjectId,
+        lat: obj.lat,
+        lng: obj.lng,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", boxId)
+      .eq("organisation_id", organisationId)
+      .select()
+      .single();
+
+    results.push({ boxId, success: !error, data });
   }
 
-  return {
-    success: results.failed.length === 0,
-    moved: results.success.length,
-    failed: results.failed.length,
-    details: results
-  };
-};
-
-// ============================================
-// BOX MIT NEUEM CODE ERSTELLEN
-// ============================================
-exports.createWithQrCode = async (organisationId, payload, qrCode = null) => {
-  // Erst Box erstellen (nutze bestehende create Funktion)
-  const boxResult = await exports.create(organisationId, payload);
-  
-  if (!boxResult.success) {
-    return boxResult;
-  }
-
-  const box = boxResult.data;
-
-  // Wenn QR-Code angegeben, zuweisen
-  if (qrCode) {
-    const assignResult = await exports.assignQrCode(box.id, qrCode, organisationId);
-    if (!assignResult.success) {
-      console.warn(`Box erstellt, aber QR-Code Zuweisung fehlgeschlagen: ${assignResult.message}`);
-      return {
-        success: true,
-        data: box,
-        warning: `QR-Code konnte nicht zugewiesen werden: ${assignResult.message}`
-      };
-    }
-    box.qr_code = qrCode.toUpperCase();
-  }
-
-  return { success: true, data: box };
+  return { success: true, moved: results.filter(r => r.success).length, results };
 };
