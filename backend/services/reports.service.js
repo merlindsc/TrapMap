@@ -1,6 +1,6 @@
 // ============================================
-// REPORTS SERVICE - KOMPLETT
-// Audit Reports + Gefahrenanalyse + Logo
+// REPORTS SERVICE - PROFESSIONELL
+// Sauberes Design, Fotos, TrapMap Branding
 // ============================================
 
 const { supabase } = require("../config/supabase");
@@ -9,56 +9,145 @@ let PDFDocument = null;
 try {
   PDFDocument = require("pdfkit");
 } catch (e) {
-  console.warn("⚠️ pdfkit nicht installiert");
+  console.warn("⚠️ pdfkit nicht installiert - npm install pdfkit");
 }
 
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
 const formatDate = (d) => d ? new Date(d).toLocaleDateString("de-DE") : "";
 const formatDateTime = (d) => d ? new Date(d).toLocaleString("de-DE") : "";
-const statusText = { green: "OK", yellow: "Auffällig", orange: "Erhöht", red: "Befall" };
+const formatTime = (d) => d ? new Date(d).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : "";
+
+// Farben
+const COLORS = {
+  primary: "#1e40af",      // Dunkelblau
+  secondary: "#3b82f6",    // Blau
+  accent: "#06b6d4",       // Cyan
+  green: "#22c55e",
+  yellow: "#eab308",
+  orange: "#f97316",
+  red: "#ef4444",
+  gray: "#6b7280",
+  lightGray: "#f3f4f6",
+  darkGray: "#374151",
+  white: "#ffffff",
+  black: "#111827"
+};
+
+const STATUS_CONFIG = {
+  green: { label: "OK", color: COLORS.green },
+  yellow: { label: "Auffällig", color: COLORS.yellow },
+  orange: { label: "Erhöht", color: COLORS.orange },
+  red: { label: "Befall", color: COLORS.red },
+  none: { label: "Nicht geprüft", color: COLORS.gray }
+};
 
 // ============================================
-// GET OBJECTS
+// DATABASE FUNCTIONS
 // ============================================
 exports.getObjects = async (orgId) => {
   const { data, error } = await supabase
-    .from("objects").select("*")
-    .eq("organisation_id", orgId).order("name", { ascending: true });
-  return error ? { success: false, message: error.message } : { success: true, data: data || [] };
+    .from("objects")
+    .select("*")
+    .eq("organisation_id", orgId)
+    .order("name", { ascending: true });
+  
+  return error 
+    ? { success: false, message: error.message } 
+    : { success: true, data: data || [] };
 };
 
-// ============================================
-// GET ORGANISATION
-// ============================================
 exports.getOrganisation = async (orgId) => {
   const { data, error } = await supabase
-    .from("organisations").select("*")
-    .eq("id", orgId).single();
-  return error ? { success: false, message: error.message } : { success: true, data };
+    .from("organisations")
+    .select("*")
+    .eq("id", orgId)
+    .single();
+  
+  return error 
+    ? { success: false, message: error.message } 
+    : { success: true, data };
 };
 
-// ============================================
-// GET REPORT DATA (für Audit)
-// ============================================
+exports.updateOrganisation = async (orgId, updateData) => {
+  const { data, error } = await supabase
+    .from("organisations")
+    .update(updateData)
+    .eq("id", orgId)
+    .select()
+    .single();
+  
+  return error 
+    ? { success: false, message: error.message } 
+    : { success: true, data };
+};
+
+exports.getOrganisationLogo = async (orgId) => {
+  const { data, error } = await supabase
+    .from("organisations")
+    .select("logo_url")
+    .eq("id", orgId)
+    .single();
+  
+  return error 
+    ? { success: false, message: error.message } 
+    : { success: true, logoUrl: data?.logo_url };
+};
+
+exports.uploadLogo = async (orgId, buffer, filename, mimetype) => {
+  try {
+    const ext = filename.split('.').pop();
+    const path = `logos/${orgId}/logo.${ext}`;
+    
+    const { error: uploadError } = await supabase.storage
+      .from("uploads")
+      .upload(path, buffer, { contentType: mimetype, upsert: true });
+    
+    if (uploadError) throw uploadError;
+    
+    const { data: urlData } = supabase.storage.from("uploads").getPublicUrl(path);
+    const logoUrl = urlData.publicUrl;
+    
+    await supabase.from("organisations").update({ logo_url: logoUrl }).eq("id", orgId);
+    
+    return { success: true, logoUrl };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+};
+
 exports.getReportData = async (orgId, objectId, startDate, endDate) => {
   try {
     const { data: object } = await supabase
-      .from("objects").select("*")
-      .eq("id", objectId).eq("organisation_id", orgId).single();
+      .from("objects")
+      .select("*")
+      .eq("id", objectId)
+      .eq("organisation_id", orgId)
+      .single();
+    
     if (!object) return { success: false, message: "Objekt nicht gefunden" };
 
     const { data: organisation } = await supabase
-      .from("organisations").select("*")
-      .eq("id", orgId).single();
+      .from("organisations")
+      .select("*")
+      .eq("id", orgId)
+      .single();
 
     const { data: boxes } = await supabase
-      .from("boxes").select("*, box_types (id, name, category)")
-      .eq("object_id", objectId).eq("organisation_id", orgId).eq("active", true)
+      .from("boxes")
+      .select("*, box_types (id, name, category)")
+      .eq("object_id", objectId)
+      .eq("organisation_id", orgId)
+      .eq("active", true)
       .order("number", { ascending: true });
 
     const { data: scans } = await supabase
-      .from("scans").select("*, users (id, first_name, last_name), boxes (id, number), box_types (id, name)")
+      .from("scans")
+      .select("*, users (id, first_name, last_name), boxes (id, number), box_types (id, name)")
       .eq("organisation_id", orgId)
-      .gte("scanned_at", startDate).lte("scanned_at", endDate + "T23:59:59")
+      .gte("scanned_at", startDate)
+      .lte("scanned_at", endDate + "T23:59:59")
       .order("scanned_at", { ascending: true });
 
     const objectScans = (scans || []).filter(s => 
@@ -70,6 +159,7 @@ exports.getReportData = async (orgId, objectId, startDate, endDate) => {
       totalScans: objectScans.length,
       greenScans: objectScans.filter(s => s.status === "green").length,
       yellowScans: objectScans.filter(s => s.status === "yellow").length,
+      orangeScans: objectScans.filter(s => s.status === "orange").length,
       redScans: objectScans.filter(s => s.status === "red").length,
       uniqueTechnicians: [...new Set(objectScans.map(s => s.user_id))].length
     };
@@ -79,432 +169,647 @@ exports.getReportData = async (orgId, objectId, startDate, endDate) => {
       return { ...box, lastScan: bs[bs.length - 1], scanCount: bs.length };
     });
 
-    return { success: true, data: { object, organisation, boxes: boxesWithLastScan, scans: objectScans, stats, period: { startDate, endDate } } };
+    return { 
+      success: true, 
+      data: { object, organisation, boxes: boxesWithLastScan, scans: objectScans, stats, period: { startDate, endDate } } 
+    };
   } catch (err) {
     return { success: false, message: err.message };
   }
 };
 
+exports.getPhotosForReport = async (orgId, objectId, startDate, endDate, sizeOrCount = "thumbnail") => {
+  try {
+    if (sizeOrCount === "count") {
+      const { count } = await supabase
+        .from("scans")
+        .select("id", { count: "exact", head: true })
+        .eq("object_id", objectId)
+        .eq("organisation_id", orgId)
+        .not("photo_url", "is", null)
+        .gte("scanned_at", startDate)
+        .lte("scanned_at", endDate + "T23:59:59");
+
+      return { success: true, count: count || 0 };
+    }
+
+    const twoYearsAgo = new Date();
+    twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+
+    const effectiveStartDate = new Date(startDate) < twoYearsAgo 
+      ? twoYearsAgo.toISOString().split("T")[0] 
+      : startDate;
+
+    const { data: scans } = await supabase
+      .from("scans")
+      .select("id, scanned_at, photo_url, status, notes, box_id, boxes (id, number, box_types(name)), users (first_name, last_name)")
+      .eq("object_id", objectId)
+      .eq("organisation_id", orgId)
+      .not("photo_url", "is", null)
+      .gte("scanned_at", effectiveStartDate)
+      .lte("scanned_at", endDate + "T23:59:59")
+      .order("scanned_at", { ascending: false })
+      .limit(30);
+
+    if (!scans || scans.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    const photos = scans.map(s => ({
+      scan_id: s.id,
+      box_id: s.box_id,
+      box_number: s.boxes?.number || "?",
+      box_type: s.boxes?.box_types?.name || "Unbekannt",
+      scanned_at: s.scanned_at,
+      status: s.status,
+      notes: s.notes,
+      technician: s.users ? `${s.users.first_name} ${s.users.last_name}` : "Unbekannt",
+      photo_url: s.photo_url,
+      size: sizeOrCount
+    }));
+
+    return { success: true, data: photos };
+  } catch (err) {
+    console.error("getPhotosForReport error:", err);
+    return { success: false, message: err.message, data: [] };
+  }
+};
+
+exports.getFloorplanForReport = async (orgId, objectId) => {
+  try {
+    const { data: floorplans } = await supabase
+      .from("floor_plans")
+      .select("*")
+      .eq("object_id", objectId)
+      .eq("organisation_id", orgId)
+      .order("name", { ascending: true });
+
+    const { data: object } = await supabase
+      .from("objects")
+      .select("id, name, lat, lng")
+      .eq("id", objectId)
+      .single();
+
+    const { data: boxes } = await supabase
+      .from("boxes")
+      .select("id, number, lat, lng, floor_plan_id, floor_x, floor_y, status, box_types (name, category)")
+      .eq("object_id", objectId)
+      .eq("organisation_id", orgId)
+      .eq("active", true)
+      .order("number", { ascending: true });
+
+    const boxesByFloorplan = {};
+    const boxesOnMap = [];
+
+    (boxes || []).forEach(box => {
+      if (box.floor_plan_id && box.floor_x && box.floor_y) {
+        if (!boxesByFloorplan[box.floor_plan_id]) {
+          boxesByFloorplan[box.floor_plan_id] = [];
+        }
+        boxesByFloorplan[box.floor_plan_id].push(box);
+      } else if (box.lat && box.lng) {
+        boxesOnMap.push(box);
+      }
+    });
+
+    return {
+      success: true,
+      data: {
+        object,
+        floorplans: floorplans || [],
+        boxesByFloorplan,
+        boxesOnMap,
+        hasFloorplans: (floorplans || []).length > 0,
+        hasMapPositions: boxesOnMap.length > 0,
+        totalBoxes: (boxes || []).length
+      }
+    };
+  } catch (err) {
+    return { success: false, message: err.message, data: null };
+  }
+};
+
 // ============================================
-// LOGO LADEN
+// IMAGE LOADING
 // ============================================
-const loadLogo = async (url) => {
+const loadImage = async (url) => {
   if (!url) return null;
   try {
     const proto = url.startsWith('https') ? require('https') : require('http');
-    return new Promise(r => {
-      const t = setTimeout(() => r(null), 5000);
-      proto.get(url, res => {
-        if (res.statusCode !== 200) { clearTimeout(t); return r(null); }
-        const c = []; res.on('data', d => c.push(d));
-        res.on('end', () => { clearTimeout(t); r(Buffer.concat(c)); });
-        res.on('error', () => { clearTimeout(t); r(null); });
-      }).on('error', () => { clearTimeout(t); r(null); });
-    });
-  } catch { return null; }
-};
-
-// ============================================
-// AUDIT PDF GENERIEREN
-// ============================================
-exports.generatePDF = async (reportData) => {
-  if (!PDFDocument) throw new Error("pdfkit nicht installiert");
-
-  const { object, organisation, boxes, scans, stats, period } = reportData;
-  const logoBuffer = organisation?.logo_url ? await loadLogo(organisation.logo_url) : null;
-  const orgName = organisation?.name || "TrapMap";
-
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ 
-      size: "A4", 
-      margins: { top: 50, bottom: 50, left: 50, right: 50 }
-    });
-
-    const chunks = [];
-    doc.on("data", c => chunks.push(c));
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-    doc.on("error", reject);
-
-    const W = doc.page.width - 100;
-    const BOTTOM = 750;
-    let pageNum = 1;
-
-    const addPageHeader = () => {
-      doc.fontSize(8).font("Helvetica").fillColor("#999999");
-      doc.text(`${orgName} | ${object.name} | Seite ${pageNum}`, 50, 30, { align: "right", width: W });
-      doc.fillColor("#000000");
-      doc.moveTo(50, 45).lineTo(545, 45).stroke("#eeeeee");
-    };
-
-    const newPage = () => {
-      doc.addPage();
-      pageNum++;
-      addPageHeader();
-      return 55;
-    };
-
-    if (logoBuffer) {
-      try { doc.image(logoBuffer, doc.page.width - 130, 30, { fit: [80, 40] }); } catch {}
-    }
-
-    doc.fontSize(24).font("Helvetica-Bold").fillColor("#000000").text("AUDIT-REPORT", 50, 50);
-    doc.fontSize(11).font("Helvetica").text("Schädlingsbekämpfung");
-    doc.moveDown(1.5);
-
-    const iy = doc.y;
-    doc.rect(50, iy, W, 70).stroke("#cccccc");
-    doc.fontSize(14).font("Helvetica-Bold").text(object.name, 60, iy + 10);
-    doc.fontSize(10).font("Helvetica")
-      .text(`${object.address || ""}, ${object.zip || ""} ${object.city || ""}`, 60, iy + 28)
-      .text(`Berichtszeitraum: ${formatDate(period.startDate)} - ${formatDate(period.endDate)}`, 60, iy + 42)
-      .text(`Erstellt am: ${formatDateTime(new Date())}`, 60, iy + 56);
-    doc.y = iy + 85;
-
-    doc.fontSize(14).font("Helvetica-Bold").text("Zusammenfassung");
-    doc.moveDown(0.3);
-    doc.fontSize(10).font("Helvetica");
-    doc.text(`Gesamtanzahl Boxen: ${stats.totalBoxes}`);
-    doc.text(`Durchgeführte Kontrollen: ${stats.totalScans}`);
-    doc.text(`Eingesetzte Techniker: ${stats.uniqueTechnicians}`);
-    doc.text(`Kontrollen OK (grün): ${stats.greenScans}`);
-    doc.text(`Kontrollen auffällig (gelb): ${stats.yellowScans}`);
-    doc.text(`Kontrollen Befall (rot): ${stats.redScans}`);
-    doc.moveDown(1);
-
-    doc.fontSize(14).font("Helvetica-Bold").text("Bewertung");
-    doc.moveDown(0.3);
-    const rate = stats.totalScans > 0 ? ((stats.redScans / stats.totalScans) * 100).toFixed(1) : 0;
-    let bew = "Sehr gut";
-    if (rate > 5) bew = "Kritisch - Maßnahmen erforderlich";
-    else if (rate > 2) bew = "Auffällig - Beobachtung empfohlen";
-    else if (stats.yellowScans > stats.totalScans * 0.2) bew = "Gut - leichte Auffälligkeiten";
-    doc.fontSize(11).font("Helvetica-Bold").text(`Gesamtbewertung: ${bew}`);
-    doc.font("Helvetica").fontSize(10).text(`Befallsrate: ${rate}%`);
-    doc.moveDown(1);
-
-    if (boxes?.length > 0) {
-      doc.fontSize(14).font("Helvetica-Bold").text("Box-Übersicht");
-      doc.moveDown(0.3);
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve(null), 15000);
       
-      let y = doc.y;
-      doc.fontSize(9).font("Helvetica-Bold");
-      doc.text("Nr.", 50, y); doc.text("Typ", 85, y); doc.text("Letzte Kontrolle", 200, y);
-      doc.text("Status", 310, y); doc.text("Kontrollen", 400, y);
-      doc.moveTo(50, y + 12).lineTo(545, y + 12).stroke("#cccccc");
-      y += 18;
-      
-      doc.fontSize(9).font("Helvetica");
-      for (const box of boxes) {
-        if (y > BOTTOM) y = newPage();
-        const st = box.lastScan?.status || box.current_status || "green";
-        doc.text(box.number?.toString() || "-", 50, y);
-        doc.text((box.box_types?.name || "-").substring(0, 18), 85, y);
-        doc.text(box.lastScan ? formatDate(box.lastScan.scanned_at) : "-", 200, y);
-        doc.text(statusText[st] || "OK", 310, y);
-        doc.text((box.scanCount || 0).toString(), 400, y);
-        y += 14;
-      }
-      doc.y = y + 10;
-    }
-
-    if (scans?.length > 0) {
-      if (doc.y > BOTTOM - 60) doc.y = newPage();
-      else doc.moveDown(1);
-
-      doc.fontSize(14).font("Helvetica-Bold").text("Kontroll-Protokoll");
-      doc.moveDown(0.3);
-
-      let y = doc.y;
-      doc.fontSize(8).font("Helvetica-Bold");
-      doc.text("Datum", 50, y); doc.text("Box", 115, y); doc.text("Typ", 150, y);
-      doc.text("Status", 235, y); doc.text("Techniker", 300, y); doc.text("Bemerkung", 400, y);
-      doc.moveTo(50, y + 10).lineTo(545, y + 10).stroke("#cccccc");
-      y += 14;
-
-      doc.fontSize(8).font("Helvetica");
-      const max = Math.min(scans.length, 100);
-      for (let i = 0; i < max; i++) {
-        if (y > BOTTOM) y = newPage();
-        const s = scans[i];
-        const tech = s.users ? `${s.users.first_name || ""} ${s.users.last_name || ""}`.trim() : "-";
-        doc.text(formatDate(s.scanned_at), 50, y);
-        doc.text(s.boxes?.number?.toString() || "-", 115, y);
-        doc.text((s.box_types?.name || "-").substring(0, 12), 150, y);
-        doc.text(statusText[s.status] || "-", 235, y);
-        doc.text(tech.substring(0, 15), 300, y);
-        doc.text((s.notes || "-").substring(0, 20), 400, y);
-        y += 11;
-      }
-      if (scans.length > 100) {
-        doc.y = y + 5;
-        doc.fontSize(8).fillColor("#666666").text(`... und ${scans.length - 100} weitere`);
-        doc.fillColor("#000000");
-      }
-    }
-
-    doc.end();
-  });
-};
-
-// ============================================
-// GEFAHRENANALYSE PDF GENERIEREN
-// Mit Dienstleister, Auftraggeber, Objekt
-// ============================================
-exports.generateGefahrenanalyse = async (data, organisation) => {
-  if (!PDFDocument) throw new Error("pdfkit nicht installiert");
-
-  const logoBuffer = organisation?.logo_url ? await loadLogo(organisation.logo_url) : null;
-
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ 
-      size: "A4", 
-      margins: { top: 40, bottom: 40, left: 40, right: 40 }
-    });
-
-    const chunks = [];
-    doc.on("data", c => chunks.push(c));
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-    doc.on("error", reject);
-
-    const W = doc.page.width - 80;
-    const LEFT = 40;
-    const COL2 = 220;
-    const COL3 = 400;
-
-    // Checkbox Helper
-    const checkbox = (x, y, checked) => {
-      doc.rect(x, y, 10, 10).stroke("#000000");
-      if (checked) {
-        doc.moveTo(x + 2, y + 5).lineTo(x + 4, y + 8).lineTo(x + 8, y + 2).stroke("#000000");
-      }
-    };
-
-    // ============================================
-    // HEADER
-    // ============================================
-    doc.fontSize(14).font("Helvetica-Bold").fillColor("#000000");
-    doc.text("Objektbezogene Gefahrenanalyse", LEFT, 40);
-    doc.fontSize(10).font("Helvetica");
-    doc.text("zur Bewertung der Notwendigkeit einer", LEFT, 58);
-    doc.text("befallsunabhängigen Dauerbeköderung gegen Schadnager", LEFT, 70);
-
-    // Logo oben rechts
-    if (logoBuffer) {
-      try { doc.image(logoBuffer, doc.page.width - 120, 35, { fit: [70, 35] }); } catch {}
-    }
-
-    // Hinweistext
-    doc.fontSize(6).font("Helvetica").fillColor("#333333");
-    doc.text('Aufgrund der „Allgemeinen Kriterien einer guten fachlichen Anwendung von Fraßködern bei der Nagetierbekämpfung mit Antikoagulanzien durch sachkundige Verwender und berufsmäßige Verwender mit Sachkunde" erfolgte die Bewertung zur Notwendigkeit einer befallsunabhängigen Dauerbeköderung gegen Schadnager.', LEFT, 88, { width: W });
-
-    let y = 115;
-
-    // ============================================
-    // DREI SPALTEN: Dienstleister, Auftraggeber, Objekt
-    // ============================================
-    const fieldHeight = 14;
-    const labelWidth = 55;
-    const valueWidth = 100;
-
-    const drawSection = (title, data, x, startY) => {
-      doc.fillColor("#000000").fontSize(9).font("Helvetica-Bold").text(title, x, startY);
-      let yPos = startY + 14;
-      doc.fontSize(7).font("Helvetica");
-      
-      const fields = [
-        { label: "Firma", key: "firma" },
-        { label: "Straße", key: "strasse" },
-        { label: "PLZ/Ort", key: "plzOrt" },
-        { label: "Verantw.", key: "verantwortlicher" },
-        { label: "Telefon", key: "telefon" }
-      ];
-
-      fields.forEach(f => {
-        doc.fillColor("#000000").text(f.label, x, yPos + 2);
-        doc.rect(x + labelWidth, yPos, valueWidth, fieldHeight).stroke("#999999");
-        const val = data?.[f.key] || "";
-        if (val) doc.text(val.substring(0, 18), x + labelWidth + 2, yPos + 3);
-        yPos += 16;
+      proto.get(url, (res) => {
+        if (res.statusCode === 301 || res.statusCode === 302) {
+          loadImage(res.headers.location).then(resolve);
+          clearTimeout(timeout);
+          return;
+        }
+        if (res.statusCode !== 200) {
+          clearTimeout(timeout);
+          return resolve(null);
+        }
+        const chunks = [];
+        res.on('data', (d) => chunks.push(d));
+        res.on('end', () => {
+          clearTimeout(timeout);
+          resolve(Buffer.concat(chunks));
+        });
+        res.on('error', () => {
+          clearTimeout(timeout);
+          resolve(null);
+        });
+      }).on('error', () => {
+        clearTimeout(timeout);
+        resolve(null);
       });
-
-      return yPos;
-    };
-
-    const y1 = drawSection("Dienstleister:", data.dienstleister, LEFT, y);
-    drawSection("Auftraggeber:", data.auftraggeber, COL2, y);
-    drawSection("Objekt:", data.objekt, COL3, y);
-
-    y = y1 + 10;
-
-    // ============================================
-    // DURCHFÜHRUNG
-    // ============================================
-    doc.fontSize(9).font("Helvetica-Bold").text("Durchführung:", LEFT, y);
-    y += 14;
-    
-    doc.fontSize(8).font("Helvetica");
-    doc.text("Am:", LEFT, y + 2);
-    doc.rect(LEFT + 20, y, 80, fieldHeight).stroke("#999999");
-    doc.text(data.durchfuehrung?.datum || formatDate(new Date()), LEFT + 23, y + 3);
-    
-    doc.text("Durch:", LEFT + 120, y + 2);
-    doc.rect(LEFT + 150, y, 120, fieldHeight).stroke("#999999");
-    doc.text(data.durchfuehrung?.durch || "", LEFT + 153, y + 3);
-
-    y += 25;
-
-    // ============================================
-    // DOKUMENTATION
-    // ============================================
-    doc.fontSize(9).font("Helvetica-Bold").text("Aktuelle Dokumentation (Zutreffendes ankreuzen):", LEFT, y);
-    y += 14;
-    doc.fontSize(8).font("Helvetica");
-    
-    checkbox(LEFT, y, data.dokumentation?.apcIntegral);
-    doc.text("APC Integral", LEFT + 14, y + 1);
-    
-    checkbox(LEFT + 80, y, data.dokumentation?.apcDocuWeb);
-    doc.text("APC DocuWeb", LEFT + 94, y + 1);
-    
-    checkbox(LEFT + 170, y, data.dokumentation?.trapmap !== false);
-    doc.text("TrapMap", LEFT + 184, y + 1);
-
-    doc.text("Behandlungen jährlich:", LEFT + 260, y + 1);
-    doc.rect(LEFT + 355, y - 1, 35, fieldHeight).stroke("#999999");
-    doc.text(data.behandlungenJaehrlich?.toString() || "", LEFT + 358, y + 2);
-    
-    doc.text("Inspektionsintervall", LEFT + 400, y + 1);
-
-    y += 25;
-
-    // ============================================
-    // VORAUSSETZUNGEN HEADER
-    // ============================================
-    doc.rect(LEFT, y, W, 16).fill("#e8e8e8");
-    doc.fillColor("#000000").fontSize(8).font("Helvetica-Bold");
-    doc.text("Voraussetzungen für eine befallsunabhängige Dauerbeköderung", LEFT + 5, y + 4);
-    doc.text("Gegeben:", W - 60, y + 4);
-    doc.text("JA", W - 15, y + 4);
-    doc.text("NEIN", W + 15, y + 4);
-
-    y += 20;
-    doc.fontSize(6).font("Helvetica").fillColor("#444444");
-    doc.text("Die Voraussetzung für eine befallsunabhängige Dauerbeköderung durch Rodentizide mit Antikoagulanzien der 2. Generation ist nur gegeben, wenn alle drei der nachfolgenden Kriterien mit JA zu beantworten sind.", LEFT, y, { width: W - 50 });
-    
-    doc.fillColor("#000000");
-    y += 18;
-
-    // ============================================
-    // KRITERIEN
-    // ============================================
-    const kriterien = [
-      "1. Ausschließlicher Einsatz dauerhaft kontrollierter Köderstellen an bevorzugten Eintritts- und Einniststellen von Schadnagern in und am Gebäude. Verwendung zugriffgeschützter Köderboxen.",
-      "2. Erhöhte Befallsgefahr durch Nagetiere, die eine besondere Gefahr für Gesundheit oder Sicherheit von Mensch und Tier darstellt.",
-      "3. Keine Möglichkeit, die Befallsgefahr durch verhältnismäßige Maßnahmen (z.B. organisatorische oder bauliche Maßnahmen oder Einsatz toxinfreier Alternativen) zu verhindern."
-    ];
-
-    doc.fontSize(7).font("Helvetica");
-    kriterien.forEach((text, i) => {
-      const textHeight = doc.heightOfString(text, { width: W - 70 });
-      doc.text(text, LEFT, y, { width: W - 70 });
-      
-      checkbox(W - 10, y, data.kriterien?.[i]?.ja);
-      checkbox(W + 20, y, data.kriterien?.[i]?.nein);
-      
-      y += Math.max(textHeight, 12) + 6;
     });
-
-    y += 5;
-
-    // ============================================
-    // EMPFEHLUNG HEADER
-    // ============================================
-    doc.rect(LEFT, y, W, 16).fill("#e8e8e8");
-    doc.fillColor("#000000").fontSize(8).font("Helvetica-Bold");
-    doc.text("Empfehlung auf Grund der vorliegenden Gefahrenanalyse:", LEFT + 5, y + 4);
-    doc.fontSize(7).font("Helvetica");
-    doc.text("Zutreffendes ankreuzen", W - 50, y + 5);
-
-    y += 22;
-    doc.fontSize(7).font("Helvetica");
-
-    // Empfehlung 1
-    checkbox(LEFT, y, data.empfehlung === 1);
-    const emp1 = "Wir empfehlen die Beibehaltung des bisherigen Inspektionsintervalls von weniger als 12 Behandlungen jährlich. Bei Eintreten eines Befalls durch Nagetiere empfehlen wir die temporäre Umstellung von NeoTox auf Tox unter Berücksichtigung der Allgemeinen Kriterien einer guten fachlichen Anwendung von Fraßködern bei der Nagetierbekämpfung. Entsprechend erforderliche zusätzliche Behandlungen werden gesondert berechnet.";
-    doc.text(emp1, LEFT + 14, y, { width: W - 20 });
-    
-    y += doc.heightOfString(emp1, { width: W - 20 }) + 8;
-
-    // Empfehlung 2
-    checkbox(LEFT, y, data.empfehlung === 2);
-    const emp2 = "Wir empfehlen die befallsunabhängige Beköderung mit Rodentiziden der beiliegenden Einzelzulassung der Systeme zur Nagetierbekämpfung mit Benennung der Kontrollpunkte bzw. Objektbereiche. Das Intervall zur Systembetreuung bei befallsunabhängiger Dauerbeköderung muss im Zeitraum von 1-4 Wochen liegen.";
-    doc.text(emp2, LEFT + 14, y, { width: W - 20 });
-
-    y += doc.heightOfString(emp2, { width: W - 20 }) + 20;
-
-    // ============================================
-    // UNTERSCHRIFTEN
-    // ============================================
-    doc.fontSize(8).font("Helvetica");
-    doc.text("Unterschrift Kunde:", LEFT, y);
-    doc.moveTo(LEFT + 80, y + 12).lineTo(LEFT + 200, y + 12).stroke("#000000");
-    
-    doc.text("Unterschrift Firma:", LEFT + 280, y);
-    doc.moveTo(LEFT + 360, y + 12).lineTo(LEFT + 480, y + 12).stroke("#000000");
-
-    y += 35;
-
-    // Footer
-    doc.fontSize(7).fillColor("#888888");
-    doc.text("Erstellt mit TrapMap - Professionelles Schädlingsmanagement", LEFT, y, { align: "center", width: W });
-
-    doc.end();
-  });
-};
-
-// ============================================
-// UPDATE ORGANISATION
-// ============================================
-exports.updateOrganisation = async (orgId, data) => {
-  try {
-    const { data: updated, error } = await supabase
-      .from("organisations")
-      .update({
-        name: data.name,
-        address: data.address,
-        zip: data.zip,
-        city: data.city,
-        phone: data.phone,
-        email: data.email,
-        contact_name: data.contact_name
-      })
-      .eq("id", orgId)
-      .select()
-      .single();
-
-    if (error) return { success: false, message: error.message };
-    return { success: true, data: updated };
-  } catch (err) {
-    return { success: false, message: err.message };
+  } catch {
+    return null;
   }
 };
 
 // ============================================
-// LOGO UPLOAD & GET
+// PDF GENERATION - PROFESSIONAL
 // ============================================
-exports.uploadLogo = async (orgId, fileBuffer, fileName, mimeType) => {
-  try {
-    const ext = fileName.split('.').pop();
-    const path = `logos/${orgId}/logo.${ext}`;
-    const { error: ue } = await supabase.storage.from('uploads').upload(path, fileBuffer, { contentType: mimeType, upsert: true });
-    if (ue) return { success: false, message: ue.message };
-    const { data } = supabase.storage.from('uploads').getPublicUrl(path);
-    await supabase.from("organisations").update({ logo_url: data.publicUrl }).eq("id", orgId);
-    return { success: true, logoUrl: data.publicUrl };
-  } catch (e) { return { success: false, message: e.message }; }
+exports.generatePDF = async (reportData) => {
+  if (!PDFDocument) throw new Error("pdfkit nicht installiert - npm install pdfkit");
+
+  const { 
+    object, organisation, boxes, scans, stats, period,
+    photos = [], floorplanData, options = {}
+  } = reportData;
+  
+  const logoBuffer = organisation?.logo_url ? await loadImage(organisation.logo_url) : null;
+  
+  // Fotos vorladen wenn gewünscht
+  const loadedPhotos = [];
+  if (options.includePhotos && photos.length > 0) {
+    console.log(`📸 Loading ${photos.length} photos...`);
+    for (const photo of photos.slice(0, 20)) {
+      const buffer = await loadImage(photo.photo_url);
+      if (buffer) {
+        loadedPhotos.push({ ...photo, buffer });
+      }
+    }
+    console.log(`📸 Loaded ${loadedPhotos.length} photos successfully`);
+  }
+
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ 
+        size: "A4", 
+        margins: { top: 50, bottom: 70, left: 50, right: 50 },
+        bufferPages: true
+      });
+      const chunks = [];
+      
+      doc.on("data", (chunk) => chunks.push(chunk));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", reject);
+
+      const pageWidth = doc.page.width - 100;
+      const pageHeight = doc.page.height;
+
+      // ========================================
+      // HELPER: Draw Status Dot
+      // ========================================
+      const drawStatusDot = (x, y, status, size = 8) => {
+        const color = STATUS_CONFIG[status]?.color || COLORS.gray;
+        doc.circle(x + size/2, y + size/2, size/2).fill(color);
+      };
+
+      // ========================================
+      // HELPER: Draw Section Header
+      // ========================================
+      const drawSectionHeader = (title, y) => {
+        doc.rect(50, y, pageWidth, 28).fill(COLORS.primary);
+        doc.fontSize(14).fillColor(COLORS.white).text(title, 60, y + 7);
+        return y + 38;
+      };
+
+      // ========================================
+      // HELPER: Footer
+      // ========================================
+      const addFooter = (pageNum, totalPages) => {
+        const footerY = pageHeight - 50;
+        
+        doc.moveTo(50, footerY).lineTo(pageWidth + 50, footerY).strokeColor(COLORS.lightGray).stroke();
+        
+        doc.fontSize(8).fillColor(COLORS.gray);
+        doc.text("Erstellt mit TrapMap - Professionelle Schädlingsüberwachung", 50, footerY + 8, { width: 200 });
+        doc.text("www.trap-map.de", 50, footerY + 18);
+        
+        doc.text(`Seite ${pageNum} von ${totalPages}`, pageWidth - 50, footerY + 12, { width: 100, align: "right" });
+      };
+
+      // ========================================
+      // PAGE 1: DECKBLATT
+      // ========================================
+      
+      doc.rect(0, 0, doc.page.width, 200).fill(COLORS.primary);
+      doc.rect(0, 200, doc.page.width, 8).fill(COLORS.secondary);
+      
+      if (logoBuffer) {
+        try {
+          doc.image(logoBuffer, 50, 30, { height: 80 });
+        } catch (e) {
+          console.warn("Logo konnte nicht eingefügt werden");
+        }
+      }
+      
+      doc.fontSize(32).fillColor(COLORS.white).text("AUDIT-REPORT", 50, 130, { width: pageWidth });
+      
+      doc.fontSize(28).fillColor(COLORS.black).text(object.name, 50, 240);
+      
+      doc.fontSize(14).fillColor(COLORS.darkGray);
+      doc.text(`Berichtszeitraum: ${formatDate(period.startDate)} - ${formatDate(period.endDate)}`, 50, 290);
+      doc.text(`Erstellt am: ${formatDateTime(new Date())}`, 50, 310);
+      
+      doc.moveTo(50, 350).lineTo(250, 350).strokeColor(COLORS.secondary).lineWidth(3).stroke();
+      
+      if (organisation) {
+        doc.fontSize(11).fillColor(COLORS.darkGray);
+        let infoY = 380;
+        if (organisation.name) { doc.text(organisation.name, 50, infoY); infoY += 16; }
+        if (organisation.address) { doc.text(organisation.address, 50, infoY); infoY += 16; }
+        if (organisation.zip || organisation.city) { 
+          doc.text(`${organisation.zip || ""} ${organisation.city || ""}`.trim(), 50, infoY); 
+          infoY += 16; 
+        }
+        if (organisation.phone) { doc.text(`Tel: ${organisation.phone}`, 50, infoY); infoY += 16; }
+        if (organisation.email) { doc.text(organisation.email, 50, infoY); }
+      }
+      
+      const statsBoxY = 500;
+      doc.roundedRect(50, statsBoxY, pageWidth, 100, 8).fill(COLORS.lightGray);
+      
+      const statWidth = pageWidth / 4;
+      const statItems = [
+        { label: "Boxen", value: stats.totalBoxes, color: COLORS.primary },
+        { label: "Kontrollen", value: stats.totalScans, color: COLORS.secondary },
+        { label: "Techniker", value: stats.uniqueTechnicians, color: COLORS.accent },
+        { label: "Befälle", value: stats.redScans, color: stats.redScans > 0 ? COLORS.red : COLORS.green }
+      ];
+      
+      statItems.forEach((item, i) => {
+        const x = 50 + (i * statWidth) + 20;
+        doc.fontSize(24).fillColor(item.color).text(item.value.toString(), x, statsBoxY + 25, { width: statWidth - 40 });
+        doc.fontSize(10).fillColor(COLORS.gray).text(item.label, x, statsBoxY + 60, { width: statWidth - 40 });
+      });
+
+      // ========================================
+      // PAGE 2: ZUSAMMENFASSUNG & STATUS
+      // ========================================
+      doc.addPage();
+      
+      let y = drawSectionHeader("Zusammenfassung", 50);
+      
+      doc.fontSize(11).fillColor(COLORS.black);
+      doc.text(`Objekt: ${object.name}`, 60, y);
+      y += 18;
+      if (object.address) {
+        doc.fontSize(10).fillColor(COLORS.darkGray);
+        doc.text(`Adresse: ${object.address}`, 60, y);
+        y += 16;
+      }
+      if (object.city) {
+        doc.text(`${object.zip || ""} ${object.city}`.trim(), 60, y);
+        y += 16;
+      }
+      
+      y += 20;
+      
+      y = drawSectionHeader("Status-Verteilung", y);
+      
+      const totalScans = stats.totalScans || 1;
+      const barHeight = 30;
+      const barY = y + 10;
+      
+      doc.roundedRect(60, barY, pageWidth - 20, barHeight, 4).fill(COLORS.lightGray);
+      
+      let barX = 60;
+      const statusData = [
+        { count: stats.greenScans, color: COLORS.green, label: "OK" },
+        { count: stats.yellowScans, color: COLORS.yellow, label: "Auffällig" },
+        { count: stats.orangeScans || 0, color: COLORS.orange, label: "Erhöht" },
+        { count: stats.redScans, color: COLORS.red, label: "Befall" }
+      ];
+      
+      statusData.forEach(s => {
+        if (s.count > 0) {
+          const width = ((s.count / totalScans) * (pageWidth - 20));
+          if (barX === 60) {
+            doc.roundedRect(barX, barY, width, barHeight, 4).fill(s.color);
+          } else {
+            doc.rect(barX, barY, width, barHeight).fill(s.color);
+          }
+          barX += width;
+        }
+      });
+      
+      y = barY + barHeight + 20;
+      
+      let legendX = 60;
+      statusData.forEach(s => {
+        doc.circle(legendX + 5, y + 5, 5).fill(s.color);
+        doc.fontSize(10).fillColor(COLORS.black).text(`${s.label}: ${s.count}`, legendX + 15, y);
+        legendX += 120;
+      });
+      
+      y += 40;
+
+      // ========================================
+      // KONTROLLEN-DETAILS
+      // ========================================
+      if (options.includeScans !== false && scans.length > 0) {
+        y = drawSectionHeader("Kontrollen-Protokoll", y);
+        
+        doc.fontSize(9).fillColor(COLORS.gray);
+        doc.text("Status", 60, y + 5, { width: 50 });
+        doc.text("Box", 115, y + 5, { width: 60 });
+        doc.text("Typ", 180, y + 5, { width: 100 });
+        doc.text("Datum / Uhrzeit", 290, y + 5, { width: 100 });
+        doc.text("Techniker", 400, y + 5, { width: 100 });
+        
+        y += 25;
+        doc.moveTo(60, y - 5).lineTo(pageWidth + 40, y - 5).strokeColor(COLORS.lightGray).lineWidth(1).stroke();
+        
+        scans.forEach((scan, i) => {
+          if (y > pageHeight - 100) {
+            doc.addPage();
+            y = 60;
+          }
+          
+          if (i % 2 === 0) {
+            doc.rect(55, y - 3, pageWidth - 5, 22).fill("#f9fafb");
+          }
+          
+          drawStatusDot(60, y, scan.status);
+          
+          doc.fontSize(10).fillColor(COLORS.black);
+          doc.text(scan.boxes?.number?.toString() || "?", 115, y, { width: 60 });
+          
+          doc.fontSize(9).fillColor(COLORS.darkGray);
+          doc.text(scan.box_types?.name || "-", 180, y, { width: 105 });
+          
+          doc.text(formatDateTime(scan.scanned_at), 290, y, { width: 105 });
+          
+          const techName = scan.users ? `${scan.users.first_name} ${scan.users.last_name}` : "-";
+          doc.text(techName, 400, y, { width: 100 });
+          
+          y += 22;
+          
+          if (scan.notes) {
+            doc.fontSize(8).fillColor(COLORS.gray);
+            doc.text(`  → ${scan.notes}`, 75, y - 2, { width: pageWidth - 35 });
+            y += 14;
+          }
+        });
+      }
+
+      // ========================================
+      // BOX-ÜBERSICHT
+      // ========================================
+      doc.addPage();
+      y = drawSectionHeader("Box-Übersicht", 50);
+      
+      doc.fontSize(9).fillColor(COLORS.gray);
+      doc.text("Nr.", 60, y + 5, { width: 40 });
+      doc.text("Box-Typ", 105, y + 5, { width: 140 });
+      doc.text("Status", 260, y + 5, { width: 80 });
+      doc.text("Kontrollen", 350, y + 5, { width: 60 });
+      doc.text("Letzte Kontrolle", 420, y + 5, { width: 120 });
+      
+      y += 25;
+      doc.moveTo(60, y - 5).lineTo(pageWidth + 40, y - 5).strokeColor(COLORS.lightGray).lineWidth(1).stroke();
+      
+      boxes.forEach((box, i) => {
+        if (y > pageHeight - 100) {
+          doc.addPage();
+          y = 60;
+        }
+        
+        if (i % 2 === 0) {
+          doc.rect(55, y - 3, pageWidth - 5, 20).fill("#f9fafb");
+        }
+        
+        const lastStatus = box.lastScan?.status || "none";
+        
+        doc.fontSize(11).fillColor(COLORS.black).text(box.number?.toString() || "?", 60, y, { width: 40 });
+        
+        doc.fontSize(10).fillColor(COLORS.darkGray).text(box.box_types?.name || "Unbekannt", 105, y, { width: 140 });
+        
+        drawStatusDot(260, y, lastStatus);
+        doc.fontSize(9).fillColor(STATUS_CONFIG[lastStatus]?.color || COLORS.gray);
+        doc.text(STATUS_CONFIG[lastStatus]?.label || "-", 275, y, { width: 70 });
+        
+        doc.fillColor(COLORS.black).text(box.scanCount?.toString() || "0", 350, y, { width: 60, align: "center" });
+        
+        doc.fontSize(9).fillColor(COLORS.gray);
+        doc.text(box.lastScan ? formatDateTime(box.lastScan.scanned_at) : "-", 420, y, { width: 120 });
+        
+        y += 20;
+      });
+
+      // ========================================
+      // FOTO-DOKUMENTATION
+      // ========================================
+      if (options.includePhotos && loadedPhotos.length > 0) {
+        doc.addPage();
+        y = drawSectionHeader("Foto-Dokumentation", 50);
+        
+        doc.fontSize(10).fillColor(COLORS.darkGray);
+        doc.text(`${loadedPhotos.length} Fotos im Berichtszeitraum`, 60, y);
+        y += 30;
+        
+        const photoSize = options.photoSize || "medium";
+        const imgWidth = photoSize === "full" ? 450 : (photoSize === "medium" ? 220 : 140);
+        const imgHeight = photoSize === "full" ? 300 : (photoSize === "medium" ? 160 : 100);
+        const cols = photoSize === "full" ? 1 : 2;
+        
+        loadedPhotos.forEach((photo, i) => {
+          const col = i % cols;
+          const needNewPage = col === 0 && y + imgHeight + 60 > pageHeight - 80;
+          
+          if (needNewPage) {
+            doc.addPage();
+            y = 60;
+          }
+          
+          const x = 60 + (col * (imgWidth + 30));
+          
+          try {
+            doc.image(photo.buffer, x, y, { 
+              fit: [imgWidth, imgHeight],
+              align: "center",
+              valign: "center"
+            });
+            
+            doc.rect(x, y, imgWidth, imgHeight).strokeColor(COLORS.lightGray).stroke();
+            
+            const infoY = y + imgHeight + 5;
+            
+            drawStatusDot(x, infoY, photo.status, 6);
+            
+            doc.fontSize(9).fillColor(COLORS.black);
+            doc.text(`Box ${photo.box_number}`, x + 12, infoY, { width: imgWidth - 12 });
+            
+            doc.fontSize(8).fillColor(COLORS.gray);
+            doc.text(`${photo.box_type} | ${formatDateTime(photo.scanned_at)}`, x, infoY + 12, { width: imgWidth });
+            doc.text(photo.technician, x, infoY + 22, { width: imgWidth });
+            
+            if (photo.notes) {
+              doc.fontSize(7).fillColor(COLORS.darkGray);
+              doc.text(photo.notes, x, infoY + 32, { width: imgWidth });
+            }
+            
+          } catch (err) {
+            console.warn(`Foto ${i + 1} konnte nicht eingefügt werden`);
+          }
+          
+          if (col === cols - 1 || i === loadedPhotos.length - 1) {
+            y += imgHeight + 70;
+          }
+        });
+      }
+
+      // ========================================
+      // SCHLUSS-SEITE
+      // ========================================
+      doc.addPage();
+      
+      doc.rect(0, 0, doc.page.width, 100).fill(COLORS.primary);
+      doc.fontSize(20).fillColor(COLORS.white).text("Report-Informationen", 50, 40);
+      
+      y = 130;
+      
+      doc.fontSize(11).fillColor(COLORS.black);
+      doc.text(`Berichtszeitraum: ${formatDate(period.startDate)} - ${formatDate(period.endDate)}`, 60, y);
+      y += 20;
+      doc.text(`Erstellt am: ${formatDateTime(new Date())}`, 60, y);
+      y += 20;
+      doc.text(`Objekt: ${object.name}`, 60, y);
+      y += 40;
+      
+      doc.roundedRect(50, y, pageWidth, 60, 5).fill(COLORS.lightGray);
+      doc.fontSize(10).fillColor(COLORS.darkGray);
+      doc.text("Aufbewahrungsfristen gemäß HACCP/IFS:", 60, y + 10);
+      doc.fontSize(9);
+      doc.text("• Scan-Daten und Protokolle: 5 Jahre", 70, y + 28);
+      doc.text("• Foto-Dokumentation: 2 Jahre", 70, y + 42);
+      
+      y += 90;
+      
+      doc.roundedRect(50, y, pageWidth, 120, 8).fillAndStroke(COLORS.white, COLORS.secondary);
+      
+      doc.fontSize(14).fillColor(COLORS.primary);
+      doc.text("Erstellt mit TrapMap", 70, y + 15);
+      
+      doc.fontSize(10).fillColor(COLORS.darkGray);
+      doc.text("Professionelle Schädlingsüberwachung für Ihr Unternehmen", 70, y + 38);
+      doc.text("• Digitale Dokumentation aller Kontrollen", 70, y + 58);
+      doc.text("• HACCP & IFS konforme Audit-Reports", 70, y + 72);
+      doc.text("• GPS-Tracking und Lagepläne", 70, y + 86);
+      
+      doc.fontSize(11).fillColor(COLORS.secondary);
+      doc.text("www.trap-map.de", 70, y + 105);
+      
+      // ========================================
+      // FOOTER AUF ALLEN SEITEN
+      // ========================================
+      const pages = doc.bufferedPageRange();
+      for (let i = 0; i < pages.count; i++) {
+        doc.switchToPage(i);
+        addFooter(i + 1, pages.count);
+      }
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
 };
 
-exports.getOrganisationLogo = async (orgId) => {
-  const { data, error } = await supabase.from("organisations").select("logo_url").eq("id", orgId).single();
-  return error ? { success: false, message: error.message } : { success: true, logoUrl: data?.logo_url };
+// ============================================
+// GEFAHRENANALYSE PDF
+// ============================================
+exports.generateGefahrenanalyse = async (formData, organisation) => {
+  if (!PDFDocument) throw new Error("pdfkit nicht installiert");
+
+  const logoBuffer = organisation?.logo_url ? await loadImage(organisation.logo_url) : null;
+
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ size: "A4", margin: 50 });
+      const chunks = [];
+      
+      doc.on("data", (chunk) => chunks.push(chunk));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", reject);
+
+      doc.rect(0, 0, doc.page.width, 120).fill(COLORS.primary);
+      
+      if (logoBuffer) {
+        try { doc.image(logoBuffer, 50, 25, { height: 70 }); } catch (e) {}
+      }
+
+      doc.fontSize(22).fillColor(COLORS.white).text("Gefahrenanalyse", 50, 85);
+      
+      doc.fontSize(10).fillColor(COLORS.darkGray);
+      doc.text("zur Notwendigkeit einer befallsunabhängigen Dauerbeköderung", 50, 140);
+      
+      let y = 180;
+
+      if (formData.objekt) {
+        doc.rect(50, y, doc.page.width - 100, 28).fill(COLORS.primary);
+        doc.fontSize(12).fillColor(COLORS.white).text("Objekt-Informationen", 60, y + 8);
+        y += 38;
+        
+        doc.fontSize(10).fillColor(COLORS.darkGray);
+        if (formData.objekt.firma) { doc.text(`Firma: ${formData.objekt.firma}`, 60, y); y += 16; }
+        if (formData.objekt.adresse) { doc.text(`Adresse: ${formData.objekt.adresse}`, 60, y); y += 16; }
+        if (formData.objekt.ansprechpartner) { doc.text(`Ansprechpartner: ${formData.objekt.ansprechpartner}`, 60, y); y += 16; }
+        y += 20;
+      }
+
+      if (formData.bewertung) {
+        doc.rect(50, y, doc.page.width - 100, 28).fill(COLORS.primary);
+        doc.fontSize(12).fillColor(COLORS.white).text("Bewertung", 60, y + 8);
+        y += 38;
+        
+        doc.fontSize(10).fillColor(COLORS.darkGray);
+        Object.entries(formData.bewertung).forEach(([key, value]) => {
+          if (value) { doc.text(`${key}: ${value}`, 60, y); y += 16; }
+        });
+        y += 20;
+      }
+
+      if (formData.ergebnis) {
+        doc.rect(50, y, doc.page.width - 100, 28).fill(COLORS.primary);
+        doc.fontSize(12).fillColor(COLORS.white).text("Ergebnis", 60, y + 8);
+        y += 38;
+        
+        doc.fontSize(11).fillColor(COLORS.black).text(formData.ergebnis, 60, y, { width: doc.page.width - 120 });
+        y += 40;
+      }
+
+      y += 40;
+      doc.fontSize(10).fillColor(COLORS.gray).text(`Datum: ${formatDate(new Date())}`, 60, y);
+      y += 50;
+      
+      doc.moveTo(60, y).lineTo(250, y).strokeColor(COLORS.gray).stroke();
+      doc.moveTo(300, y).lineTo(490, y).stroke();
+      y += 5;
+      doc.fontSize(9).text("Unterschrift Schädlingsbekämpfer", 60, y);
+      doc.text("Unterschrift Kunde", 300, y);
+
+      doc.fontSize(8).fillColor(COLORS.gray);
+      doc.text("Erstellt mit TrapMap - www.trap-map.de", 50, doc.page.height - 50);
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
 };

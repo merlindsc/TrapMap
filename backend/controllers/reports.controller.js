@@ -1,31 +1,80 @@
 // ============================================
 // REPORTS CONTROLLER
-// Audit + Gefahrenanalyse + Logo + Org Update
+// Mit FormData Support für Foto-Upload
 // ============================================
 
 const reportsService = require("../services/reports.service");
 
+// GET /api/reports/objects
 exports.getObjects = async (req, res) => {
   const result = await reportsService.getObjects(req.user.organisation_id);
   if (!result.success) return res.status(400).json({ error: result.message });
   res.json(result.data);
 };
 
+// POST /api/reports/audit
 exports.generateAuditReport = async (req, res) => {
   try {
-    const { objectId, startDate, endDate } = req.body;
+    const orgId = req.user.organisation_id;
+    
+    // Daten aus FormData oder JSON
+    let objectId, startDate, endDate, options;
+    
+    if (req.is('multipart/form-data')) {
+      // FormData
+      objectId = req.body.objectId;
+      startDate = req.body.startDate;
+      endDate = req.body.endDate;
+      options = req.body.options ? JSON.parse(req.body.options) : {};
+    } else {
+      // JSON
+      objectId = req.body.objectId;
+      startDate = req.body.startDate;
+      endDate = req.body.endDate;
+      options = req.body.options || {};
+    }
+
     if (!objectId || !startDate || !endDate) {
       return res.status(400).json({ error: "objectId, startDate und endDate erforderlich" });
     }
 
-    console.log(`📄 Generating audit report for object ${objectId}`);
+    console.log(`📄 ====================================`);
+    console.log(`📄 AUDIT REPORT GENERIERUNG`);
+    console.log(`📄 Object ID: ${objectId}`);
+    console.log(`📄 Zeitraum: ${startDate} bis ${endDate}`);
+    console.log(`📄 Optionen:`, options);
+    console.log(`📄 ====================================`);
     
-    const dataResult = await reportsService.getReportData(req.user.organisation_id, objectId, startDate, endDate);
-    if (!dataResult.success) return res.status(400).json({ error: dataResult.message });
+    // Report-Daten laden
+    const dataResult = await reportsService.getReportData(orgId, objectId, startDate, endDate);
+    if (!dataResult.success) {
+      return res.status(400).json({ error: dataResult.message });
+    }
 
-    const pdfBuffer = await reportsService.generatePDF(dataResult.data);
-    const objectName = dataResult.data.object.name.replace(/[^a-zA-Z0-9äöüÄÖÜß]/g, "_");
-    const filename = `Audit_${objectName}_${new Date().toISOString().split("T")[0]}.pdf`;
+    // Custom Fotos aus Upload verarbeiten
+    const customPhotos = [];
+    if (req.files && req.files.length > 0) {
+      req.files.forEach((file, i) => {
+        const captionKey = `caption_${i}`;
+        customPhotos.push({
+          buffer: file.buffer,
+          caption: req.body[captionKey] || ""
+        });
+      });
+      options.customPhotos = customPhotos;
+      options.includeCustomPhotos = true;
+    }
+
+    // PDF generieren
+    const pdfBuffer = await reportsService.generatePDF(dataResult.data, options);
+    
+    // Filename
+    const objectName = dataResult.data.object.name
+      .replace(/[^a-zA-Z0-9äöüÄÖÜß\s]/g, "")
+      .replace(/\s+/g, "_")
+      .substring(0, 30);
+    const dateStr = new Date().toISOString().split("T")[0];
+    const filename = `Audit_${objectName}_${dateStr}.pdf`;
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -34,42 +83,67 @@ exports.generateAuditReport = async (req, res) => {
     console.log(`✅ Audit report generated: ${filename}`);
   } catch (err) {
     console.error("generateAuditReport error:", err);
-    res.status(500).json({ error: "Fehler beim Generieren" });
+    res.status(500).json({ error: "Fehler beim Generieren: " + err.message });
   }
 };
 
+// POST /api/reports/audit/preview
 exports.getAuditPreview = async (req, res) => {
-  const { objectId, startDate, endDate } = req.body;
-  if (!objectId || !startDate || !endDate) {
-    return res.status(400).json({ error: "objectId, startDate und endDate erforderlich" });
+  try {
+    const { objectId, startDate, endDate } = req.body;
+    
+    if (!objectId || !startDate || !endDate) {
+      return res.status(400).json({ error: "objectId, startDate und endDate erforderlich" });
+    }
+
+    const result = await reportsService.getReportData(
+      req.user.organisation_id, 
+      objectId, 
+      startDate, 
+      endDate
+    );
+    
+    if (!result.success) {
+      return res.status(400).json({ error: result.message });
+    }
+
+    // Foto-Anzahl holen
+    const photoResult = await reportsService.getPhotosForReport(
+      req.user.organisation_id,
+      objectId,
+      startDate,
+      endDate,
+      "count"
+    );
+
+    res.json({
+      object: result.data.object,
+      stats: result.data.stats,
+      boxCount: result.data.boxes.length,
+      scanCount: result.data.scans.length,
+      photoCount: photoResult.count || 0,
+      period: result.data.period
+    });
+  } catch (err) {
+    console.error("getAuditPreview error:", err);
+    res.status(500).json({ error: err.message });
   }
-
-  const result = await reportsService.getReportData(req.user.organisation_id, objectId, startDate, endDate);
-  if (!result.success) return res.status(400).json({ error: result.message });
-
-  res.json({
-    object: result.data.object,
-    stats: result.data.stats,
-    boxCount: result.data.boxes.length,
-    period: result.data.period
-  });
 };
 
-// ============================================
-// GEFAHRENANALYSE
-// ============================================
+// POST /api/reports/gefahrenanalyse
 exports.generateGefahrenanalyse = async (req, res) => {
   try {
     const formData = req.body;
     
-    console.log(`📄 Generating Gefahrenanalyse for org ${req.user.organisation_id}`);
+    console.log(`📄 Generating Gefahrenanalyse`);
     
     const orgResult = await reportsService.getOrganisation(req.user.organisation_id);
     const organisation = orgResult.success ? orgResult.data : null;
 
     const pdfBuffer = await reportsService.generateGefahrenanalyse(formData, organisation);
     
-    const objektName = (formData.objekt?.firma || "Objekt").replace(/[^a-zA-Z0-9äöüÄÖÜß]/g, "_");
+    const objektName = (formData.objekt?.firma || "Objekt")
+      .replace(/[^a-zA-Z0-9äöüÄÖÜß]/g, "_");
     const filename = `Gefahrenanalyse_${objektName}_${new Date().toISOString().split("T")[0]}.pdf`;
 
     res.setHeader("Content-Type", "application/pdf");
@@ -83,15 +157,14 @@ exports.generateGefahrenanalyse = async (req, res) => {
   }
 };
 
-// ============================================
-// ORGANISATION
-// ============================================
+// GET /api/reports/organisation
 exports.getOrganisation = async (req, res) => {
   const result = await reportsService.getOrganisation(req.user.organisation_id);
   if (!result.success) return res.status(400).json({ error: result.message });
   res.json(result.data);
 };
 
+// PUT /api/reports/organisation
 exports.updateOrganisation = async (req, res) => {
   const { name, address, zip, city, phone, email, contact_name } = req.body;
   
@@ -103,9 +176,7 @@ exports.updateOrganisation = async (req, res) => {
   res.json({ message: "Organisation aktualisiert", data: result.data });
 };
 
-// ============================================
-// LOGO
-// ============================================
+// POST /api/reports/logo
 exports.uploadLogo = async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Keine Datei" });
   
@@ -120,6 +191,7 @@ exports.uploadLogo = async (req, res) => {
   res.json({ message: "Logo hochgeladen", logoUrl: result.logoUrl });
 };
 
+// GET /api/reports/logo
 exports.getLogo = async (req, res) => {
   const result = await reportsService.getOrganisationLogo(req.user.organisation_id);
   if (!result.success) return res.status(400).json({ error: result.message });
