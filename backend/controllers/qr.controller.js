@@ -1,6 +1,11 @@
+// ============================================
+// QR CONTROLLER - KOMPLETT
+// Aktualisiert: generateCodes erstellt automatisch Boxen
+// ============================================
+
 const qrService = require("../services/qr.service");
 
-// Generate QR codes
+// POST /api/qr/generate - Codes + Boxen generieren
 exports.generate = async (req, res) => {
   try {
     const { count } = req.body;
@@ -10,27 +15,34 @@ exports.generate = async (req, res) => {
       return res.status(400).json({ error: "Count muss zwischen 1 und 100 liegen" });
     }
 
-    const codes = await qrService.generateCodes(org, count);
-    res.json({ codes });
+    const results = await qrService.generateCodes(org, count);
+
+    res.json({
+      success: true,
+      count: results.length,
+      codes: results.map((r) => r.code),
+      boxes: results.map((r) => r.box_id)
+    });
   } catch (err) {
     console.error("QR generate error:", err);
     res.status(500).json({ error: err.message });
   }
 };
 
-// Check if QR exists + assigned
+// GET /api/qr/check/:code - Code prüfen
 exports.check = async (req, res) => {
   try {
     const code = req.params.code;
-
     if (!code) {
       return res.status(400).json({ error: "Code fehlt" });
     }
 
     const result = await qrService.checkCode(code);
 
-    // Immer 200 zurückgeben, auch wenn Code nicht existiert
-    // Das Frontend entscheidet basierend auf `exists` und `assigned`
+    if (!result) {
+      return res.status(404).json({ message: "QR does not exist" });
+    }
+
     res.json(result);
   } catch (err) {
     console.error("QR check error:", err);
@@ -38,50 +50,97 @@ exports.check = async (req, res) => {
   }
 };
 
-// Assign QR to box
-exports.assign = async (req, res) => {
+// GET /api/qr/codes - Alle Codes der Organisation
+exports.getAll = async (req, res) => {
   try {
-    const { qr_code, box_id } = req.body;
-    const organisation_id = req.user.organisation_id;
-
-    if (!qr_code || !box_id) {
-      return res.status(400).json({ error: "qr_code und box_id erforderlich" });
-    }
-
-    await qrService.assignCode(qr_code, box_id, organisation_id);
-    res.json({ message: "QR-Code erfolgreich verknüpft" });
+    const org = req.user.organisation_id;
+    const codes = await qrService.getCodesByOrganisation(org);
+    res.json(codes);
   } catch (err) {
-    console.error("QR assign error:", err);
+    console.error("QR getAll error:", err);
     res.status(500).json({ error: err.message });
   }
 };
 
-// Unassign QR from box
-exports.unassign = async (req, res) => {
+// GET /api/qr/codes/available - Freie Boxen im Pool
+exports.getAvailable = async (req, res) => {
   try {
-    const { box_id } = req.params;
+    const org = req.user.organisation_id;
+    const boxes = await qrService.getAvailableCodes(org);
+    res.json(boxes);
+  } catch (err) {
+    console.error("QR getAvailable error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// POST /api/qr/assign - QR Code einer Box zuweisen (Legacy)
+exports.assign = async (req, res) => {
+  try {
+    const { code, box_id } = req.body;
+
+    if (!code || !box_id) {
+      return res.status(400).json({ error: "code und box_id erforderlich" });
+    }
+
+    await qrService.assignCode(code, box_id);
+    res.json({ message: "QR linked successfully" });
+  } catch (err) {
+    console.error("QR assign error:", err);
+    res.status(400).json({ error: err.message });
+  }
+};
+
+// POST /api/qr/assign-object - Box einem Objekt zuweisen
+exports.assignToObject = async (req, res) => {
+  try {
+    const { box_id, object_id } = req.body;
+    const org = req.user.organisation_id;
+
+    if (!box_id || !object_id) {
+      return res.status(400).json({ error: "box_id und object_id erforderlich" });
+    }
+
+    const result = await qrService.assignToObject(box_id, object_id, org);
+    res.json(result);
+  } catch (err) {
+    console.error("QR assignToObject error:", err);
+    res.status(400).json({ error: err.message });
+  }
+};
+
+// POST /api/qr/return-to-pool - Box zurück in Pool
+exports.returnToPool = async (req, res) => {
+  try {
+    const { box_id } = req.body;
+    const org = req.user.organisation_id;
 
     if (!box_id) {
       return res.status(400).json({ error: "box_id erforderlich" });
     }
 
-    await qrService.unassignCode(box_id);
-    res.json({ message: "QR-Code erfolgreich getrennt" });
+    const result = await qrService.returnToPool(box_id, org);
+    res.json(result);
   } catch (err) {
-    console.error("QR unassign error:", err);
-    res.status(500).json({ error: err.message });
+    console.error("QR returnToPool error:", err);
+    res.status(400).json({ error: err.message });
   }
 };
 
-// Get QR code for a box
-exports.getByBox = async (req, res) => {
+// POST /api/qr/move - Box zu anderem Objekt verschieben
+exports.moveToObject = async (req, res) => {
   try {
-    const { box_id } = req.params;
+    const { box_id, object_id } = req.body;
+    const org = req.user.organisation_id;
 
-    const result = await qrService.getCodeByBox(box_id);
-    res.json(result || { assigned: false });
+    if (!box_id || !object_id) {
+      return res.status(400).json({ error: "box_id und object_id erforderlich" });
+    }
+
+    const result = await qrService.moveToObject(box_id, object_id, org);
+    res.json(result);
   } catch (err) {
-    console.error("QR getByBox error:", err);
-    res.status(500).json({ error: err.message });
+    console.error("QR moveToObject error:", err);
+    res.status(400).json({ error: err.message });
   }
 };

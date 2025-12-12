@@ -112,6 +112,40 @@ router.post("/organisations", async (req, res) => {
   }
 });
 
+// Organisation aktualisieren (NEU!)
+router.put("/organisations/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, address, zip, city, phone, email } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: "Name ist erforderlich" });
+    }
+
+    const { data, error } = await supabase
+      .from("organisations")
+      .update({
+        name,
+        address: address || null,
+        zip: zip || null,
+        city: city || null,
+        phone: phone || null,
+        email: email || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) return res.status(400).json({ error: error.message });
+    
+    console.log(`✏️ Organisation aktualisiert: ${name} (ID: ${id})`);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Organisation löschen
 router.delete("/organisations/:id", async (req, res) => {
   try {

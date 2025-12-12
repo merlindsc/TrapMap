@@ -7,6 +7,7 @@
    - Icons nach Typ
    - Kein Scrollen
    - 48px Header
+   - DRAG & DROP für unplatzierte Boxen
    ============================================================ */
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -21,7 +22,7 @@ import {
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
-import { Plus, Layers3, X, Search } from "lucide-react";
+import { Plus, Layers3, X, Search, MapPin } from "lucide-react";
 import "./Maps.css";
 
 // Components
@@ -30,7 +31,6 @@ import BoxScanDialog from "../../components/BoxScanDialog";
 import BoxEditDialog from "./BoxEditDialog";
 import ObjectCreateDialog from "./ObjectCreateDialog";
 import ObjectEditDialog from "./ObjectEditDialog";
-import BoxCreateDialog from "./BoxCreateDialog";
 
 /* ENV */
 const API = import.meta.env.VITE_API_URL;
@@ -44,8 +44,7 @@ const MAPBOX_STREETS = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tile
 const MAPBOX_SAT = `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
 
 /* ============================================================
-   ICONS - Different per Box Type with Animal Symbols
-   Alle Box-Typen mit eindeutigen Icons
+   ICONS - Different per Box Type
    ============================================================ */
 
 const createObjectIcon = () => {
@@ -59,100 +58,20 @@ const createObjectIcon = () => {
   });
 };
 
-// SVG Icons - ALLE TYPEN
-const BOX_TYPE_ICONS = {
-  // Emojis statt SVG - klar erkennbar!
-  rat: '🐀',
-  mouse: '🐁',
-  snapTrap: '⚠️',
-  tunnel: '🔶',
-  bait: '🟢',
-  liveTrap: '🔵',
-  monitoring: '👁️',
-  moth: '🦋',
-  cockroach: '🪳',
-  beetle: '🪲',
-  insect: '🪰',
-  uvLight: '☀️',
+// Box-Nummer aus QR-Code extrahieren (DSE-0096 → 96, DSE-0145 → 145)
+const getBoxDisplayNumber = (box) => {
+  if (box.qr_code) {
+    // Letzte Ziffern extrahieren und führende Nullen entfernen
+    const match = box.qr_code.match(/(\d+)$/);
+    if (match) {
+      return parseInt(match[1], 10).toString(); // "0096" → "96"
+    }
+  }
+  // Fallback auf box.number oder ID
+  return box.number || box.id;
 };
 
-// Bestimme Icons basierend auf box_type Name - ERWEITERT
-const getBoxTypeIconConfig = (boxTypeName) => {
-  if (!boxTypeName) return null;
-  
-  const name = boxTypeName.toLowerCase();
-  
-  // === SCHLAGFALLEN ===
-  // Schlagfallen-Tunnel Ratte
-  if ((name.includes('schlagfall') || name.includes('snap')) && name.includes('tunnel') && (name.includes('ratte') || name.includes('rat'))) {
-    return { icons: ['rat', 'tunnel'], color: '#f97316' };
-  }
-  // Schlagfallen-Tunnel Maus
-  if ((name.includes('schlagfall') || name.includes('snap')) && name.includes('tunnel') && (name.includes('maus') || name.includes('mouse'))) {
-    return { icons: ['mouse', 'tunnel'], color: '#f97316' };
-  }
-  // Schlagfalle Ratte (normal)
-  if ((name.includes('schlagfall') || name.includes('snap')) && (name.includes('ratte') || name.includes('rat'))) {
-    return { icons: ['rat', 'snapTrap'], color: '#ef4444' };
-  }
-  // Schlagfalle Maus (normal)
-  if ((name.includes('schlagfall') || name.includes('snap')) && (name.includes('maus') || name.includes('mouse'))) {
-    return { icons: ['mouse', 'snapTrap'], color: '#ef4444' };
-  }
-  
-  // === KOEDERSTATIONEN ===
-  if ((name.includes('koeder') || name.includes('koeder') || name.includes('bait')) && (name.includes('ratte') || name.includes('rat'))) {
-    return { icons: ['rat', 'bait'], color: '#22c55e' };
-  }
-  if ((name.includes('koeder') || name.includes('koeder') || name.includes('bait')) && (name.includes('maus') || name.includes('mouse'))) {
-    return { icons: ['mouse', 'bait'], color: '#22c55e' };
-  }
-  
-  // === LEBENDFALLEN ===
-  if ((name.includes('lebend') || name.includes('live')) && (name.includes('ratte') || name.includes('rat'))) {
-    return { icons: ['rat', 'liveTrap'], color: '#3b82f6' };
-  }
-  if ((name.includes('lebend') || name.includes('live')) && (name.includes('maus') || name.includes('mouse'))) {
-    return { icons: ['mouse', 'liveTrap'], color: '#3b82f6' };
-  }
-  
-  // === MONITORING ===
-  if (name.includes('monitoring') && (name.includes('ratte') || name.includes('rat'))) {
-    return { icons: ['rat', 'monitoring'], color: '#8b5cf6' };
-  }
-  if (name.includes('monitoring') && (name.includes('maus') || name.includes('mouse'))) {
-    return { icons: ['mouse', 'monitoring'], color: '#8b5cf6' };
-  }
-  
-  // === SPEZIAL-MONITORE ===
-  if (name.includes('motten')) {
-    return { icons: ['moth'], color: '#d97706' };
-  }
-  if (name.includes('schaben')) {
-    return { icons: ['cockroach'], color: '#78716c' };
-  }
-  if (name.includes('kaefer') || name.includes('kaefer')) {
-    return { icons: ['beetle'], color: '#92400e' };
-  }
-  if (name.includes('insekt') || name.includes('insect')) {
-    return { icons: ['insect'], color: '#65a30d' };
-  }
-  if (name.includes('uv') || name.includes('licht') || name.includes('light')) {
-    return { icons: ['uvLight'], color: '#a855f7' };
-  }
-  
-  // === FALLBACK: Nur Tier ===
-  if (name.includes('ratte') || name.includes('rat')) {
-    return { icons: ['rat'], color: '#6b7280' };
-  }
-  if (name.includes('maus') || name.includes('mouse')) {
-    return { icons: ['mouse'], color: '#6b7280' };
-  }
-  
-  return null;
-};
-
-const createBoxIcon = (boxNumber, status = "green", boxTypeName = null) => {
+const createBoxIcon = (displayNumber, status = "green") => {
   const colors = {
     green: "#10b981",
     yellow: "#eab308",
@@ -163,36 +82,9 @@ const createBoxIcon = (boxNumber, status = "green", boxTypeName = null) => {
   };
 
   const color = colors[status] || colors.green;
-  const displayNum = String(boxNumber || "?").slice(-3);
-  
-  // Hole Icon-Config
-  const iconConfig = getBoxTypeIconConfig(boxTypeName);
-  
-  if (iconConfig && iconConfig.icons && iconConfig.icons.length > 0) {
-    // Erzeuge Emoji Icons
-    const emojis = iconConfig.icons.map(iconKey => BOX_TYPE_ICONS[iconKey] || '').join('');
-    const iconWidth = iconConfig.icons.length > 1 ? 52 : 40;
-    
-    const iconHtml = `
-      <div style="position: relative; width: ${iconWidth}px; height: 56px;">
-        <div style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); display: flex; gap: 1px; background: rgba(0,0,0,0.85); border-radius: 8px; padding: 3px 6px; border: 1px solid rgba(255,255,255,0.3); box-shadow: 0 2px 8px rgba(0,0,0,0.4);">
-          <span style="font-size: 16px; line-height: 1;">${emojis}</span>
-        </div>
-        <div style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); background: ${color}; width: 28px; height: 28px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: bold;">${displayNum}</div>
-      </div>
-    `;
-    
-    return L.divIcon({
-      html: iconHtml,
-      className: "custom-box-marker",
-      iconSize: [iconWidth, 54],
-      iconAnchor: [iconWidth / 2, 54],
-    });
-  }
-  
-  // Standard: Nur Nummer
+
   return L.divIcon({
-    html: `<div style="background: ${color}; width: 28px; height: 28px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: bold;">${displayNum}</div>`,
+    html: `<div style="background: ${color}; width: 28px; height: 28px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: bold;">${displayNumber}</div>`,
     className: "custom-box-marker",
     iconSize: [28, 28],
     iconAnchor: [14, 28],
@@ -203,16 +95,11 @@ const createBoxIcon = (boxNumber, status = "green", boxTypeName = null) => {
    BOX MARKER - NO POPUP, only onClick
    ============================================================ */
 function BoxMarker({ box, onClick }) {
-  // Guard: keine ungueltigen Koordinaten
-  if (!box?.lat || !box?.lng) return null;
-  
-  // box_type_name kann von verschiedenen Stellen kommen
-  const boxTypeName = box.box_type_name || box.box_type?.name || box.type_name || null;
-  
+  const displayNum = getBoxDisplayNumber(box);
   return (
     <Marker
       position={[box.lat, box.lng]}
-      icon={createBoxIcon(box.number || box.id, box.current_status || box.status, boxTypeName)}
+      icon={createBoxIcon(displayNum, box.current_status || box.status)}
       eventHandlers={{
         click: () => onClick(box),
       }}
@@ -224,9 +111,6 @@ function BoxMarker({ box, onClick }) {
    OBJECT MARKER - NO POPUP, only onClick
    ============================================================ */
 function ObjectMarkerComponent({ object, isSelected, onSelect }) {
-  // Guard: keine ungueltigen Koordinaten
-  if (!object?.lat || !object?.lng) return null;
-  
   return (
     <Marker
       position={[object.lat, object.lng]}
@@ -267,26 +151,31 @@ export default function Maps() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [controlDialogOpen, setControlDialogOpen] = useState(false);
   const [boxEditDialogOpen, setBoxEditDialogOpen] = useState(false);
+  const [isFirstSetup, setIsFirstSetup] = useState(false);  // Ersteinrichtung?
   const [objectCreateDialogOpen, setObjectCreateDialogOpen] = useState(false);
   const [objectEditDialogOpen, setObjectEditDialogOpen] = useState(false);
-  const [boxCreateDialogOpen, setBoxCreateDialogOpen] = useState(false);
 
   // Map
   const [mapStyle, setMapStyle] = useState("streets");
   const [styleOpen, setStyleOpen] = useState(false);
 
-  // Placing modes
+  // Placing modes - NUR noch für Objekte
   const [objectPlacingMode, setObjectPlacingMode] = useState(false);
-  const [boxPlacingMode, setBoxPlacingMode] = useState(false);
   const [tempObjectLatLng, setTempObjectLatLng] = useState(null);
-  const [tempBoxLatLng, setTempBoxLatLng] = useState(null);
+  
+  // Box Position verschieben Modus
+  const [repositionBox, setRepositionBox] = useState(null);  // Box die verschoben werden soll
 
   // Search
   const [objectSearchQuery, setObjectSearchQuery] = useState("");
   const [addressSearchQuery, setAddressSearchQuery] = useState("");
   const [addressResults, setAddressResults] = useState([]);
 
+  // Drag & Drop
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
   const mapRef = useRef(null);
+  const mapWrapperRef = useRef(null);
 
   /* ============================================================
      ESC KEY HANDLER
@@ -305,10 +194,6 @@ export default function Maps() {
           setObjectCreateDialogOpen(false);
           setTempObjectLatLng(null);
           setObjectPlacingMode(false);
-        } else if (boxCreateDialogOpen) {
-          setBoxCreateDialogOpen(false);
-          setTempBoxLatLng(null);
-          setBoxPlacingMode(false);
         } else if (sidebarOpen) {
           setSidebarOpen(false);
           setSelectedObject(null);
@@ -318,7 +203,7 @@ export default function Maps() {
 
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
-  }, [controlDialogOpen, boxEditDialogOpen, objectEditDialogOpen, objectCreateDialogOpen, boxCreateDialogOpen, sidebarOpen]);
+  }, [controlDialogOpen, boxEditDialogOpen, objectEditDialogOpen, objectCreateDialogOpen, sidebarOpen]);
 
   /* ============================================================
      LOAD DATA
@@ -333,18 +218,18 @@ export default function Maps() {
       const json = await res.json();
       const arr = Array.isArray(json) ? json : [];
 
-      console.log("B Loaded objects:", arr.length);
+      console.log("📍 Loaded objects:", arr.length);
       setObjects(arr);
       setFilteredObjects(arr);
     } catch (e) {
-      console.error("- Fehler beim Laden der Objekte:", e);
+      console.error("❌ Fehler beim Laden der Objekte:", e);
     }
   }, [token]);
 
   const loadBoxes = useCallback(
     async (objectId) => {
       try {
-        console.log("B Fetching boxes for object:", objectId);
+        console.log("📦 Fetching boxes for object:", objectId);
 
         const res = await fetch(`${API}/boxes?object_id=${objectId}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -359,10 +244,10 @@ export default function Maps() {
           boxesData = json.data;
         }
 
-        console.log("B Loaded boxes:", boxesData.length);
+        console.log("📦 Loaded boxes:", boxesData.length);
         setBoxes(boxesData);
       } catch (e) {
-        console.error("- Fehler beim Laden der Boxen:", e);
+        console.error("❌ Fehler beim Laden der Boxen:", e);
         setBoxes([]);
       }
     },
@@ -382,10 +267,10 @@ export default function Maps() {
       else if (Array.isArray(json.data)) types = json.data;
       else if (Array.isArray(json.boxtypes)) types = json.boxtypes;
 
-      console.log("B Loaded box types:", types.length);
+      console.log("📋 Loaded box types:", types.length);
       setBoxTypes(types);
     } catch (e) {
-      console.error("- Fehler beim Laden der Boxtypen:", e);
+      console.error("❌ Fehler beim Laden der Boxtypen:", e);
     }
   }, [token]);
 
@@ -404,7 +289,6 @@ export default function Maps() {
         loadBoxes(targetObject.id);
         setSidebarOpen(true);
         
-        // Give map time to initialize then fly
         setTimeout(() => {
           if (mapRef.current) {
             mapRef.current.flyTo([targetObject.lat, targetObject.lng], 18, {
@@ -413,7 +297,6 @@ export default function Maps() {
           }
         }, 500);
         
-        // Clear URL params after handling
         setSearchParams({});
       }
     }
@@ -421,9 +304,9 @@ export default function Maps() {
 
   useEffect(() => {
     if (selectedObject) {
-      console.log("B Loading boxes for object:", selectedObject.id);
+      console.log("📦 Loading boxes for object:", selectedObject.id);
       loadBoxes(selectedObject.id);
-      setSidebarOpen(true); // - Sidebar oeffnet automatisch
+      setSidebarOpen(true);
     } else {
       setBoxes([]);
       setSidebarOpen(false);
@@ -434,10 +317,29 @@ export default function Maps() {
      HANDLERS
      ============================================================ */
 
-  const handleBoxClick = (box) => {
-    console.log("B Box clicked:", box);
+  const handleBoxClick = async (box) => {
+    // Nur platzierte Boxen können angeklickt werden
+    const isPlaced = box.position_type && box.position_type !== 'none';
+    if (!isPlaced) {
+      console.log("⚠️ Box ist nicht platziert, ignoriere Klick");
+      return;
+    }
+    
+    console.log("📦 Box clicked:", box);
     setSelectedBox(box);
-    setControlDialogOpen(true); // - Kontrolle oeffnet, NICHT Bearbeiten!
+
+    // Prüfen ob Ersteinrichtung nötig: Kein Box-Typ gesetzt = Ersteinrichtung
+    const needsSetup = !box.box_type_id;
+
+    if (needsSetup) {
+      console.log("🔧 Ersteinrichtung nötig - BoxEditDialog öffnen");
+      setIsFirstSetup(true);
+      setBoxEditDialogOpen(true);
+    } else {
+      console.log("📋 Kontrolle - BoxScanDialog öffnen");
+      setIsFirstSetup(false);
+      setControlDialogOpen(true);
+    }
   };
 
   const handleObjectClick = (obj) => {
@@ -446,11 +348,103 @@ export default function Maps() {
     loadBoxes(obj.id);
     setSidebarOpen(true);
     
-    // Nur flyTo wenn Koordinaten gueltig sind
-    if (mapRef.current && obj.lat && obj.lng) {
+    if (mapRef.current) {
       mapRef.current.flyTo([obj.lat, obj.lng], 18, {
         duration: 1.0,
       });
+    }
+  };
+
+  /* ============================================================
+     DRAG & DROP - Box auf Karte platzieren
+     ============================================================ */
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+
+    const boxData = e.dataTransfer.getData('box');
+    if (!boxData) return;
+
+    try {
+      const box = JSON.parse(boxData);
+      console.log("📍 Box dropped:", box.qr_code || box.id);
+
+      // Pixel-Position relativ zum Map-Container berechnen
+      const mapWrapper = mapWrapperRef.current;
+      if (!mapWrapper || !mapRef.current) return;
+
+      const rect = mapWrapper.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      // Pixel zu LatLng konvertieren
+      const point = L.point(x, y);
+      const latlng = mapRef.current.containerPointToLatLng(point);
+
+      console.log("📍 Drop position:", latlng.lat, latlng.lng);
+
+      // Box auf Karte platzieren via API
+      const res = await fetch(`${API}/boxes/${box.id}/place-map`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          lat: latlng.lat,
+          lng: latlng.lng,
+          object_id: selectedObject?.id
+        })
+      });
+
+      if (res.ok) {
+        const placedBox = await res.json();
+        console.log("✅ Box platziert!", placedBox);
+
+        // Box mit Object-Daten anreichern für Dialoge
+        const enrichedBox = {
+          ...placedBox,
+          objects: selectedObject,
+          box_types: boxTypes.find(t => t.id === placedBox.box_type_id)
+        };
+
+        setSelectedBox(enrichedBox);
+
+        // Prüfen ob Ersteinrichtung nötig: Kein Box-Typ = Ersteinrichtung
+        const needsSetup = !placedBox.box_type_id;
+
+        if (needsSetup) {
+          console.log("🔧 Ersteinrichtung - BoxEditDialog öffnen");
+          setIsFirstSetup(true);
+          setBoxEditDialogOpen(true);
+        } else {
+          console.log("📋 Kontrolle - BoxScanDialog öffnen");
+          setIsFirstSetup(false);
+          setControlDialogOpen(true);
+        }
+
+        // Boxen neu laden
+        if (selectedObject) {
+          loadBoxes(selectedObject.id);
+        }
+      } else {
+        const err = await res.json();
+        console.error("❌ Platzierung fehlgeschlagen:", err);
+        alert(err.error || 'Fehler beim Platzieren der Box');
+      }
+    } catch (err) {
+      console.error("❌ Drop error:", err);
     }
   };
 
@@ -471,13 +465,12 @@ export default function Maps() {
       const data = await res.json();
       setAddressResults(data);
     } catch (e) {
-      console.error("- Address search error:", e);
+      console.error("❌ Address search error:", e);
     }
   };
 
   const selectAddress = (result) => {
-    // Nur flyTo wenn Koordinaten gueltig sind
-    if (mapRef.current && result?.lat && result?.lon) {
+    if (mapRef.current) {
       mapRef.current.flyTo([parseFloat(result.lat), parseFloat(result.lon)], 16, {
         duration: 1.0,
       });
@@ -523,15 +516,15 @@ export default function Maps() {
   function MapEventsHandler() {
     useMapEvents({
       click(e) {
+        // Box Position verschieben Modus
+        if (repositionBox) {
+          handleRepositionBox(e.latlng);
+          return;
+        }
+        
         if (objectPlacingMode) {
           setTempObjectLatLng(e.latlng);
           setObjectCreateDialogOpen(true);
-          return;
-        }
-
-        if (boxPlacingMode && selectedObject) {
-          setTempBoxLatLng(e.latlng);
-          setBoxCreateDialogOpen(true);
           return;
         }
       },
@@ -539,6 +532,39 @@ export default function Maps() {
 
     return null;
   }
+
+  // Box an neue Position verschieben
+  const handleRepositionBox = async (latlng) => {
+    if (!repositionBox) return;
+    
+    try {
+      const res = await fetch(`${API}/boxes/${repositionBox.id}/location`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ lat: latlng.lat, lng: latlng.lng })
+      });
+      
+      if (res.ok) {
+        console.log("✅ Box verschoben:", latlng.lat, latlng.lng);
+        // Boxen neu laden
+        if (selectedObject) {
+          loadBoxes(selectedObject.id);
+        }
+      } else {
+        const err = await res.json();
+        alert("Fehler: " + (err.error || "Position konnte nicht gespeichert werden"));
+      }
+    } catch (err) {
+      console.error("Reposition error:", err);
+      alert("Fehler beim Verschieben der Box");
+    }
+    
+    // Modus beenden
+    setRepositionBox(null);
+  };
 
   const getTileUrl = () => {
     if (mapStyle === "satellite" || mapStyle === "hybrid") return MAPBOX_SAT;
@@ -583,11 +609,11 @@ export default function Maps() {
           )}
         </div>
 
-        {/* Adress-Suche (Nominatim) */}
+        {/* Adress-Suche */}
         <div className="search-group">
           <Search size={18} className="search-icon" />
           <input
-            className="address-search-input-v6"
+            className="object-search-input-v6"
             placeholder="Adresse suchen..."
             value={addressSearchQuery}
             onChange={(e) => {
@@ -596,51 +622,39 @@ export default function Maps() {
             }}
           />
           {addressResults.length > 0 && (
-            <div className="address-dropdown">
-              {addressResults.map((result, idx) => (
+            <div className="object-dropdown">
+              {addressResults.map((res, i) => (
                 <div
-                  key={idx}
-                  className="address-dropdown-item"
-                  onClick={() => selectAddress(result)}
+                  key={i}
+                  className="object-dropdown-item"
+                  onClick={() => selectAddress(res)}
                 >
-                  {result.display_name}
+                  <span className="object-name">{res.display_name}</span>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* Buttons */}
+        {/* Aktionen */}
         {canEdit && (
-          <button
-            className={`action-btn-v6 ${objectPlacingMode ? "active" : ""}`}
-            onClick={() => {
-              setObjectPlacingMode(!objectPlacingMode);
-              setBoxPlacingMode(false);
-            }}
-          >
-            <Plus size={16} /> Objekt
-          </button>
+          <div className="header-actions-v6">
+            <button
+              className={`btn-action ${objectPlacingMode ? "active" : ""}`}
+              onClick={() => {
+                setObjectPlacingMode(!objectPlacingMode);
+                setBoxPlacingMode(false);
+              }}
+            >
+              <Plus size={16} />
+              Objekt
+            </button>
+          </div>
         )}
 
-        {selectedObject && canEdit && (
-          <button
-            className={`action-btn-v6 ${boxPlacingMode ? "active" : ""}`}
-            onClick={() => {
-              setBoxPlacingMode(!boxPlacingMode);
-              setObjectPlacingMode(false);
-            }}
-          >
-            <Plus size={16} /> Box
-          </button>
-        )}
-
-        {/* Map Style */}
-        <div className="map-controls-v6">
-          <button
-            className="style-btn-v6"
-            onClick={() => setStyleOpen(!styleOpen)}
-          >
+        {/* Map Style Toggle */}
+        <div className="style-toggle-v6">
+          <button onClick={() => setStyleOpen(!styleOpen)}>
             <Layers3 size={18} />
           </button>
 
@@ -653,7 +667,7 @@ export default function Maps() {
                   setStyleOpen(false);
                 }}
               >
-                Strassen
+                🗺️ Straßen
               </button>
 
               <button
@@ -663,7 +677,7 @@ export default function Maps() {
                   setStyleOpen(false);
                 }}
               >
-                Satellit
+                🛰️ Satellit
               </button>
 
               <button
@@ -673,7 +687,7 @@ export default function Maps() {
                   setStyleOpen(false);
                 }}
               >
-                Hybrid
+                🌍 Hybrid
               </button>
             </div>
           )}
@@ -681,9 +695,77 @@ export default function Maps() {
       </div>
 
       {/* ============================================================
-          MAP
+          PLACING MODE HINTS
           ============================================================ */}
-      <div className="map-wrapper-v6">
+      {objectPlacingMode && (
+        <div className="placing-hint">
+          Klicke auf die Karte, um ein neues Objekt zu erstellen
+          <button onClick={() => setObjectPlacingMode(false)}>
+            <X size={16} /> Abbrechen
+          </button>
+        </div>
+      )}
+
+      {/* Reposition Box Banner */}
+      {repositionBox && (
+        <div style={{
+          position: "absolute",
+          top: 70,
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 1000,
+          background: "#1f6feb",
+          color: "#fff",
+          padding: "12px 20px",
+          borderRadius: 8,
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+          fontSize: 14,
+          fontWeight: 500
+        }}>
+          <MapPin size={18} />
+          Klicke auf die Karte um Box #{repositionBox.qr_code?.match(/(\d+)$/)?.[1] || repositionBox.id} zu verschieben
+          <button 
+            onClick={() => setRepositionBox(null)}
+            style={{
+              background: "rgba(255,255,255,0.2)",
+              border: "none",
+              borderRadius: 4,
+              color: "#fff",
+              padding: "6px 12px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 13
+            }}
+          >
+            <X size={14} /> Abbrechen
+          </button>
+        </div>
+      )}
+
+      {/* ============================================================
+          MAP - Mit Drag & Drop Support
+          ============================================================ */}
+      <div 
+        className={`map-wrapper-v6 ${isDraggingOver ? 'drag-over' : ''}`}
+        ref={mapWrapperRef}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {/* Drop Zone Indicator */}
+        {isDraggingOver && (
+          <div className="drop-zone-indicator">
+            <div className="drop-zone-content">
+              📍 Box hier platzieren
+            </div>
+          </div>
+        )}
+
         <MapContainer
           center={[51.1657, 10.4515]}
           zoom={6}
@@ -717,7 +799,7 @@ export default function Maps() {
           <MapReadyHandler />
           <MapEventsHandler />
 
-          {/* Objects - nur mit gueltigen Koordinaten */}
+          {/* Objects - nur mit Koordinaten! */}
           {objects.filter(obj => obj.lat && obj.lng).map((obj) => (
             <ObjectMarkerComponent
               key={obj.id}
@@ -727,14 +809,16 @@ export default function Maps() {
             />
           ))}
 
-          {/* Boxes - NO POPUP! */}
-          {boxes.filter(box => box.lat && box.lng).map((box) => (
-            <BoxMarker
-              key={box.id}
-              box={box}
-              onClick={handleBoxClick}
-            />
-          ))}
+          {/* Boxes - nur platzierte anzeigen! */}
+          {boxes
+            .filter(box => box.lat && box.lng)
+            .map((box) => (
+              <BoxMarker
+                key={box.id}
+                box={box}
+                onClick={handleBoxClick}
+              />
+            ))}
         </MapContainer>
 
         {/* Zoom Buttons - mittig rechts */}
@@ -759,9 +843,6 @@ export default function Maps() {
           onEditObject={() => {
             setObjectEditDialogOpen(true);
           }}
-          onCreateBox={() => {
-            setBoxPlacingMode(true);
-          }}
         />
       )}
 
@@ -776,16 +857,55 @@ export default function Maps() {
             setSelectedBox(null);
           }}
           onEdit={() => {
-            setControlDialogOpen(false);
+            setIsFirstSetup(false);
             setBoxEditDialogOpen(true);
+            setControlDialogOpen(false);
           }}
           onSave={() => {
             setControlDialogOpen(false);
             setSelectedBox(null);
-            // Reload boxes
             if (selectedObject) {
               loadBoxes(selectedObject.id);
             }
+          }}
+          onAdjustPosition={(box) => {
+            // Reposition-Modus aktivieren
+            setControlDialogOpen(false);
+            setRepositionBox(box);
+            setSelectedBox(null);
+          }}
+          onSetGPS={(box) => {
+            // GPS-Position holen (nur auf Mobil)
+            setControlDialogOpen(false);
+            if (navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(
+                async (pos) => {
+                  const { latitude, longitude } = pos.coords;
+                  try {
+                    const res = await fetch(`${API}/boxes/${box.id}/location`, {
+                      method: 'PATCH',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`
+                      },
+                      body: JSON.stringify({ lat: latitude, lng: longitude })
+                    });
+                    if (res.ok) {
+                      alert(`✅ GPS-Position gesetzt!`);
+                      if (selectedObject) loadBoxes(selectedObject.id);
+                    }
+                  } catch (err) {
+                    console.error("GPS error:", err);
+                    alert("Fehler beim Setzen der GPS-Position");
+                  }
+                },
+                (err) => {
+                  alert("GPS nicht verfügbar: " + err.message);
+                },
+                { enableHighAccuracy: true }
+              );
+            }
+            setSelectedBox(null);
           }}
         />
       )}
@@ -797,25 +917,60 @@ export default function Maps() {
         <BoxEditDialog
           box={selectedBox}
           boxTypes={boxTypes}
+          isFirstSetup={isFirstSetup}
           onClose={() => {
             setBoxEditDialogOpen(false);
             setSelectedBox(null);
+            setIsFirstSetup(false);
           }}
           onSave={() => {
             setBoxEditDialogOpen(false);
             setSelectedBox(null);
-            // Reload boxes
+            setIsFirstSetup(false);
             if (selectedObject) {
               loadBoxes(selectedObject.id);
             }
           }}
-          onDelete={() => {
+          onAdjustPosition={() => {
+            // Reposition-Modus aktivieren
             setBoxEditDialogOpen(false);
+            setRepositionBox(selectedBox);
+            setIsFirstSetup(false);
             setSelectedBox(null);
-            // Reload boxes
-            if (selectedObject) {
-              loadBoxes(selectedObject.id);
+          }}
+          onSetGPS={() => {
+            // GPS nur auf Mobil - Prüfung im Dialog selbst
+            setBoxEditDialogOpen(false);
+            if (navigator.geolocation) {
+              navigator.geolocation.getCurrentPosition(
+                async (pos) => {
+                  const { latitude, longitude } = pos.coords;
+                  try {
+                    const res = await fetch(`${API}/boxes/${selectedBox.id}/location`, {
+                      method: 'PATCH',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`
+                      },
+                      body: JSON.stringify({ lat: latitude, lng: longitude })
+                    });
+                    if (res.ok) {
+                      alert(`✅ GPS-Position gesetzt!`);
+                      if (selectedObject) loadBoxes(selectedObject.id);
+                    }
+                  } catch (err) {
+                    console.error("GPS error:", err);
+                    alert("Fehler beim Setzen der GPS-Position");
+                  }
+                },
+                (err) => {
+                  alert("GPS nicht verfügbar: " + err.message);
+                },
+                { enableHighAccuracy: true }
+              );
             }
+            setSelectedBox(null);
+            setIsFirstSetup(false);
           }}
         />
       )}
@@ -852,42 +1007,17 @@ export default function Maps() {
             setObjectEditDialogOpen(false);
           }}
           onSave={(updated) => {
-            // Update in list
             setObjects((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
             setFilteredObjects((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
             setSelectedObject(updated);
             setObjectEditDialogOpen(false);
           }}
           onDelete={(id) => {
-            // Remove from lists
             setObjects((prev) => prev.filter((o) => o.id !== id));
             setFilteredObjects((prev) => prev.filter((o) => o.id !== id));
             setSelectedObject(null);
             setSidebarOpen(false);
             setObjectEditDialogOpen(false);
-          }}
-        />
-      )}
-
-      {/* ============================================================
-          BOX CREATE DIALOG
-          ============================================================ */}
-      {boxCreateDialogOpen && tempBoxLatLng && selectedObject && (
-        <BoxCreateDialog
-          latLng={tempBoxLatLng}
-          objectId={selectedObject.id}
-          boxTypes={boxTypes}
-          onClose={() => {
-            setBoxCreateDialogOpen(false);
-            setTempBoxLatLng(null);
-            setBoxPlacingMode(false);
-          }}
-          onSave={() => {
-            setBoxCreateDialogOpen(false);
-            setTempBoxLatLng(null);
-            setBoxPlacingMode(false);
-            // Reload boxes
-            loadBoxes(selectedObject.id);
           }}
         />
       )}

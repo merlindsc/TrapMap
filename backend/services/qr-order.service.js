@@ -16,23 +16,20 @@ const SCAN_BASE_URL = process.env.SCAN_BASE_URL || 'https://trap-map.de/s';
 
 // Preiskonfiguration
 const PRICING = {
-  basePrice: 0.05,        // Basispreis pro Code
+  basePrice: 0.05,
   bulkDiscount: {
-    100: 0.04,            // Ab 100 Stück: 4 Cent
-    500: 0.03,            // Ab 500 Stück: 3 Cent
-    1000: 0.025           // Ab 1000 Stück: 2,5 Cent
+    100: 0.04,
+    500: 0.03,
+    1000: 0.025
   },
-  shippingEmail: 0,       // E-Mail-Versand kostenlos
-  shippingPost: 4.99      // Postversand (falls gewünscht)
+  shippingEmail: 0,
+  shippingPost: 4.99
 };
 
 // ============================================
 // ORGANISATION EINSTELLUNGEN
 // ============================================
 
-/**
- * Holt oder erstellt QR-Präfix für Organisation
- */
 exports.getOrganisationPrefix = async (organisationId) => {
   const { data, error } = await supabase
     .from('organisations')
@@ -42,7 +39,6 @@ exports.getOrganisationPrefix = async (organisationId) => {
 
   if (error) throw new Error(error.message);
 
-  // Falls kein Präfix gesetzt, generiere eines aus dem Namen
   if (!data.qr_prefix) {
     const prefix = generatePrefixFromName(data.name);
     await supabase
@@ -55,18 +51,13 @@ exports.getOrganisationPrefix = async (organisationId) => {
   return data;
 };
 
-/**
- * Generiert Präfix aus Organisationsname
- */
 function generatePrefixFromName(name) {
-  // Nimm die ersten 2-3 Buchstaben der Wörter
   const words = name.replace(/[^a-zA-ZäöüÄÖÜ\s]/g, '').split(/\s+/);
   
   if (words.length === 1) {
     return words[0].substring(0, 3).toUpperCase();
   }
   
-  // Erste Buchstaben der ersten 3 Wörter
   return words
     .slice(0, 3)
     .map(w => w[0])
@@ -74,9 +65,6 @@ function generatePrefixFromName(name) {
     .toUpperCase();
 }
 
-/**
- * Setzt benutzerdefinierten Präfix
- */
 exports.setOrganisationPrefix = async (organisationId, prefix) => {
   const cleanPrefix = prefix.toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 10);
   
@@ -93,13 +81,9 @@ exports.setOrganisationPrefix = async (organisationId, prefix) => {
 // PREIS BERECHNUNG
 // ============================================
 
-/**
- * Berechnet Preis für eine Bestellung
- */
 exports.calculatePrice = (quantity) => {
   let pricePerCode = PRICING.basePrice;
 
-  // Mengenrabatt anwenden
   for (const [threshold, price] of Object.entries(PRICING.bulkDiscount).sort((a, b) => b[0] - a[0])) {
     if (quantity >= parseInt(threshold)) {
       pricePerCode = price;
@@ -125,9 +109,6 @@ exports.calculatePrice = (quantity) => {
 // BESTELLUNG ERSTELLEN
 // ============================================
 
-/**
- * Erstellt eine neue QR-Code Bestellung
- */
 exports.createOrder = async (organisationId, quantity, createdBy) => {
   // 1. Organisation und nächste Nummer holen
   const { data: org, error: orgError } = await supabase
@@ -139,8 +120,32 @@ exports.createOrder = async (organisationId, quantity, createdBy) => {
   if (orgError) throw new Error('Organisation nicht gefunden');
 
   const prefix = org.qr_prefix || generatePrefixFromName(org.name);
-  const startNumber = org.qr_next_number || 1;
+  
+  // ============================================
+  // FIX: Höchste existierende Nummer finden!
+  // ============================================
+  let startNumber = org.qr_next_number || 1;
+  
+  // Prüfe ob es schon Codes mit diesem Prefix gibt
+  const { data: existingCodes } = await supabase
+    .from('qr_codes')
+    .select('sequence_number')
+    .eq('organisation_id', organisationId)
+    .order('sequence_number', { ascending: false })
+    .limit(1);
+
+  if (existingCodes && existingCodes.length > 0) {
+    const highestExisting = existingCodes[0].sequence_number || 0;
+    // Starte nach der höchsten existierenden Nummer
+    if (highestExisting >= startNumber) {
+      startNumber = highestExisting + 1;
+      console.log(`⚠️ Korrigiere startNumber: ${org.qr_next_number} → ${startNumber}`);
+    }
+  }
+
   const endNumber = startNumber + quantity - 1;
+
+  console.log(`📦 Creating order: ${prefix}-${String(startNumber).padStart(4, '0')} bis ${prefix}-${String(endNumber).padStart(4, '0')}`);
 
   // 2. Preis berechnen
   const pricing = exports.calculatePrice(quantity);
@@ -188,9 +193,6 @@ exports.createOrder = async (organisationId, quantity, createdBy) => {
 // CODES GENERIEREN
 // ============================================
 
-/**
- * Generiert QR-Codes für eine Bestellung
- */
 exports.generateCodesForOrder = async (orderId) => {
   // 1. Bestellung laden
   const { data: order, error: orderError } = await supabase
@@ -202,14 +204,18 @@ exports.generateCodesForOrder = async (orderId) => {
   if (orderError) throw new Error('Bestellung nicht gefunden');
   if (order.status !== 'pending') throw new Error('Bestellung wurde bereits verarbeitet');
 
-  const codes = [];
+  console.log(`🔄 Generiere Codes + Boxen für Order ${orderId}: ${order.start_number} bis ${order.end_number}`);
 
-  // 2. Codes generieren und in DB speichern
+  const codes = [];
+  const errors = [];
+
+  // 2. Codes UND Boxen generieren
   for (let i = order.start_number; i <= order.end_number; i++) {
     const codeId = `${order.prefix}-${String(i).padStart(4, '0')}`;
     const url = `${SCAN_BASE_URL}/${codeId}`;
 
-    const { error } = await supabase
+    // 2a. ERST QR-Code erstellen
+    const { error: codeError } = await supabase
       .from('qr_codes')
       .insert({
         id: codeId,
@@ -219,9 +225,49 @@ exports.generateCodesForOrder = async (orderId) => {
         assigned: false
       });
 
-    if (!error) {
-      codes.push({ id: codeId, url, number: i });
+    if (codeError) {
+      console.error(`❌ Code ${codeId} fehlgeschlagen:`, codeError.message);
+      errors.push({ code: codeId, error: codeError.message });
+      continue;
     }
+
+    // 2b. DANN Box erstellen (im Pool) und mit QR-Code verknüpfen
+    const { data: box, error: boxError } = await supabase
+      .from('boxes')
+      .insert({
+        organisation_id: order.organisation_id,
+        qr_code: codeId,
+        number: i,
+        status: 'pool',
+        position_type: 'none',
+        current_status: 'green',
+        active: true
+      })
+      .select()
+      .single();
+
+    if (boxError) {
+      console.error(`❌ Box für ${codeId} fehlgeschlagen:`, boxError.message);
+      // Rollback: QR-Code wieder löschen
+      await supabase.from('qr_codes').delete().eq('id', codeId);
+      errors.push({ code: codeId, error: boxError.message });
+      continue;
+    }
+
+    // 2c. QR-Code mit Box-ID aktualisieren
+    await supabase
+      .from('qr_codes')
+      .update({ box_id: box.id, assigned: true })
+      .eq('id', codeId);
+
+    codes.push({ id: codeId, url, number: i, box_id: box.id });
+  }
+
+  console.log(`✅ ${codes.length} Codes + Boxen erstellt, ${errors.length} Fehler`);
+
+  // Wenn KEINE Codes erstellt wurden, Fehler werfen
+  if (codes.length === 0) {
+    throw new Error(`Keine Codes erstellt! ${errors.length} Fehler. Erster Fehler: ${errors[0]?.error || 'unbekannt'}`);
   }
 
   // 3. Status aktualisieren
@@ -231,7 +277,6 @@ exports.generateCodesForOrder = async (orderId) => {
     .eq('id', orderId);
 
   // 4. Organisation Statistik aktualisieren
-  // Erst aktuellen Wert holen, dann inkrementieren
   const { data: orgData } = await supabase
     .from('organisations')
     .select('qr_codes_ordered')
@@ -254,9 +299,6 @@ exports.generateCodesForOrder = async (orderId) => {
 // PDF GENERIEREN
 // ============================================
 
-/**
- * Generiert PDF mit QR-Codes
- */
 exports.generateOrderPDF = async (orderId) => {
   // 1. Bestellung und Codes laden
   const { data: order } = await supabase
@@ -271,8 +313,10 @@ exports.generateOrderPDF = async (orderId) => {
     .eq('order_id', orderId)
     .order('sequence_number', { ascending: true });
 
+  console.log(`📄 PDF für Order ${orderId}: ${codes?.length || 0} Codes gefunden`);
+
   if (!codes || codes.length === 0) {
-    throw new Error('Keine Codes für diese Bestellung gefunden');
+    throw new Error(`Keine Codes für diese Bestellung gefunden (order_id: ${orderId})`);
   }
 
   // 2. PDF erstellen
@@ -305,7 +349,6 @@ exports.generateOrderPDF = async (orderId) => {
       const codesPerPage = 20;
 
       for (const code of codes) {
-        // Neue Seite wenn nötig
         if (codesOnPage > 0 && codesOnPage % codesPerPage === 0) {
           doc.addPage();
           currentRow = 0;
@@ -315,7 +358,6 @@ exports.generateOrderPDF = async (orderId) => {
         const x = 30 + (currentCol * cellWidth);
         const y = startY + (currentRow * cellHeight);
 
-        // QR-Code generieren
         const url = `${SCAN_BASE_URL}/${code.id}`;
         const qrDataUrl = await QRCode.toDataURL(url, {
           width: 300,
@@ -323,17 +365,14 @@ exports.generateOrderPDF = async (orderId) => {
           errorCorrectionLevel: 'H'
         });
 
-        // QR-Code zeichnen
         const qrX = x + (cellWidth - codeSize) / 2;
         doc.image(qrDataUrl, qrX, y, { width: codeSize, height: codeSize });
 
-        // Label
         doc.fontSize(9).text(code.id, x, y + codeSize + 5, {
           width: cellWidth,
           align: 'center'
         });
 
-        // Nächste Position
         currentCol++;
         if (currentCol >= codesPerRow) {
           currentCol = 0;
@@ -358,7 +397,6 @@ exports.generateOrderPDF = async (orderId) => {
       doc.text('Wichtig: Jeder Code kann nur EINER Box zugewiesen werden!', { bold: true });
       doc.moveDown(2);
 
-      // Kostenübersicht
       doc.fontSize(14).text('Kostenübersicht', { underline: true });
       doc.moveDown(0.5);
       doc.fontSize(11);
@@ -377,11 +415,7 @@ exports.generateOrderPDF = async (orderId) => {
 // E-MAIL VERSAND
 // ============================================
 
-/**
- * Versendet QR-Codes per E-Mail
- */
 exports.sendOrderByEmail = async (orderId, recipientEmail = null) => {
-  // 1. Bestellung laden
   const { data: order } = await supabase
     .from('qr_orders')
     .select('*, organisations(name, contact_email)')
@@ -390,14 +424,13 @@ exports.sendOrderByEmail = async (orderId, recipientEmail = null) => {
 
   if (!order) throw new Error('Bestellung nicht gefunden');
 
-  // E-Mail-Adresse bestimmen
   const email = recipientEmail || order.organisations.contact_email;
   if (!email) throw new Error('Keine E-Mail-Adresse vorhanden');
 
-  // 2. PDF generieren
+  console.log(`📧 Sende Email an ${email} für Order ${orderId}`);
+
   const pdfBuffer = await exports.generateOrderPDF(orderId);
 
-  // 3. E-Mail senden
   const { data, error } = await resend.emails.send({
     from: 'TrapMap <noreply@trap-map.de>',
     to: email,
@@ -486,7 +519,6 @@ exports.sendOrderByEmail = async (orderId, recipientEmail = null) => {
 
   if (error) throw new Error(error.message);
 
-  // 4. Bestellung als versendet markieren
   await supabase
     .from('qr_orders')
     .update({ 
@@ -503,10 +535,9 @@ exports.sendOrderByEmail = async (orderId, recipientEmail = null) => {
 // KOMPLETTER WORKFLOW
 // ============================================
 
-/**
- * Kompletter Workflow: Erstellen → Generieren → Versenden
- */
 exports.processCompleteOrder = async (organisationId, quantity, createdBy, recipientEmail = null) => {
+  console.log(`🚀 processCompleteOrder: org=${organisationId}, qty=${quantity}, email=${recipientEmail}`);
+
   // 1. Bestellung erstellen
   const { order, pricing, organisation } = await exports.createOrder(organisationId, quantity, createdBy);
 
@@ -533,9 +564,6 @@ exports.processCompleteOrder = async (organisationId, quantity, createdBy, recip
 // STATISTIKEN
 // ============================================
 
-/**
- * Statistiken für eine Organisation
- */
 exports.getOrganisationStats = async (organisationId) => {
   const { data: org } = await supabase
     .from('organisations')
@@ -571,30 +599,22 @@ exports.getOrganisationStats = async (organisationId) => {
   };
 };
 
-/**
- * Alle Organisationen mit QR-Statistiken (für Super-Admin)
- */
 exports.getAllOrganisationsStats = async () => {
-  // Erst alle Organisations-Spalten abfragen die existieren könnten
   const { data: organisations, error } = await supabase
     .from('organisations')
-    .select('*')  // Alle Spalten um Fehler zu vermeiden
+    .select('*')
     .order('name');
 
-  // Defensive Check - wenn keine Daten, leeres Array zurückgeben
   if (error) {
     console.error('Error fetching organisations:', error);
     return [];
   }
 
   if (!organisations || organisations.length === 0) {
-    console.log('No organisations found');
     return [];
   }
 
-  // Für jede Organisation die Anzahl verwendeter Codes holen
   const stats = await Promise.all(organisations.map(async (org) => {
-    // Versuche qr_codes zu zählen (Tabelle existiert möglicherweise nicht)
     let usedCodes = 0;
     try {
       const { count } = await supabase
@@ -603,14 +623,11 @@ exports.getAllOrganisationsStats = async () => {
         .eq('organisation_id', org.id)
         .eq('assigned', true);
       usedCodes = count || 0;
-    } catch (e) {
-      // qr_codes Tabelle existiert vielleicht nicht
-    }
+    } catch (e) {}
 
     return {
       id: org.id,
       name: org.name,
-      // Nutze contact_email oder email (je nachdem was existiert)
       contact_email: org.contact_email || org.email || null,
       qr_prefix: org.qr_prefix || null,
       qr_next_number: org.qr_next_number || 1,

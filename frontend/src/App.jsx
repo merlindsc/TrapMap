@@ -25,6 +25,7 @@ import AssignCode from "./pages/qr/AssignCode";
 import Settings from "./pages/settings/Settings";
 import Reports from "./pages/reports/Reports";
 import Admin from "./pages/admin/Admin";
+import BoxPool from "./pages/boxes/BoxPool";
 
 // Super-Admin E-Mails
 const SUPER_ADMINS = ["admin@demo.trapmap.de", "merlin@trapmap.de", "hilfe@die-schaedlingsexperten.de"];
@@ -111,6 +112,7 @@ function MainApp() {
       <Route path="/qr/assign/:code" element={<DashboardLayout><AssignCode /></DashboardLayout>} />
       <Route path="/settings" element={<DashboardLayout><Settings /></DashboardLayout>} />
       <Route path="/reports" element={<DashboardLayout><Reports /></DashboardLayout>} />
+      <Route path="/boxes" element={<DashboardLayout><BoxPool /></DashboardLayout>} />
       {isSuperAdmin && (
         <Route path="/admin" element={<DashboardLayout><Admin /></DashboardLayout>} />
       )}

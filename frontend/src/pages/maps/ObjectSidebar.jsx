@@ -1,17 +1,11 @@
 /* ============================================================
-   TRAPMAP - OBJECT SIDEBAR V3
-   - Faltbar/Minimierbar
-   - Mobile: Bottom-Sheet mit Expand/Collapse
-   - Desktop: Slide-in/out von rechts
-   - GPS-Boxen und Floorplan-Boxen getrennt
+   TRAPMAP - OBJECT SIDEBAR
+   Rechte Sidebar (350px) mit Boxliste & History
+   Sortierung: Unplatzierte zuerst, dann nach Nummer
    ============================================================ */
 
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { 
-  X, Edit, Plus, History, MapPin, Map, ChevronRight, 
-  ChevronUp, ChevronDown, PanelRightClose, PanelRightOpen 
-} from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { X, Edit, History, MapPin } from "lucide-react";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -21,213 +15,256 @@ export default function ObjectSidebar({
   onClose,
   onBoxClick,
   onEditObject,
-  onCreateBox,
 }) {
-  const navigate = useNavigate();
   const token = localStorage.getItem("trapmap_token");
   const [history, setHistory] = useState([]);
-  const [floorPlans, setFloorPlans] = useState([]);
-  
-  // Minimized State
-  const [minimized, setMinimized] = useState(false);
 
-  // Boxen aufteilen
-  const gpsBoxes = (boxes || []).filter(box => !box.floor_plan_id);
-  const floorPlanBoxes = (boxes || []).filter(box => box.floor_plan_id);
-
-  const boxesByFloorPlan = floorPlanBoxes.reduce((acc, box) => {
-    const planId = box.floor_plan_id;
-    if (!acc[planId]) acc[planId] = [];
-    acc[planId].push(box);
-    return acc;
-  }, {});
-
-  useEffect(() => {
-    const loadFloorPlans = async () => {
-      try {
-        const res = await fetch(`${API}/floorplans/object/${object.id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
-        setFloorPlans(Array.isArray(data) ? data : []);
-      } catch (e) {
-        console.error("Error loading floor plans:", e);
-      }
-    };
-    if (object) loadFloorPlans();
-  }, [object, token]);
-
+  // Load history for this object (last 90 days)
   useEffect(() => {
     const loadHistory = async () => {
       try {
         const ninetyDaysAgo = new Date();
         ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
         const res = await fetch(
           `${API}/scans?object_id=${object.id}&after=${ninetyDaysAgo.toISOString()}`,
-          { headers: { Authorization: `Bearer ${token}` } }
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
         );
+
         const json = await res.json();
         const scans = Array.isArray(json) ? json : Array.isArray(json.data) ? json.data : [];
+
+        console.log("📋 Loaded history:", scans.length);
         setHistory(scans.slice(0, 10));
       } catch (e) {
-        console.error("Error loading history:", e);
+        console.error("❌ Error loading history:", e);
       }
     };
-    if (object) loadHistory();
+
+    if (object) {
+      loadHistory();
+    }
   }, [object, token]);
 
-  const getFloorPlanName = (planId) => {
-    const plan = floorPlans.find(p => p.id === planId);
-    return plan?.name || `Lageplan ${planId}`;
+  // ============================================
+  // SORTIERTE BOXEN
+  // 1. Unplatzierte (position_type = none/null) zuerst
+  // 2. Dann nach Nummer sortiert
+  // ============================================
+  const sortedBoxes = useMemo(() => {
+    if (!boxes || boxes.length === 0) return [];
+
+    return [...boxes].sort((a, b) => {
+      // Unplatzierte zuerst
+      const aPlaced = a.position_type && a.position_type !== 'none';
+      const bPlaced = b.position_type && b.position_type !== 'none';
+
+      if (!aPlaced && bPlaced) return -1;
+      if (aPlaced && !bPlaced) return 1;
+
+      // Dann nach Nummer
+      const aNum = a.number || 0;
+      const bNum = b.number || 0;
+      return aNum - bNum;
+    });
+  }, [boxes]);
+
+  // Zähler für unplatzierte
+  const unplacedCount = useMemo(() => {
+    return boxes.filter(b => !b.position_type || b.position_type === 'none').length;
+  }, [boxes]);
+
+  // ============================================
+  // BOX NAME - Nummer aus QR-Code extrahieren (DSE-0096 → 96)
+  // ============================================
+  const getBoxName = (box) => {
+    // Wenn QR-Code vorhanden, Nummer extrahieren
+    if (box.qr_code) {
+      const match = box.qr_code.match(/(\d+)$/);
+      if (match) {
+        return parseInt(match[1], 10).toString(); // "0096" → "96"
+      }
+      return box.qr_code;
+    }
+    // Sonst Nummer
+    if (box.number) {
+      return String(box.number);
+    }
+    // Fallback
+    return `#${box.id}`;
   };
 
-  const goToFloorPlan = (planId) => {
-    navigate(`/objects/${object.id}?tab=floorplans&plan=${planId}`);
-    onClose();
-  };
-
+  // Get icon based on box type
   const getBoxIcon = (box) => {
     const typeName = (box.box_type_name || "").toLowerCase();
+
     if (typeName.includes("schlag") || typeName.includes("trap")) return "T";
-    if (typeName.includes("gift") || typeName.includes("bait") || typeName.includes("nager")) return "R";
+    if (typeName.includes("gift") || typeName.includes("bait") || typeName.includes("rodent") || typeName.includes("nager")) return "R";
     if (typeName.includes("insekt") || typeName.includes("insect")) return "I";
     if (typeName.includes("uv") || typeName.includes("licht")) return "L";
+
     return "B";
   };
 
+  // Get status color
   const getStatusColor = (status) => {
-    const map = { green: "green", ok: "green", yellow: "yellow", orange: "orange", red: "red" };
-    return map[(status || "").toLowerCase()] || "gray";
+    const statusMap = {
+      green: "green",
+      ok: "green",
+      yellow: "yellow",
+      "geringe aufnahme": "yellow",
+      orange: "orange",
+      "auffällig": "orange",
+      red: "red",
+      "starker befall": "red",
+    };
+
+    const normalized = (status || "").toLowerCase();
+    return statusMap[normalized] || "gray";
   };
 
-  const renderBoxItem = (box, isFloorPlanBox = false) => (
-    <div
-      key={box.id}
-      className="box-item-v6"
-      onClick={() => isFloorPlanBox ? goToFloorPlan(box.floor_plan_id) : onBoxClick(box)}
-    >
-      <span className="box-icon-v6">{getBoxIcon(box)}</span>
-      <div className="box-info-v6">
-        <h4>{box.box_name || box.number || `Box #${box.id}`}</h4>
-        <p>
-          {box.box_type_name}
-          {isFloorPlanBox && box.grid_position && (
-            <span style={{ color: "#60a5fa", marginLeft: 6 }}>[{box.grid_position}]</span>
-          )}
-        </p>
-      </div>
-      <span className={`box-status-v6 ${getStatusColor(box.current_status || box.status)}`} />
-      {isFloorPlanBox && <ChevronRight size={16} style={{ color: "#6b7280" }} />}
-    </div>
-  );
-
-  const toggleMinimized = () => setMinimized(!minimized);
+  // Ist Box platziert?
+  const isPlaced = (box) => {
+    return box.position_type && box.position_type !== 'none';
+  };
 
   return (
-    <div className={`object-sidebar-v6 ${minimized ? 'minimized' : ''}`}>
+    <div className="object-sidebar-v6">
       {/* Header */}
       <div className="sidebar-header-v6">
-        {/* Drag Handle - Mobile */}
-        <div className="sidebar-drag-handle" onClick={toggleMinimized}>
-          <div className="drag-bar" />
+        <div className="sidebar-title-v6">
+          <h2>{object.name}</h2>
+          <p>
+            {object.address}
+            {object.city && `, ${object.zip} ${object.city}`}
+          </p>
         </div>
-        
-        <div className="sidebar-title-row">
-          <div className="sidebar-title-v6">
-            <h2>{object.name}</h2>
-            {!minimized && (
-              <p>{object.address}{object.city && `, ${object.zip} ${object.city}`}</p>
-            )}
-          </div>
-          
-          <div className="sidebar-header-buttons">
-            {/* Toggle Desktop */}
-            <button className="sidebar-toggle-btn desktop-only" onClick={toggleMinimized} title={minimized ? "Erweitern" : "Minimieren"}>
-              {minimized ? <PanelRightOpen size={18} /> : <PanelRightClose size={18} />}
-            </button>
-            
-            {/* Toggle Mobile */}
-            <button className="sidebar-toggle-btn mobile-only" onClick={toggleMinimized}>
-              {minimized ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-            </button>
-            
-            <button className="sidebar-close-v6" onClick={onClose}>
-              <X size={20} />
-            </button>
-          </div>
-        </div>
-
-        {/* Minimized Stats */}
-        {minimized && (
-          <div className="sidebar-minimized-stats">
-            <span className="stat-item"><MapPin size={14} /> {gpsBoxes.length} GPS</span>
-            <span className="stat-item"><Map size={14} /> {floorPlanBoxes.length} Plan</span>
-          </div>
-        )}
+        <button className="sidebar-close-v6" onClick={onClose}>
+          <X size={20} />
+        </button>
       </div>
 
       {/* Content */}
-      {!minimized && (
-        <div className="sidebar-content-v6">
-          <div className="sidebar-actions-v6">
-            <button className="sidebar-btn-v6" onClick={onEditObject}>
-              <Edit size={16} /> Bearbeiten
-            </button>
-            <button className="sidebar-btn-v6" onClick={onCreateBox} style={{ background: "#10b981" }}>
-              <Plus size={16} /> GPS-Box
-            </button>
-          </div>
+      <div className="sidebar-content-v6">
+        {/* Action Buttons */}
+        <div className="sidebar-actions-v6">
+          <button className="sidebar-btn-v6" onClick={onEditObject}>
+            <Edit size={16} />
+            Bearbeiten
+          </button>
+        </div>
 
-          <div className="sidebar-section-v6">
-            <h3><MapPin size={16} style={{ color: "#10b981", marginRight: 8 }} />GPS-Boxen ({gpsBoxes.length})</h3>
-            {gpsBoxes.length === 0 ? (
-              <p style={{ color: "#6b7280", fontSize: "12px", padding: "8px 0" }}>Keine GPS-Boxen</p>
-            ) : (
-              <div className="box-list-v6">{gpsBoxes.map(box => renderBoxItem(box, false))}</div>
+        {/* Box List */}
+        <div className="sidebar-section-v6">
+          <h3>
+            Boxen ({(boxes || []).length})
+            {unplacedCount > 0 && (
+              <span style={{ 
+                marginLeft: 8, 
+                fontSize: 12, 
+                color: '#f59e0b',
+                fontWeight: 'normal'
+              }}>
+                {unplacedCount} unplatziert
+              </span>
             )}
-          </div>
+          </h3>
 
-          {Object.keys(boxesByFloorPlan).length > 0 && (
-            <div className="sidebar-section-v6">
-              <h3><Map size={16} style={{ color: "#6366f1", marginRight: 8 }} />Lageplan-Boxen ({floorPlanBoxes.length})</h3>
-              {Object.entries(boxesByFloorPlan).map(([planId, planBoxes]) => (
-                <div key={planId} style={{ marginBottom: 12 }}>
-                  <div onClick={() => goToFloorPlan(parseInt(planId))} style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: "8px 10px", background: "rgba(99, 102, 241, 0.1)",
-                    borderRadius: 6, cursor: "pointer", marginBottom: 6
-                  }}>
-                    <span style={{ color: "#a5b4fc", fontSize: 13, fontWeight: 500 }}>{getFloorPlanName(parseInt(planId))}</span>
-                    <span style={{ color: "#6b7280", fontSize: 12 }}>{planBoxes.length} Boxen <ChevronRight size={14} /></span>
+          {(!boxes || boxes.length === 0) ? (
+            <p style={{ color: "#9ca3af", fontSize: "13px", textAlign: "center", padding: "20px 0" }}>
+              Keine Boxen vorhanden
+            </p>
+          ) : (
+            <div className="box-list-v6">
+              {sortedBoxes.map((box) => {
+                const placed = isPlaced(box);
+                
+                return (
+                  <div
+                    key={box.id}
+                    className={`box-item-v6 ${!placed ? 'unplaced' : ''}`}
+                    draggable={!placed}
+                    onDragStart={(e) => {
+                      if (!placed) {
+                        e.dataTransfer.setData('box', JSON.stringify(box));
+                        e.dataTransfer.effectAllowed = 'move';
+                      }
+                    }}
+                    onClick={() => {
+                      // Nur platzierte Boxen sind anklickbar
+                      if (placed) {
+                        onBoxClick(box);
+                      }
+                    }}
+                    style={{
+                      opacity: placed ? 1 : 0.7,
+                      borderLeft: placed ? 'none' : '3px solid #f59e0b',
+                      cursor: placed ? 'pointer' : 'grab'
+                    }}
+                    title={placed ? 'Box anzeigen' : 'Auf Karte ziehen zum Platzieren'}
+                  >
+                    <span className="box-icon-v6">{getBoxIcon(box)}</span>
+                    <div className="box-info-v6">
+                      <h4 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {getBoxName(box)}
+                        {!placed && (
+                          <MapPin size={12} style={{ color: '#f59e0b' }} />
+                        )}
+                      </h4>
+                      <p>{box.box_type_name || 'Kein Typ'}</p>
+                    </div>
+                    {placed ? (
+                      <span
+                        className={`box-status-v6 ${getStatusColor(
+                          box.current_status || box.status
+                        )}`}
+                      />
+                    ) : (
+                      <span style={{ 
+                        fontSize: 11, 
+                        color: '#f59e0b',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        ⇢ Ziehen
+                      </span>
+                    )}
                   </div>
-                  <div className="box-list-v6">{planBoxes.map(box => renderBoxItem(box, true))}</div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {boxes.length === 0 && (
-            <p style={{ color: "#9ca3af", fontSize: "13px", textAlign: "center", padding: "20px 0" }}>Keine Boxen</p>
-          )}
-
-          {history.length > 0 && (
-            <div className="sidebar-section-v6">
-              <h3><History size={16} style={{ marginRight: 6 }} />Letzte 90 Tage</h3>
-              <div className="history-list-v6">
-                {history.map(scan => (
-                  <div key={scan.id} className="history-item-v6">
-                    <span className={`box-status-v6 ${getStatusColor(scan.status)}`} />
-                    <span className="history-date-v6">
-                      {(scan.scanned_at || scan.created_at) ? new Date(scan.scanned_at || scan.created_at).toLocaleDateString("de-DE") : "-"}
-                    </span>
-                    <span className="history-user-v6">{scan.users?.first_name || scan.users?.email || "Unbekannt"}</span>
-                  </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
           )}
         </div>
-      )}
+
+        {/* History */}
+        {history.length > 0 && (
+          <div className="sidebar-section-v6">
+            <h3>
+              <History size={16} style={{ display: "inline", marginRight: "6px" }} />
+              Letzte 90 Tage
+            </h3>
+
+            <div className="history-list-v6">
+              {history.map((scan) => (
+                <div key={scan.id} className="history-item-v6">
+                  <span
+                    className={`box-status-v6 ${getStatusColor(scan.status)}`}
+                  />
+                  <span className="history-date-v6">
+                    {(scan.scanned_at || scan.created_at) 
+                      ? new Date(scan.scanned_at || scan.created_at).toLocaleDateString("de-DE") 
+                      : "-"}
+                  </span>
+                  <span className="history-user-v6">
+                    {scan.users?.first_name || scan.users?.email || "Unbekannt"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

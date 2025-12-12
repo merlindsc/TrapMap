@@ -263,35 +263,73 @@ export default function Admin() {
 }
 
 // ============================================
-// ORGANISATIONEN TAB
+// ORGANISATIONEN TAB (MIT EDIT-FUNKTION)
 // ============================================
 function OrganisationsTab({ organisations, onRefresh, showMessage, headers, jsonHeaders }) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingOrg, setEditingOrg] = useState(null); // Für Edit-Modus
   const [form, setForm] = useState({
     name: "", email: "", address: "", zip: "", city: "", phone: ""
   });
 
-  const handleCreate = async (e) => {
+  // Form zurücksetzen
+  const resetForm = () => {
+    setForm({ name: "", email: "", address: "", zip: "", city: "", phone: "" });
+    setEditingOrg(null);
+    setShowForm(false);
+  };
+
+  // Edit starten
+  const handleEdit = (org) => {
+    setEditingOrg(org);
+    setForm({
+      name: org.name || "",
+      email: org.email || "",
+      address: org.address || "",
+      zip: org.zip || "",
+      city: org.city || "",
+      phone: org.phone || ""
+    });
+    setShowForm(true);
+  };
+
+  // Neue Organisation anlegen
+  const handleNewOrg = () => {
+    resetForm();
+    setShowForm(true);
+  };
+
+  // Create oder Update
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) return showMessage("error", "Name erforderlich");
 
     setSaving(true);
     try {
-      const res = await fetch(`${API}/admin/organisations`, {
-        method: "POST",
+      // Unterscheide zwischen Create und Update
+      const url = editingOrg 
+        ? `${API}/admin/organisations/${editingOrg.id}`
+        : `${API}/admin/organisations`;
+      
+      const method = editingOrg ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: jsonHeaders,
         body: JSON.stringify(form)
       });
 
       if (res.ok) {
-        showMessage("success", `Organisation "${form.name}" erstellt!`);
-        setForm({ name: "", email: "", address: "", zip: "", city: "", phone: "" });
-        setShowForm(false);
+        showMessage("success", editingOrg 
+          ? `Organisation "${form.name}" aktualisiert!`
+          : `Organisation "${form.name}" erstellt!`
+        );
+        resetForm();
         onRefresh();
       } else {
         const err = await res.json();
-        showMessage("error", err.error || "Fehler beim Erstellen");
+        showMessage("error", err.error || "Fehler beim Speichern");
       }
     } catch (err) {
       showMessage("error", "Netzwerkfehler");
@@ -329,7 +367,7 @@ function OrganisationsTab({ organisations, onRefresh, showMessage, headers, json
             <RefreshCw size={18} />
           </button>
           <button
-            onClick={() => setShowForm(!showForm)}
+            onClick={handleNewOrg}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg"
           >
             <Plus size={18} />
@@ -339,7 +377,15 @@ function OrganisationsTab({ organisations, onRefresh, showMessage, headers, json
       </div>
 
       {showForm && (
-        <form onSubmit={handleCreate} className="bg-[#0d0d1a] rounded-lg p-4 mb-6 border border-white/10">
+        <form onSubmit={handleSubmit} className="bg-[#0d0d1a] rounded-lg p-4 mb-6 border border-white/10">
+          {/* Titel zeigt Create vs Edit */}
+          <h3 className="text-white font-medium mb-4 flex items-center gap-2">
+            {editingOrg ? (
+              <><Edit2 size={18} className="text-blue-400" /> Organisation bearbeiten</>
+            ) : (
+              <><Plus size={18} className="text-green-400" /> Neue Organisation</>
+            )}
+          </h3>
           <div className="grid md:grid-cols-2 gap-4 mb-4">
             <input type="text" placeholder="Name *" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" required />
             <input type="email" placeholder="E-Mail" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
@@ -348,12 +394,13 @@ function OrganisationsTab({ organisations, onRefresh, showMessage, headers, json
               <input type="text" placeholder="PLZ" value={form.zip} onChange={e => setForm({...form, zip: e.target.value})} className="w-24 bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
               <input type="text" placeholder="Ort" value={form.city} onChange={e => setForm({...form, city: e.target.value})} className="flex-1 bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
             </div>
+            <input type="tel" placeholder="Telefon" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
           </div>
           <div className="flex gap-2">
-            <button type="submit" disabled={saving} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50">
-              {saving ? <Loader size={18} className="animate-spin" /> : "Erstellen"}
+            <button type="submit" disabled={saving} className={`px-4 py-2 text-white rounded-lg disabled:opacity-50 ${editingOrg ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}`}>
+              {saving ? <Loader size={18} className="animate-spin" /> : (editingOrg ? "Speichern" : "Erstellen")}
             </button>
-            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">Abbrechen</button>
+            <button type="button" onClick={resetForm} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">Abbrechen</button>
           </div>
         </form>
       )}
@@ -371,9 +418,15 @@ function OrganisationsTab({ organisations, onRefresh, showMessage, headers, json
                 {org.city && <span className="flex items-center gap-1"><MapPin size={12} />{org.city}</span>}
               </div>
             </div>
-            <button onClick={() => handleDelete(org)} className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg">
-              <Trash2 size={18} />
-            </button>
+            {/* Edit + Delete Buttons */}
+            <div className="flex gap-1">
+              <button onClick={() => handleEdit(org)} className="p-2 text-blue-400 hover:bg-blue-500/20 rounded-lg" title="Bearbeiten">
+                <Edit2 size={18} />
+              </button>
+              <button onClick={() => handleDelete(org)} className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg" title="Löschen">
+                <Trash2 size={18} />
+              </button>
+            </div>
           </div>
         ))}
         {organisations.length === 0 && <p className="text-center text-gray-500 py-8">Keine Organisationen</p>}
