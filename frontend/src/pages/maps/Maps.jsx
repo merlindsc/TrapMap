@@ -1,7 +1,9 @@
 /* ============================================================
-   TRAPMAP - MAPS V10 - MIT LAGER-ANFORDERUNG
-   - "Boxen aus Lager anfordern" in der Objekt-Sidebar
-   - Kleinste Nummern zuerst
+   TRAPMAP - MAPS V11 - MOBILE OPTIMIZED
+   - Bottom Sheet für Mobile (Slide-Up Panel)
+   - Swipe-Gesten zum Auf/Zuklappen
+   - Floating Action Buttons
+   - Touch-optimiert
    ============================================================ */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -19,7 +21,7 @@ import L from "leaflet";
 import { 
   Plus, Layers3, X, Search, MapPin, Building2, 
   ChevronLeft, ChevronRight, Map, LayoutGrid, Navigation,
-  ChevronDown, Clock, User, Package, ArrowRight
+  ChevronDown, Clock, User, Package, ArrowRight, List
 } from "lucide-react";
 import "./Maps.css";
 
@@ -48,6 +50,14 @@ const MAPBOX_STREETS = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tile
 const MAPBOX_SAT = `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
 
 /* ============================================================
+   MOBILE DETECTION
+   ============================================================ */
+const isMobileDevice = () => {
+  if (typeof window === 'undefined') return false;
+  return window.innerWidth <= 768 || 'ontouchstart' in window;
+};
+
+/* ============================================================
    ICONS
    ============================================================ */
 const createObjectIcon = () => {
@@ -69,9 +79,6 @@ const getBoxDisplayNumber = (box) => {
   return box.number || box.id;
 };
 
-/* ============================================================
-   STATUS COLOR HELPER
-   ============================================================ */
 const getStatusColor = (status) => {
   const s = (status || "").toLowerCase();
   if (s === "green" || s === "ok") return "green";
@@ -81,9 +88,6 @@ const getStatusColor = (status) => {
   return "gray";
 };
 
-/* ============================================================
-   BOX ICON HELPER
-   ============================================================ */
 const getBoxIcon = (box) => {
   const typeName = (box.box_type_name || "").toLowerCase();
   if (typeName.includes("schlag") || typeName.includes("trap")) return "T";
@@ -140,7 +144,7 @@ function ObjectMarkerComponent({ object, isSelected, onSelect }) {
 }
 
 /* ============================================================
-   COLLAPSIBLE BOX SECTION (Aufklappbare Sektion)
+   COLLAPSIBLE BOX SECTION
    ============================================================ */
 function CollapsibleBoxSection({ title, icon, count, variant = "default", defaultOpen = false, children }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -174,11 +178,11 @@ function CollapsibleBoxSection({ title, icon, count, variant = "default", defaul
 }
 
 /* ============================================================
-   BOX LIST ITEM (Mit Details: Letzte Kontrolle, Techniker)
+   BOX LIST ITEM
    ============================================================ */
 function BoxListItem({ box, onClick, showLocation = false, isFloorplan = false }) {
   const formatLastScan = (lastScan) => {
-    if (!lastScan) return "Nie kontrolliert";
+    if (!lastScan) return "Nie";
     const date = new Date(lastScan);
     const now = new Date();
     const diffMs = now - date;
@@ -186,9 +190,9 @@ function BoxListItem({ box, onClick, showLocation = false, isFloorplan = false }
     
     if (diffDays === 0) return "Heute";
     if (diffDays === 1) return "Gestern";
-    if (diffDays < 7) return `vor ${diffDays} Tagen`;
-    if (diffDays < 30) return `vor ${Math.floor(diffDays / 7)} Wochen`;
-    return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    if (diffDays < 7) return `${diffDays}d`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)}w`;
+    return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
   };
 
   const displayNum = getBoxDisplayNumber(box);
@@ -247,7 +251,7 @@ export default function Maps() {
   const [objects, setObjects] = useState([]);
   const [boxes, setBoxes] = useState([]);
   const [boxTypes, setBoxTypes] = useState([]);
-  const [poolBoxes, setPoolBoxes] = useState([]); // Lager-Boxen
+  const [poolBoxes, setPoolBoxes] = useState([]);
 
   // Selected
   const [selectedObject, setSelectedObject] = useState(null);
@@ -261,16 +265,25 @@ export default function Maps() {
   const [objectEditDialogOpen, setObjectEditDialogOpen] = useState(false);
   const [floorplanDialogOpen, setFloorplanDialogOpen] = useState(false);
   const [pendingFloorplanBox, setPendingFloorplanBox] = useState(null);
+
+  // Mobile Bottom Sheet State
+  const [isMobile, setIsMobile] = useState(isMobileDevice());
+  const [sheetState, setSheetState] = useState('peek'); // 'closed', 'peek', 'half', 'full'
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  
+  // Sheet drag state
+  const sheetRef = useRef(null);
+  const dragStartY = useRef(0);
+  const dragStartHeight = useRef(0);
+  const isDragging = useRef(false);
 
   // Lager-Anforderung State
   const [requestCount, setRequestCount] = useState("");
   const [requesting, setRequesting] = useState(false);
   const [requestMessage, setRequestMessage] = useState(null);
 
-  // Click-to-Place Modus (für Mobile/Tablet)
+  // Click-to-Place Modus
   const [boxToPlace, setBoxToPlace] = useState(null);
-  const isMobile = typeof window !== 'undefined' && (window.innerWidth <= 1024 || 'ontouchstart' in window);
 
   // Map
   const [mapStyle, setMapStyle] = useState("streets");
@@ -281,10 +294,8 @@ export default function Maps() {
   const [tempObjectLatLng, setTempObjectLatLng] = useState(null);
   const [repositionBox, setRepositionBox] = useState(null);
 
-  // Search - Objekte
+  // Search
   const [objectSearchQuery, setObjectSearchQuery] = useState("");
-  
-  // Search - Adresse (Geocoding)
   const [addressQuery, setAddressQuery] = useState("");
   const [addressResults, setAddressResults] = useState([]);
   const [addressSearching, setAddressSearching] = useState(false);
@@ -295,6 +306,75 @@ export default function Maps() {
 
   const mapRef = useRef(null);
   const mapWrapperRef = useRef(null);
+
+  /* ============================================================
+     RESPONSIVE HANDLING
+     ============================================================ */
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = isMobileDevice();
+      setIsMobile(mobile);
+      if (!mobile) {
+        setSheetState('peek');
+        setSidebarOpen(true);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  /* ============================================================
+     SHEET DRAG HANDLERS (Mobile)
+     ============================================================ */
+  const handleSheetDragStart = useCallback((e) => {
+    if (!isMobile) return;
+    
+    const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+    dragStartY.current = clientY;
+    isDragging.current = true;
+    
+    const sheet = sheetRef.current;
+    if (sheet) {
+      dragStartHeight.current = sheet.offsetHeight;
+    }
+  }, [isMobile]);
+
+  const handleSheetDrag = useCallback((e) => {
+    if (!isDragging.current || !isMobile) return;
+
+    const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+    const deltaY = dragStartY.current - clientY;
+    
+    // Swipe up = positive delta, swipe down = negative
+    if (Math.abs(deltaY) > 50) {
+      if (deltaY > 0) {
+        // Swipe up
+        if (sheetState === 'peek') setSheetState('half');
+        else if (sheetState === 'half') setSheetState('full');
+      } else {
+        // Swipe down
+        if (sheetState === 'full') setSheetState('half');
+        else if (sheetState === 'half') setSheetState('peek');
+        else if (sheetState === 'peek') setSheetState('closed');
+      }
+      isDragging.current = false;
+    }
+  }, [isMobile, sheetState]);
+
+  const handleSheetDragEnd = useCallback(() => {
+    isDragging.current = false;
+  }, []);
+
+  // Toggle sheet on handle tap
+  const handleSheetToggle = useCallback(() => {
+    if (!isMobile) return;
+    
+    if (sheetState === 'peek') setSheetState('half');
+    else if (sheetState === 'half') setSheetState('full');
+    else if (sheetState === 'full') setSheetState('half');
+    else setSheetState('peek');
+  }, [isMobile, sheetState]);
 
   /* ============================================================
      LOAD DATA
@@ -340,7 +420,6 @@ export default function Maps() {
     }
   }, [token]);
 
-  // Pool-Boxen laden (Lagerbestand)
   const loadPoolBoxes = useCallback(async () => {
     try {
       const res = await fetch(`${API}/qr/codes`, {
@@ -349,11 +428,9 @@ export default function Maps() {
       const json = await res.json();
       const allCodes = Array.isArray(json) ? json : [];
       
-      // Nur Codes ohne object_id (im Pool)
       const pool = allCodes
         .filter(qr => !qr.boxes?.object_id)
         .sort((a, b) => {
-          // Nach sequence_number sortieren (kleinste zuerst)
           const numA = a.sequence_number ?? extractNumber(a);
           const numB = b.sequence_number ?? extractNumber(b);
           return numA - numB;
@@ -366,7 +443,6 @@ export default function Maps() {
     }
   }, [token]);
 
-  // Nummer aus QR-Code extrahieren
   const extractNumber = (qr) => {
     if (qr.sequence_number != null) return qr.sequence_number;
     const match = qr.id?.match(/(\d+)$/);
@@ -380,19 +456,21 @@ export default function Maps() {
     loadPoolBoxes();
   }, [loadObjects, loadBoxTypes, loadPoolBoxes]);
 
-  // Flag um doppeltes Laden zu verhindern
   const [skipNextBoxLoad, setSkipNextBoxLoad] = useState(false);
 
-  // URL Parameter handling (object_id, flyTo, openBox, firstSetup)
+  // URL Parameter handling
   useEffect(() => {
     if (urlObjectId && objects.length > 0) {
       const targetObject = objects.find(obj => String(obj.id) === urlObjectId);
       if (targetObject) {
-        // Flag setzen um doppeltes Laden zu verhindern
         setSkipNextBoxLoad(true);
         setSelectedObject(targetObject);
         
-        // Boxen laden und dann ggf. Dialog öffnen
+        // On mobile, expand sheet when object is selected
+        if (isMobile) {
+          setSheetState('half');
+        }
+        
         const loadAndOpenBox = async () => {
           try {
             const res = await fetch(`${API}/boxes?object_id=${targetObject.id}`, {
@@ -402,9 +480,6 @@ export default function Maps() {
             const boxesData = Array.isArray(json) ? json : json.data || [];
             setBoxes(boxesData);
             
-            console.log("🔍 Loaded boxes:", boxesData.length, "Looking for:", urlOpenBox);
-            
-            // FlyTo wenn gewünscht
             if (urlFlyTo && targetObject.lat && targetObject.lng) {
               setTimeout(() => {
                 if (mapRef.current) {
@@ -413,30 +488,21 @@ export default function Maps() {
               }, 500);
             }
             
-            // openBox - Dialog öffnen
             if (urlOpenBox && boxesData.length > 0) {
               const targetBox = boxesData.find(box => String(box.id) === urlOpenBox);
-              console.log("🔍 Found box:", targetBox?.id, targetBox?.qr_code, "firstSetup:", urlFirstSetup);
               if (targetBox) {
-                // Kurz warten bis UI bereit
                 setTimeout(() => {
                   setSelectedBox(targetBox);
-                  
                   if (urlFirstSetup) {
-                    // Ersteinrichtung → BoxEditDialog
                     setIsFirstSetup(true);
                     setBoxEditDialogOpen(true);
-                    console.log("✅ Opening SETUP dialog for box:", targetBox.id);
                   } else {
-                    // Normale Kontrolle → BoxScanDialog
                     setControlDialogOpen(true);
-                    console.log("✅ Opening CONTROL dialog for box:", targetBox.id);
                   }
                 }, 300);
               }
             }
             
-            // URL-Parameter löschen
             setSearchParams({});
           } catch (e) {
             console.error("❌ Fehler beim Laden:", e);
@@ -446,9 +512,8 @@ export default function Maps() {
         loadAndOpenBox();
       }
     }
-  }, [urlObjectId, urlFlyTo, urlOpenBox, urlFirstSetup, objects, token, setSearchParams]);
+  }, [urlObjectId, urlFlyTo, urlOpenBox, urlFirstSetup, objects, token, setSearchParams, isMobile]);
 
-  // openBox ohne object_id (falls Box direkt verlinkt)
   useEffect(() => {
     if (urlOpenBox && !urlObjectId && boxes.length > 0) {
       const targetBox = boxes.find(box => String(box.id) === urlOpenBox);
@@ -462,7 +527,6 @@ export default function Maps() {
 
   useEffect(() => {
     if (selectedObject) {
-      // Skip wenn wir gerade vom URL-Handler kommen
       if (skipNextBoxLoad) {
         setSkipNextBoxLoad(false);
         return;
@@ -474,7 +538,7 @@ export default function Maps() {
   }, [selectedObject, loadBoxes, skipNextBoxLoad]);
 
   /* ============================================================
-     BOXEN AUS LAGER ANFORDERN
+     REQUEST BOXES FROM POOL
      ============================================================ */
   const handleRequestBoxes = async () => {
     const count = parseInt(requestCount, 10);
@@ -494,16 +558,14 @@ export default function Maps() {
       return;
     }
 
-    // Prüfen ob genug Boxen im Pool
     if (poolBoxes.length < count) {
       setRequestMessage({ 
         type: "error", 
-        text: `Nicht genug Boxen! Verfügbar: ${poolBoxes.length}, Angefordert: ${count}` 
+        text: `Nicht genug Boxen! Verfügbar: ${poolBoxes.length}` 
       });
       return;
     }
 
-    // Die ersten X Pool-Boxen nehmen (kleinste Nummern zuerst)
     const boxesToAssign = poolBoxes.slice(0, count);
     
     setRequesting(true);
@@ -529,39 +591,29 @@ export default function Maps() {
           body: JSON.stringify({ object_id: selectedObject.id })
         });
 
-        if (res.ok) {
-          successCount++;
-        } else {
-          errorCount++;
-        }
+        if (res.ok) successCount++;
+        else errorCount++;
       } catch (err) {
         errorCount++;
       }
     }
     
     if (errorCount === 0) {
-      setRequestMessage({ 
-        type: "success", 
-        text: `✓ ${successCount} Boxen zugewiesen` 
-      });
+      setRequestMessage({ type: "success", text: `✓ ${successCount} Boxen zugewiesen` });
     } else {
-      setRequestMessage({ 
-        type: "warning", 
-        text: `${successCount} zugewiesen, ${errorCount} fehlgeschlagen` 
-      });
+      setRequestMessage({ type: "warning", text: `${successCount} OK, ${errorCount} Fehler` });
     }
 
     setRequestCount("");
     loadBoxes(selectedObject.id);
-    loadPoolBoxes(); // Pool aktualisieren
+    loadPoolBoxes();
     setRequesting(false);
 
-    // Nachricht nach 3 Sekunden ausblenden
     setTimeout(() => setRequestMessage(null), 3000);
   };
 
   /* ============================================================
-     ADDRESS SEARCH (Mapbox Geocoding)
+     ADDRESS SEARCH
      ============================================================ */
   const handleAddressSearch = useCallback((query) => {
     if (addressTimeoutRef.current) {
@@ -617,7 +669,6 @@ export default function Maps() {
     );
   }, [objects, objectSearchQuery]);
 
-  // Boxen sortiert: Kleinste Nummer zuerst, Maps vor Floorplan
   const sortedBoxes = useMemo(() => {
     if (!boxes.length) return { mapBoxes: [], floorplanBoxes: [], unplacedBoxes: [] };
 
@@ -654,12 +705,23 @@ export default function Maps() {
     setSelectedObject(obj);
     setRequestMessage(null);
     setRequestCount("");
+    
+    // On mobile, expand sheet
+    if (isMobile) {
+      setSheetState('half');
+    }
+    
     if (obj.lat && obj.lng && mapRef.current) {
       mapRef.current.flyTo([obj.lat, obj.lng], 17, { duration: 1.0 });
     }
   };
 
   const handleBoxClick = (box) => {
+    // Close sheet on mobile when opening dialog
+    if (isMobile) {
+      setSheetState('peek');
+    }
+    
     if (box.position_type === 'floorplan') {
       setPendingFloorplanBox(box);
       setFloorplanDialogOpen(true);
@@ -690,12 +752,17 @@ export default function Maps() {
     setBoxes([]);
     setRequestMessage(null);
     setRequestCount("");
+    
+    if (isMobile) {
+      setSheetState('peek');
+    }
   };
 
   /* ============================================================
-     DRAG & DROP
+     DRAG & DROP (Desktop only)
      ============================================================ */
   const handleDragOver = (e) => {
+    if (isMobile) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setIsDraggingOver(true);
@@ -706,6 +773,7 @@ export default function Maps() {
   };
 
   const handleDrop = async (e) => {
+    if (isMobile) return;
     e.preventDefault();
     setIsDraggingOver(false);
 
@@ -776,7 +844,6 @@ export default function Maps() {
   function MapEventsHandler() {
     useMapEvents({
       click(e) {
-        // Box platzieren (Click-to-Place für Mobile)
         if (boxToPlace) {
           handlePlaceBoxOnMap(boxToPlace, e.latlng);
           return;
@@ -794,7 +861,6 @@ export default function Maps() {
     return null;
   }
 
-  // Box auf Karte platzieren (Click-to-Place)
   const handlePlaceBoxOnMap = async (box, latlng) => {
     try {
       const res = await fetch(`${API}/boxes/${box.id}/place-map`, {
@@ -857,6 +923,14 @@ export default function Maps() {
   const getTileUrl = () => {
     if (mapStyle === "satellite" || mapStyle === "hybrid") return MAPBOX_SAT;
     return MAPBOX_STREETS;
+  };
+
+  // Get sidebar/sheet classes
+  const getSidebarClasses = () => {
+    if (isMobile) {
+      return `maps-sidebar sheet-${sheetState}`;
+    }
+    return `maps-sidebar ${sidebarOpen ? 'open' : 'closed'}`;
   };
 
   /* ============================================================
@@ -940,12 +1014,16 @@ export default function Maps() {
             )}
           </div>
 
-          <button 
-            className="sidebar-toggle-btn"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-          >
-            {sidebarOpen ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-          </button>
+          {/* Desktop only: Sidebar toggle */}
+          {!isMobile && (
+            <button 
+              className="sidebar-toggle-btn"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              style={{ display: 'flex' }}
+            >
+              {sidebarOpen ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            </button>
+          )}
         </div>
       </header>
 
@@ -973,7 +1051,7 @@ export default function Maps() {
       {boxToPlace && (
         <div className="placing-hint" style={{ borderColor: "#10b981", color: "#10b981" }}>
           <MapPin size={18} />
-          <span>Klicke auf die Karte um Box #{getBoxDisplayNumber(boxToPlace)} zu platzieren</span>
+          <span>Tippe auf die Karte um Box #{getBoxDisplayNumber(boxToPlace)} zu platzieren</span>
           <button onClick={() => setBoxToPlace(null)} style={{ background: "rgba(16, 185, 129, 0.15)" }}>
             <X size={16} /> Abbrechen
           </button>
@@ -981,7 +1059,7 @@ export default function Maps() {
       )}
 
       {/* ============================================================
-          MAIN CONTENT: Map + Sidebar
+          MAIN CONTENT: Map + Sidebar/Sheet
           ============================================================ */}
       <div className="maps-content">
         {/* MAP */}
@@ -1042,10 +1120,35 @@ export default function Maps() {
           </div>
         </div>
 
+        {/* Mobile FAB - Show list */}
+        {isMobile && sheetState === 'closed' && (
+          <button 
+            className="mobile-fab"
+            onClick={() => setSheetState('peek')}
+          >
+            <List size={18} />
+            {selectedObject ? `${boxes.length} Boxen` : `${objects.length} Objekte`}
+          </button>
+        )}
+
         {/* ============================================================
-            SIDEBAR
+            SIDEBAR / BOTTOM SHEET
             ============================================================ */}
-        <aside className={`maps-sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
+        <aside 
+          ref={sheetRef}
+          className={getSidebarClasses()}
+        >
+          {/* Mobile Drag Handle */}
+          {isMobile && (
+            <div 
+              className="sheet-drag-handle"
+              onTouchStart={handleSheetDragStart}
+              onTouchMove={handleSheetDrag}
+              onTouchEnd={handleSheetDragEnd}
+              onClick={handleSheetToggle}
+            />
+          )}
+
           {!selectedObject ? (
             /* OBJEKT-LISTE */
             <>
@@ -1057,48 +1160,52 @@ export default function Maps() {
                 </div>
               </div>
 
-              <div className="sidebar-search">
-                <Search size={16} />
-                <input
-                  type="text"
-                  placeholder="Objekt suchen..."
-                  value={objectSearchQuery}
-                  onChange={(e) => setObjectSearchQuery(e.target.value)}
-                />
-                {objectSearchQuery && (
-                  <button onClick={() => setObjectSearchQuery("")}>
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
+              {(sheetState !== 'peek' || !isMobile) && (
+                <>
+                  <div className="sidebar-search">
+                    <Search size={16} />
+                    <input
+                      type="text"
+                      placeholder="Objekt suchen..."
+                      value={objectSearchQuery}
+                      onChange={(e) => setObjectSearchQuery(e.target.value)}
+                    />
+                    {objectSearchQuery && (
+                      <button onClick={() => setObjectSearchQuery("")}>
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
 
-              <div className="sidebar-content">
-                {filteredObjects.length === 0 ? (
-                  <div className="empty-state">
-                    <Building2 size={32} />
-                    <p>Keine Objekte gefunden</p>
-                  </div>
-                ) : (
-                  <div className="object-list">
-                    {filteredObjects.map((obj) => (
-                      <div
-                        key={obj.id}
-                        className="object-item"
-                        onClick={() => handleObjectClick(obj)}
-                      >
-                        <div className="object-icon">
-                          <Building2 size={18} />
-                        </div>
-                        <div className="object-info">
-                          <h4>{obj.name}</h4>
-                          <p>{obj.address}{obj.city ? `, ${obj.city}` : ''}</p>
-                        </div>
-                        <ChevronRight size={18} className="chevron" />
+                  <div className="sidebar-content">
+                    {filteredObjects.length === 0 ? (
+                      <div className="empty-state">
+                        <Building2 size={32} />
+                        <p>Keine Objekte gefunden</p>
                       </div>
-                    ))}
+                    ) : (
+                      <div className="object-list">
+                        {filteredObjects.map((obj) => (
+                          <div
+                            key={obj.id}
+                            className="object-item"
+                            onClick={() => handleObjectClick(obj)}
+                          >
+                            <div className="object-icon">
+                              <Building2 size={18} />
+                            </div>
+                            <div className="object-info">
+                              <h4>{obj.name}</h4>
+                              <p>{obj.address}{obj.city ? `, ${obj.city}` : ''}</p>
+                            </div>
+                            <ChevronRight size={18} className="chevron" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
             </>
           ) : (
             /* BOX-LISTE für ausgewähltes Objekt */
@@ -1116,226 +1223,214 @@ export default function Maps() {
                 </button>
               </div>
 
-              <div className="sidebar-content">
-                {/* ============================================
-                    BOXEN AUS LAGER ANFORDERN
-                    ============================================ */}
-                <div style={{
-                  background: "linear-gradient(135deg, #1e3a5f 0%, #1e293b 100%)",
-                  borderRadius: 10,
-                  padding: 14,
-                  marginBottom: 16,
-                  border: "1px solid #3b82f6"
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                    <Package size={16} style={{ color: "#60a5fa" }} />
-                    <span style={{ color: "#fff", fontSize: 13, fontWeight: 600 }}>Boxen aus Lager anfordern</span>
-                  </div>
-                  
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      placeholder="Anzahl"
-                      value={requestCount}
-                      onChange={(e) => {
-                        setRequestCount(e.target.value);
-                        setRequestMessage(null);
-                      }}
-                      onKeyDown={(e) => e.key === "Enter" && handleRequestBoxes()}
-                      style={{
-                        flex: "0 0 80px",
-                        padding: "8px 10px",
-                        background: "#0f172a",
-                        border: "1px solid #374151",
-                        borderRadius: 6,
-                        color: "#fff",
-                        fontSize: 14,
-                        textAlign: "center"
-                      }}
-                    />
-                    <button
-                      onClick={handleRequestBoxes}
-                      disabled={requesting || !requestCount}
-                      style={{
-                        flex: 1,
-                        padding: "8px 14px",
-                        background: requesting ? "#374151" : "#3b82f6",
-                        border: "none",
-                        borderRadius: 6,
-                        color: "#fff",
-                        fontSize: 13,
-                        fontWeight: 500,
-                        cursor: requesting ? "wait" : "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: 6,
-                        opacity: !requestCount ? 0.5 : 1
-                      }}
-                    >
-                      <ArrowRight size={14} />
-                      {requesting ? "..." : "Anfordern"}
-                    </button>
-                  </div>
-                  
-                  {/* Verfügbare Boxen */}
-                  <div style={{ 
-                    marginTop: 8, 
-                    fontSize: 11, 
-                    color: "#94a3b8",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4
+              {(sheetState !== 'peek' || !isMobile) && (
+                <div className="sidebar-content">
+                  {/* Boxen aus Lager anfordern */}
+                  <div style={{
+                    background: "linear-gradient(135deg, #1e3a5f 0%, #1e293b 100%)",
+                    borderRadius: 10,
+                    padding: 14,
+                    marginBottom: 16,
+                    border: "1px solid #3b82f6"
                   }}>
-                    <span style={{ color: "#10b981", fontWeight: 600 }}>{poolBoxes.length}</span>
-                    <span>Boxen im Lager verfügbar</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                      <Package size={16} style={{ color: "#60a5fa" }} />
+                      <span style={{ color: "#fff", fontSize: 13, fontWeight: 600 }}>Boxen aus Lager</span>
+                    </div>
+                    
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        placeholder="Anz."
+                        value={requestCount}
+                        onChange={(e) => {
+                          setRequestCount(e.target.value);
+                          setRequestMessage(null);
+                        }}
+                        onKeyDown={(e) => e.key === "Enter" && handleRequestBoxes()}
+                        style={{
+                          flex: "0 0 60px",
+                          padding: "10px 8px",
+                          background: "#0f172a",
+                          border: "1px solid #374151",
+                          borderRadius: 6,
+                          color: "#fff",
+                          fontSize: 16,
+                          textAlign: "center"
+                        }}
+                      />
+                      <button
+                        onClick={handleRequestBoxes}
+                        disabled={requesting || !requestCount}
+                        style={{
+                          flex: 1,
+                          padding: "10px 14px",
+                          minHeight: 44,
+                          background: requesting ? "#374151" : "#3b82f6",
+                          border: "none",
+                          borderRadius: 6,
+                          color: "#fff",
+                          fontSize: 13,
+                          fontWeight: 500,
+                          cursor: requesting ? "wait" : "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 6,
+                          opacity: !requestCount ? 0.5 : 1
+                        }}
+                      >
+                        <ArrowRight size={14} />
+                        {requesting ? "..." : "Anfordern"}
+                      </button>
+                    </div>
+                    
+                    <div style={{ marginTop: 8, fontSize: 11, color: "#94a3b8" }}>
+                      <span style={{ color: "#10b981", fontWeight: 600 }}>{poolBoxes.length}</span> im Lager
+                    </div>
+
+                    {requestMessage && (
+                      <div style={{
+                        marginTop: 8,
+                        padding: "6px 10px",
+                        background: requestMessage.type === "success" ? "#10b98120" :
+                                    requestMessage.type === "error" ? "#ef444420" :
+                                    requestMessage.type === "warning" ? "#f59e0b20" : "#3b82f620",
+                        borderRadius: 4,
+                        color: requestMessage.type === "success" ? "#10b981" :
+                               requestMessage.type === "error" ? "#ef4444" :
+                               requestMessage.type === "warning" ? "#f59e0b" : "#60a5fa",
+                        fontSize: 12,
+                        fontWeight: 500
+                      }}>
+                        {requestMessage.text}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Feedback Message */}
-                  {requestMessage && (
-                    <div style={{
-                      marginTop: 8,
-                      padding: "6px 10px",
-                      background: requestMessage.type === "success" ? "#10b98120" :
-                                  requestMessage.type === "error" ? "#ef444420" :
-                                  requestMessage.type === "warning" ? "#f59e0b20" : "#3b82f620",
-                      borderRadius: 4,
-                      color: requestMessage.type === "success" ? "#10b981" :
-                             requestMessage.type === "error" ? "#ef4444" :
-                             requestMessage.type === "warning" ? "#f59e0b" : "#60a5fa",
-                      fontSize: 12,
-                      fontWeight: 500
-                    }}>
-                      {requestMessage.text}
+                  {/* Statistik */}
+                  <div className="box-stats-row">
+                    <div className="stat-item">
+                      <span className="stat-value">{boxes.length}</span>
+                      <span className="stat-label">Gesamt</span>
+                    </div>
+                    <div className="stat-item map">
+                      <span className="stat-value">{sortedBoxes.mapBoxes.length}</span>
+                      <span className="stat-label">Karte</span>
+                    </div>
+                    <div className="stat-item floorplan">
+                      <span className="stat-value">{sortedBoxes.floorplanBoxes.length}</span>
+                      <span className="stat-label">Plan</span>
+                    </div>
+                    <div className="stat-item warning">
+                      <span className="stat-value">{sortedBoxes.unplacedBoxes.length}</span>
+                      <span className="stat-label">Offen</span>
+                    </div>
+                  </div>
+
+                  {/* Unplatzierte Boxen */}
+                  <CollapsibleBoxSection
+                    title="Unplatziert"
+                    icon={<MapPin size={16} />}
+                    count={sortedBoxes.unplacedBoxes.length}
+                    variant="warning"
+                    defaultOpen={sortedBoxes.unplacedBoxes.length > 0}
+                  >
+                    {sortedBoxes.unplacedBoxes.length === 0 ? (
+                      <div className="section-empty">Alle Boxen platziert ✓</div>
+                    ) : (
+                      sortedBoxes.unplacedBoxes.map((box) => (
+                        <div
+                          key={box.id}
+                          className={`box-item unplaced ${boxToPlace?.id === box.id ? 'selected' : ''}`}
+                          draggable={!isMobile}
+                          onDragStart={(e) => {
+                            if (!isMobile) {
+                              e.dataTransfer.setData('box', JSON.stringify(box));
+                              e.dataTransfer.effectAllowed = 'move';
+                            }
+                          }}
+                          onClick={() => {
+                            if (isMobile) {
+                              setBoxToPlace(boxToPlace?.id === box.id ? null : box);
+                              setSheetState('peek');
+                            }
+                          }}
+                          style={{
+                            cursor: isMobile ? 'pointer' : 'grab',
+                            background: boxToPlace?.id === box.id ? 'rgba(16, 185, 129, 0.15)' : undefined,
+                            borderColor: boxToPlace?.id === box.id ? '#10b981' : undefined
+                          }}
+                        >
+                          <span className="box-icon">{getBoxIcon(box)}</span>
+                          <div className="box-info">
+                            <h4>{getBoxDisplayNumber(box)}</h4>
+                            <p>{box.box_type_name || 'Kein Typ'}</p>
+                          </div>
+                          <span className="drag-hint" style={{ color: boxToPlace?.id === box.id ? '#10b981' : undefined }}>
+                            {isMobile 
+                              ? (boxToPlace?.id === box.id ? '✓ Karte tippen' : '→ Antippen') 
+                              : '⇢ Ziehen'}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </CollapsibleBoxSection>
+
+                  {/* Karten-Boxen */}
+                  <CollapsibleBoxSection
+                    title="Karte"
+                    icon={<Map size={16} />}
+                    count={sortedBoxes.mapBoxes.length}
+                    variant="map"
+                    defaultOpen={true}
+                  >
+                    {sortedBoxes.mapBoxes.length === 0 ? (
+                      <div className="section-empty">Keine Boxen auf der Karte</div>
+                    ) : (
+                      sortedBoxes.mapBoxes.map((box) => (
+                        <BoxListItem 
+                          key={box.id} 
+                          box={box} 
+                          onClick={() => handleBoxClick(box)}
+                        />
+                      ))
+                    )}
+                  </CollapsibleBoxSection>
+
+                  {/* Lageplan-Boxen */}
+                  <CollapsibleBoxSection
+                    title="Lageplan"
+                    icon={<LayoutGrid size={16} />}
+                    count={sortedBoxes.floorplanBoxes.length}
+                    variant="floorplan"
+                    defaultOpen={sortedBoxes.floorplanBoxes.length > 0}
+                  >
+                    {sortedBoxes.floorplanBoxes.length === 0 ? (
+                      <div className="section-empty">Keine Boxen auf Lageplänen</div>
+                    ) : (
+                      sortedBoxes.floorplanBoxes.map((box) => (
+                        <BoxListItem 
+                          key={box.id} 
+                          box={box} 
+                          onClick={() => handleBoxClick(box)}
+                          isFloorplan={true}
+                        />
+                      ))
+                    )}
+                  </CollapsibleBoxSection>
+
+                  {boxes.length === 0 && (
+                    <div className="empty-state">
+                      <MapPin size={32} />
+                      <p>Keine Boxen vorhanden</p>
+                      <small>Boxen oben anfordern oder per QR scannen</small>
                     </div>
                   )}
                 </div>
-
-                {/* Statistik-Übersicht */}
-                <div className="box-stats-row">
-                  <div className="stat-item">
-                    <span className="stat-value">{boxes.length}</span>
-                    <span className="stat-label">Gesamt</span>
-                  </div>
-                  <div className="stat-item map">
-                    <span className="stat-value">{sortedBoxes.mapBoxes.length}</span>
-                    <span className="stat-label">Karte</span>
-                  </div>
-                  <div className="stat-item floorplan">
-                    <span className="stat-value">{sortedBoxes.floorplanBoxes.length}</span>
-                    <span className="stat-label">Lageplan</span>
-                  </div>
-                  <div className="stat-item warning">
-                    <span className="stat-value">{sortedBoxes.unplacedBoxes.length}</span>
-                    <span className="stat-label">Offen</span>
-                  </div>
-                </div>
-
-                {/* Unplatzierte Boxen */}
-                <CollapsibleBoxSection
-                  title="Unplatzierte Boxen"
-                  icon={<MapPin size={16} />}
-                  count={sortedBoxes.unplacedBoxes.length}
-                  variant="warning"
-                  defaultOpen={sortedBoxes.unplacedBoxes.length > 0}
-                >
-                  {sortedBoxes.unplacedBoxes.length === 0 ? (
-                    <div className="section-empty">Alle Boxen sind platziert ✓</div>
-                  ) : (
-                    sortedBoxes.unplacedBoxes.map((box) => (
-                      <div
-                        key={box.id}
-                        className={`box-item unplaced ${boxToPlace?.id === box.id ? 'selected' : ''}`}
-                        draggable={!isMobile}
-                        onDragStart={(e) => {
-                          if (!isMobile) {
-                            e.dataTransfer.setData('box', JSON.stringify(box));
-                            e.dataTransfer.effectAllowed = 'move';
-                          }
-                        }}
-                        onClick={() => {
-                          // Mobile/Tablet: Click-to-Place Modus
-                          if (isMobile) {
-                            setBoxToPlace(boxToPlace?.id === box.id ? null : box);
-                          }
-                        }}
-                        style={{
-                          cursor: isMobile ? 'pointer' : 'grab',
-                          background: boxToPlace?.id === box.id ? 'rgba(16, 185, 129, 0.15)' : undefined,
-                          borderColor: boxToPlace?.id === box.id ? '#10b981' : undefined
-                        }}
-                      >
-                        <span className="box-icon">{getBoxIcon(box)}</span>
-                        <div className="box-info">
-                          <h4>{getBoxDisplayNumber(box)}</h4>
-                          <p>{box.box_type_name || 'Kein Typ'}</p>
-                        </div>
-                        <span className="drag-hint" style={{ color: boxToPlace?.id === box.id ? '#10b981' : undefined }}>
-                          {isMobile 
-                            ? (boxToPlace?.id === box.id ? '✓ Karte klicken' : '→ Antippen') 
-                            : '⇢ Ziehen'}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </CollapsibleBoxSection>
-
-                {/* Karten-Boxen */}
-                <CollapsibleBoxSection
-                  title="Karten-Boxen"
-                  icon={<Map size={16} />}
-                  count={sortedBoxes.mapBoxes.length}
-                  variant="map"
-                  defaultOpen={true}
-                >
-                  {sortedBoxes.mapBoxes.length === 0 ? (
-                    <div className="section-empty">Keine Boxen auf der Karte</div>
-                  ) : (
-                    sortedBoxes.mapBoxes.map((box) => (
-                      <BoxListItem 
-                        key={box.id} 
-                        box={box} 
-                        onClick={() => handleBoxClick(box)}
-                        showLocation={false}
-                      />
-                    ))
-                  )}
-                </CollapsibleBoxSection>
-
-                {/* Lageplan-Boxen */}
-                <CollapsibleBoxSection
-                  title="Lageplan-Boxen"
-                  icon={<LayoutGrid size={16} />}
-                  count={sortedBoxes.floorplanBoxes.length}
-                  variant="floorplan"
-                  defaultOpen={sortedBoxes.floorplanBoxes.length > 0}
-                >
-                  {sortedBoxes.floorplanBoxes.length === 0 ? (
-                    <div className="section-empty">Keine Boxen auf Lageplänen</div>
-                  ) : (
-                    sortedBoxes.floorplanBoxes.map((box) => (
-                      <BoxListItem 
-                        key={box.id} 
-                        box={box} 
-                        onClick={() => handleBoxClick(box)}
-                        showLocation={true}
-                        isFloorplan={true}
-                      />
-                    ))
-                  )}
-                </CollapsibleBoxSection>
-
-                {/* Keine Boxen */}
-                {boxes.length === 0 && (
-                  <div className="empty-state">
-                    <MapPin size={32} />
-                    <p>Keine Boxen vorhanden</p>
-                    <small>Boxen oben anfordern oder per QR-Code scannen</small>
-                  </div>
-                )}
-              </div>
+              )}
             </>
           )}
         </aside>
@@ -1344,30 +1439,27 @@ export default function Maps() {
       {/* ============================================================
           DIALOGS
           ============================================================ */}
-
-      {/* Floorplan Dialog */}
       {floorplanDialogOpen && (
         <div className="dialog-overlay" onClick={() => setFloorplanDialogOpen(false)}>
           <div className="dialog-compact" onClick={(e) => e.stopPropagation()}>
             <div className="dialog-icon">
               <LayoutGrid size={32} />
             </div>
-            <h3>Zum Lageplan wechseln?</h3>
-            <p>Diese Box befindet sich auf dem Lageplan von <strong>{selectedObject?.name}</strong>.</p>
+            <h3>Zum Lageplan?</h3>
+            <p>Diese Box ist auf dem Lageplan von <strong>{selectedObject?.name}</strong>.</p>
             <div className="dialog-buttons">
               <button className="btn-secondary" onClick={() => setFloorplanDialogOpen(false)}>
                 Abbrechen
               </button>
               <button className="btn-primary" onClick={handleGoToFloorplan}>
                 <LayoutGrid size={16} />
-                Zum Lageplan
+                Lageplan
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Control Dialog */}
       {controlDialogOpen && selectedBox && (
         <BoxScanDialog
           box={selectedBox}
@@ -1398,7 +1490,6 @@ export default function Maps() {
         />
       )}
 
-      {/* Box Edit Dialog */}
       {boxEditDialogOpen && selectedBox && (
         <BoxEditDialog
           box={selectedBox}
@@ -1431,7 +1522,6 @@ export default function Maps() {
         />
       )}
 
-      {/* Object Create Dialog */}
       {objectCreateDialogOpen && tempObjectLatLng && (
         <ObjectCreateDialog
           latLng={tempObjectLatLng}
@@ -1446,7 +1536,6 @@ export default function Maps() {
         />
       )}
 
-      {/* Object Edit Dialog */}
       {objectEditDialogOpen && selectedObject && (
         <ObjectEditDialog
           object={selectedObject}
