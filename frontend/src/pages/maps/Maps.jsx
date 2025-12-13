@@ -241,6 +241,7 @@ export default function Maps() {
   const urlObjectId = searchParams.get("object_id");
   const urlFlyTo = searchParams.get("flyTo") === "true";
   const urlOpenBox = searchParams.get("openBox");
+  const urlFirstSetup = searchParams.get("firstSetup") === "true";
 
   // Data
   const [objects, setObjects] = useState([]);
@@ -379,11 +380,16 @@ export default function Maps() {
     loadPoolBoxes();
   }, [loadObjects, loadBoxTypes, loadPoolBoxes]);
 
-  // URL Parameter handling (object_id, flyTo, openBox)
+  // Flag um doppeltes Laden zu verhindern
+  const [skipNextBoxLoad, setSkipNextBoxLoad] = useState(false);
+
+  // URL Parameter handling (object_id, flyTo, openBox, firstSetup)
   useEffect(() => {
     if (urlObjectId && objects.length > 0) {
       const targetObject = objects.find(obj => String(obj.id) === urlObjectId);
       if (targetObject) {
+        // Flag setzen um doppeltes Laden zu verhindern
+        setSkipNextBoxLoad(true);
         setSelectedObject(targetObject);
         
         // Boxen laden und dann ggf. Dialog öffnen
@@ -395,6 +401,8 @@ export default function Maps() {
             const json = await res.json();
             const boxesData = Array.isArray(json) ? json : json.data || [];
             setBoxes(boxesData);
+            
+            console.log("🔍 Loaded boxes:", boxesData.length, "Looking for:", urlOpenBox);
             
             // FlyTo wenn gewünscht
             if (urlFlyTo && targetObject.lat && targetObject.lng) {
@@ -408,12 +416,23 @@ export default function Maps() {
             // openBox - Dialog öffnen
             if (urlOpenBox && boxesData.length > 0) {
               const targetBox = boxesData.find(box => String(box.id) === urlOpenBox);
+              console.log("🔍 Found box:", targetBox?.id, targetBox?.qr_code, "firstSetup:", urlFirstSetup);
               if (targetBox) {
                 // Kurz warten bis UI bereit
                 setTimeout(() => {
                   setSelectedBox(targetBox);
-                  setControlDialogOpen(true);
-                }, 800);
+                  
+                  if (urlFirstSetup) {
+                    // Ersteinrichtung → BoxEditDialog
+                    setIsFirstSetup(true);
+                    setBoxEditDialogOpen(true);
+                    console.log("✅ Opening SETUP dialog for box:", targetBox.id);
+                  } else {
+                    // Normale Kontrolle → BoxScanDialog
+                    setControlDialogOpen(true);
+                    console.log("✅ Opening CONTROL dialog for box:", targetBox.id);
+                  }
+                }, 300);
               }
             }
             
@@ -427,7 +446,7 @@ export default function Maps() {
         loadAndOpenBox();
       }
     }
-  }, [urlObjectId, urlFlyTo, urlOpenBox, objects, token, setSearchParams]);
+  }, [urlObjectId, urlFlyTo, urlOpenBox, urlFirstSetup, objects, token, setSearchParams]);
 
   // openBox ohne object_id (falls Box direkt verlinkt)
   useEffect(() => {
@@ -443,11 +462,16 @@ export default function Maps() {
 
   useEffect(() => {
     if (selectedObject) {
+      // Skip wenn wir gerade vom URL-Handler kommen
+      if (skipNextBoxLoad) {
+        setSkipNextBoxLoad(false);
+        return;
+      }
       loadBoxes(selectedObject.id);
     } else {
       setBoxes([]);
     }
-  }, [selectedObject, loadBoxes]);
+  }, [selectedObject, loadBoxes, skipNextBoxLoad]);
 
   /* ============================================================
      BOXEN AUS LAGER ANFORDERN

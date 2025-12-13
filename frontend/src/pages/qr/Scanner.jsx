@@ -127,21 +127,32 @@ export default function Scanner() {
 
       // Prüfen ob Code existiert und Box zugewiesen
       if (!res.data || !res.data.box_id) {
-        // Neuer/unbekannter Code
+        // Neuer/unbekannter Code - zur Zuweisung
         navigate(`/qr/assign/${code}`);
         return;
       }
 
+      const boxData = res.data.boxes;
       const boxId = res.data.box_id;
-      const objectId = res.data.boxes?.object_id;
+      const objectId = boxData?.object_id;
+      const hasPosition = boxData?.lat && boxData?.lng;
+      const positionType = boxData?.position_type;
 
+      // Fall 1: Box im Pool (nicht zugewiesen)
       if (!objectId) {
-        // Box existiert, aber noch keinem Objekt zugewiesen (im Pool)
-        navigate(`/qr/assign/${code}`);
-      } else {
-        // Zur Maps-Seite mit openBox Parameter → öffnet Kontrolle-Dialog
-        navigate(`/maps?object_id=${objectId}&openBox=${boxId}&flyTo=true`);
+        navigate(`/qr/assign-object/${code}?box_id=${boxId}`);
+        return;
       }
+
+      // Fall 2: Zugewiesen aber nicht platziert
+      if (!hasPosition || positionType === 'none') {
+        navigate(`/maps?object_id=${objectId}&openBox=${boxId}&firstSetup=true&flyTo=true`);
+        return;
+      }
+
+      // Fall 3: Platziert → Kontrolle-Dialog
+      navigate(`/maps?object_id=${objectId}&openBox=${boxId}&flyTo=true`);
+
     } catch (err) {
       console.error("QR check error:", err);
       setError("Fehler beim Prüfen des QR-Codes");
