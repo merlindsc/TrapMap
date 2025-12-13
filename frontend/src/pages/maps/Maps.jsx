@@ -272,6 +272,7 @@ export default function Maps() {
   const [objectPlacingMode, setObjectPlacingMode] = useState(false);
   const [tempObjectLatLng, setTempObjectLatLng] = useState(null);
   const [repositionBox, setRepositionBox] = useState(null);
+  const [placingBox, setPlacingBox] = useState(null); // NEU: Box die platziert werden soll (Touch-freundlich)
 
   // Search - Objekte
   const [objectSearchQuery, setObjectSearchQuery] = useState("");
@@ -583,6 +584,11 @@ export default function Maps() {
   function MapEventsHandler() {
     useMapEvents({
       click(e) {
+        // Unplatzierte Box platzieren (Touch-freundlich)
+        if (placingBox) {
+          handlePlaceBox(e.latlng);
+          return;
+        }
         if (repositionBox) {
           handleRepositionBox(e.latlng);
           return;
@@ -595,6 +601,43 @@ export default function Maps() {
     });
     return null;
   }
+
+  // NEU: Unplatzierte Box auf Karte platzieren
+  const handlePlaceBox = async (latlng) => {
+    if (!placingBox || !selectedObject) return;
+    try {
+      const res = await fetch(`${API}/boxes/${placingBox.id}/place-map`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ 
+          lat: latlng.lat, 
+          lng: latlng.lng,
+          object_id: selectedObject.id
+        })
+      });
+      if (res.ok) {
+        await loadBoxes(selectedObject.id);
+        console.log(`✅ Box ${placingBox.id} platziert bei ${latlng.lat}, ${latlng.lng}`);
+      }
+    } catch (err) {
+      console.error("Place box error:", err);
+    }
+    setPlacingBox(null);
+  };
+
+  // Box zum Platzieren auswählen (Touch-freundlich)
+  const handleSelectBoxForPlacing = (box) => {
+    if (placingBox?.id === box.id) {
+      // Gleiche Box nochmal geklickt -> Abbrechen
+      setPlacingBox(null);
+    } else {
+      setPlacingBox(box);
+      // Sidebar auf Mobile schließen damit Karte sichtbar ist
+      if (window.innerWidth < 768) {
+        setSidebarOpen(false);
+      }
+    }
+  };
 
   const handleRepositionBox = async (latlng) => {
     if (!repositionBox) return;
@@ -725,6 +768,17 @@ export default function Maps() {
           <Navigation size={18} />
           <span>Klicke auf die Karte um Box #{getBoxDisplayNumber(repositionBox)} zu verschieben</span>
           <button onClick={() => setRepositionBox(null)}>
+            <X size={16} /> Abbrechen
+          </button>
+        </div>
+      )}
+
+      {/* NEU: Hinweis für Touch-Platzierung */}
+      {placingBox && (
+        <div className="placing-hint placing-box">
+          <MapPin size={18} />
+          <span>Tippe auf die Karte um Box #{getBoxDisplayNumber(placingBox)} zu platzieren</span>
+          <button onClick={() => setPlacingBox(null)}>
             <X size={16} /> Abbrechen
           </button>
         </div>
@@ -891,82 +945,95 @@ export default function Maps() {
                   </div>
                 </div>
 
-                {/* Unplatzierte Boxen - Aufklappbar */}
-                <CollapsibleBoxSection
-                  title="Unplatzierte Boxen"
-                  icon={<MapPin size={16} />}
-                  count={sortedBoxes.unplacedBoxes.length}
-                  variant="warning"
-                  defaultOpen={sortedBoxes.unplacedBoxes.length > 0}
-                >
-                  {sortedBoxes.unplacedBoxes.length === 0 ? (
-                    <div className="section-empty">Alle Boxen sind platziert ✓</div>
-                  ) : (
-                    sortedBoxes.unplacedBoxes.map((box) => (
-                      <div
-                        key={box.id}
-                        className="box-item unplaced"
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData('box', JSON.stringify(box));
-                          e.dataTransfer.effectAllowed = 'move';
-                        }}
-                      >
-                        <span className="box-icon">{getBoxIcon(box)}</span>
-                        <div className="box-info">
-                          <h4>{getBoxDisplayNumber(box)}</h4>
-                          <p>{box.box_type_name || 'Kein Typ'}</p>
+                {/* Unplatzierte Boxen */}
+                {sortedBoxes.unplacedBoxes.length > 0 && (
+                  <div className="box-section">
+                    <div className="section-header warning">
+                      <MapPin size={16} />
+                      <span>Unplatziert</span>
+                      <span className="count">{sortedBoxes.unplacedBoxes.length}</span>
+                    </div>
+                    <div className="box-list">
+                      {sortedBoxes.unplacedBoxes.map((box) => (
+                        <div
+                          key={box.id}
+                          className={`box-item unplaced ${placingBox?.id === box.id ? 'placing' : ''}`}
+                          onClick={() => handleSelectBoxForPlacing(box)}
+                        >
+                          <span className="box-icon">{getBoxIcon(box)}</span>
+                          <div className="box-info">
+                            <h4>{getBoxDisplayNumber(box)}</h4>
+                            <p>{box.box_type_name || 'Kein Typ'}</p>
+                          </div>
+                          <button 
+                            className={`place-btn ${placingBox?.id === box.id ? 'active' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectBoxForPlacing(box);
+                            }}
+                          >
+                            {placingBox?.id === box.id ? '✕ Abbrechen' : '📍 Platzieren'}
+                          </button>
                         </div>
-                        <span className="drag-hint">⇢ Ziehen</span>
-                      </div>
-                    ))
-                  )}
-                </CollapsibleBoxSection>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-                {/* Karten-Boxen - Aufklappbar */}
-                <CollapsibleBoxSection
-                  title="Karten-Boxen"
-                  icon={<Map size={16} />}
-                  count={sortedBoxes.mapBoxes.length}
-                  variant="map"
-                  defaultOpen={true}
-                >
-                  {sortedBoxes.mapBoxes.length === 0 ? (
-                    <div className="section-empty">Keine Boxen auf der Karte</div>
-                  ) : (
-                    sortedBoxes.mapBoxes.map((box) => (
-                      <BoxListItem 
-                        key={box.id} 
-                        box={box} 
-                        onClick={() => handleBoxClick(box)}
-                        showLocation={false}
-                      />
-                    ))
-                  )}
-                </CollapsibleBoxSection>
+                {/* Karten-Boxen */}
+                {sortedBoxes.mapBoxes.length > 0 && (
+                  <div className="box-section">
+                    <div className="section-header">
+                      <Map size={16} />
+                      <span>Karten-Boxen</span>
+                      <span className="count">{sortedBoxes.mapBoxes.length}</span>
+                    </div>
+                    <div className="box-list">
+                      {sortedBoxes.mapBoxes.map((box) => (
+                        <div key={box.id} className="box-item" onClick={() => handleBoxClick(box)}>
+                          <span className="box-icon">{getBoxIcon(box)}</span>
+                          <div className="box-info">
+                            <h4>{getBoxDisplayNumber(box)}</h4>
+                            <p>{box.box_type_name || 'Kein Typ'}</p>
+                            <small className="box-meta">
+                              {box.last_scan ? `Letzte Kontrolle: ${new Date(box.last_scan).toLocaleDateString('de-DE')}` : 'Nie kontrolliert'}
+                              {box.last_scan_by && ` • ${box.last_scan_by}`}
+                            </small>
+                          </div>
+                          <span className={`status-dot ${getStatusColor(box.current_status || box.status)}`} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-                {/* Lageplan-Boxen - Aufklappbar */}
-                <CollapsibleBoxSection
-                  title="Lageplan-Boxen"
-                  icon={<LayoutGrid size={16} />}
-                  count={sortedBoxes.floorplanBoxes.length}
-                  variant="floorplan"
-                  defaultOpen={sortedBoxes.floorplanBoxes.length > 0}
-                >
-                  {sortedBoxes.floorplanBoxes.length === 0 ? (
-                    <div className="section-empty">Keine Boxen auf Lageplänen</div>
-                  ) : (
-                    sortedBoxes.floorplanBoxes.map((box) => (
-                      <BoxListItem 
-                        key={box.id} 
-                        box={box} 
-                        onClick={() => handleBoxClick(box)}
-                        showLocation={true}
-                        isFloorplan={true}
-                      />
-                    ))
-                  )}
-                </CollapsibleBoxSection>
+                {/* Lageplan-Boxen */}
+                {sortedBoxes.floorplanBoxes.length > 0 && (
+                  <div className="box-section">
+                    <div className="section-header floorplan">
+                      <LayoutGrid size={16} />
+                      <span>Lageplan-Boxen</span>
+                      <span className="count">{sortedBoxes.floorplanBoxes.length}</span>
+                    </div>
+                    <div className="box-list">
+                      {sortedBoxes.floorplanBoxes.map((box) => (
+                        <div key={box.id} className="box-item floorplan" onClick={() => handleBoxClick(box)}>
+                          <span className="box-icon">{getBoxIcon(box)}</span>
+                          <div className="box-info">
+                            <h4>{getBoxDisplayNumber(box)}</h4>
+                            <p>{box.box_type_name || 'Kein Typ'}</p>
+                            <small className="box-meta">
+                              {box.last_scan ? `Letzte Kontrolle: ${new Date(box.last_scan).toLocaleDateString('de-DE')}` : 'Nie kontrolliert'}
+                              {box.last_scan_by && ` • ${box.last_scan_by}`}
+                            </small>
+                          </div>
+                          <LayoutGrid size={14} className="floorplan-icon" />
+                          <span className={`status-dot ${getStatusColor(box.current_status || box.status)}`} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Keine Boxen */}
                 {boxes.length === 0 && (
