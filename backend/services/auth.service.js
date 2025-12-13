@@ -43,10 +43,15 @@ const login = async (email, password, ip = null) => {
 
     const normalizedEmail = email.toLowerCase().trim();
 
-    // User suchen
+    // User suchen MIT Organisation (für required_fields)
     const { data: user, error } = await supabase
       .from('users')
-      .select('id, organisation_id, email, password_hash, role, first_name, last_name, active, must_change_password')
+      .select(`
+        id, organisation_id, email, password_hash, role, first_name, last_name, active, must_change_password,
+        organisations (
+          id, name, required_fields
+        )
+      `)
       .eq('email', normalizedEmail)
       .single();
 
@@ -119,7 +124,19 @@ const login = async (email, password, ip = null) => {
         role: user.role,
         first_name: user.first_name,
         last_name: user.last_name,
-        must_change_password: user.must_change_password || false
+        must_change_password: user.must_change_password || false,
+        // Organisation-Daten für Frontend
+        organisation: user.organisations ? {
+          id: user.organisations.id,
+          name: user.organisations.name,
+          required_fields: user.organisations.required_fields || {
+            bait: false,
+            insect_type: false,
+            notes: false,
+            photo: false,
+            gps: false
+          }
+        } : null
       }
     };
   } catch (error) {
