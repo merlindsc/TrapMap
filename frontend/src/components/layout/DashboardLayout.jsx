@@ -1,6 +1,6 @@
 /* ============================================================
-   TRAPMAP - DASHBOARD LAYOUT (FINAL VERSION)
-   - Dark/Light Mode mit funktionierendem Toggle
+   TRAPMAP - DASHBOARD LAYOUT (FIXED VERSION)
+   - Dark/Light Mode mit CSS-Variablen (KEIN hardcoded!)
    - Moderne Sidebar
    - Mobile-optimiert
    ============================================================ */
@@ -9,8 +9,9 @@ import React, { useState, useEffect, createContext, useContext } from "react";
 import { useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import { Bars3Icon } from "@heroicons/react/24/outline";
-import { LogOut, Bell } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
+import "./DashboardLayout.css";
 
 // ============================================================
 // THEME CONTEXT
@@ -41,8 +42,11 @@ export function ThemeProvider({ children }) {
       root.style.setProperty('--bg-hover', 'rgba(0, 0, 0, 0.03)');
       root.style.setProperty('--text-primary', '#1e293b');
       root.style.setProperty('--text-secondary', '#475569');
-      root.style.setProperty('--text-muted', '#94a3b8');
+      root.style.setProperty('--text-muted', '#64748b');
       root.style.setProperty('--border-color', 'rgba(0, 0, 0, 0.08)');
+      root.style.setProperty('--shadow-sm', '0 1px 2px rgba(0, 0, 0, 0.05)');
+      root.style.setProperty('--shadow-md', '0 4px 6px rgba(0, 0, 0, 0.07)');
+      root.style.setProperty('--shadow-lg', '0 10px 25px rgba(0, 0, 0, 0.1)');
       root.style.setProperty('--sidebar-bg', 'linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%)');
       root.style.setProperty('--sidebar-text', '#64748b');
       root.style.setProperty('--sidebar-text-hover', '#1e293b');
@@ -57,6 +61,9 @@ export function ThemeProvider({ children }) {
       root.style.setProperty('--text-secondary', '#94a3b8');
       root.style.setProperty('--text-muted', '#64748b');
       root.style.setProperty('--border-color', 'rgba(255, 255, 255, 0.08)');
+      root.style.setProperty('--shadow-sm', '0 1px 2px rgba(0, 0, 0, 0.3)');
+      root.style.setProperty('--shadow-md', '0 4px 6px rgba(0, 0, 0, 0.3)');
+      root.style.setProperty('--shadow-lg', '0 10px 25px rgba(0, 0, 0, 0.4)');
       root.style.setProperty('--sidebar-bg', 'linear-gradient(180deg, #1a1f3a 0%, #0f1419 100%)');
       root.style.setProperty('--sidebar-text', '#94a3b8');
       root.style.setProperty('--sidebar-text-hover', '#ffffff');
@@ -80,7 +87,7 @@ export function ThemeProvider({ children }) {
 }
 
 // ============================================================
-// DASHBOARD LAYOUT
+// DASHBOARD LAYOUT - MIT CSS VARIABLEN!
 // ============================================================
 export default function DashboardLayout({ children }) {
   const { pathname } = useLocation();
@@ -104,38 +111,17 @@ export default function DashboardLayout({ children }) {
   }, [pathname, isMobile]);
 
   return (
-    <div style={{
-      display: 'flex',
-      minHeight: '100vh',
-      background: '#0b1120',
-      color: '#ffffff',
-    }}>
+    <div className="dashboard-layout">
       {/* Mobile Overlay */}
       {isMobile && sidebarOpen && (
         <div 
+          className="sidebar-overlay"
           onClick={() => setSidebarOpen(false)}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0, 0, 0, 0.6)',
-            zIndex: 40,
-          }} 
         />
       )}
 
       {/* Sidebar */}
-      <aside style={{
-        position: isMobile ? 'fixed' : 'relative',
-        top: 0,
-        left: 0,
-        bottom: isMobile ? 0 : 'auto',
-        zIndex: 50,
-        transform: isMobile && !sidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
-        transition: 'transform 0.3s ease-in-out',
-      }}>
+      <aside className={`sidebar-container ${isMobile ? 'mobile' : ''} ${sidebarOpen ? 'open' : ''}`}>
         <Sidebar 
           activePath={pathname} 
           isMobile={isMobile}
@@ -144,119 +130,46 @@ export default function DashboardLayout({ children }) {
       </aside>
 
       {/* Main Content */}
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        minWidth: 0,
-        background: '#0b1120',
-      }}>
+      <div className="main-container">
         {/* Mobile Header */}
         {isMobile && (
-          <header style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '12px 16px',
-            background: '#111827',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-          }}>
+          <header className="mobile-header">
             <button 
+              className="hamburger-btn"
               onClick={() => setSidebarOpen(true)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 44,
-                height: 44,
-                background: '#1f2937',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: 10,
-                cursor: 'pointer',
-              }}
             >
-              <Bars3Icon style={{ width: 24, height: 24, color: '#fff' }} />
+              <Bars3Icon className="hamburger-icon" />
             </button>
-            <div style={{ fontSize: 20, fontWeight: 700 }}>
-              <span style={{ color: '#fff' }}>Trap</span>
-              <span style={{ 
-                background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}>Map</span>
+            <div className="mobile-logo">
+              <span className="logo-trap">Trap</span>
+              <span className="logo-map">Map</span>
             </div>
-            <div style={{ width: 44 }} />
+            <div className="spacer" />
           </header>
         )}
 
         {/* Desktop Navbar */}
         {!isMobile && (
-          <header style={{
-            height: 64,
-            background: '#111827',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 24px',
-          }}>
-            <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>
-              <span style={{ color: '#fff' }}>Trap</span>
-              <span style={{ 
-                background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-              }}>Map</span>
-              <span style={{ color: '#64748b', fontWeight: 400, marginLeft: 8 }}>Dashboard</span>
+          <header className="desktop-navbar">
+            <h1 className="navbar-title">
+              <span className="title-trap">Trap</span>
+              <span className="title-map">Map</span>
+              <span className="title-dashboard">Dashboard</span>
             </h1>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div className="navbar-right">
               {user && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '6px 12px 6px 6px',
-                  background: '#1f2937',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  borderRadius: 10,
-                }}>
-                  <div style={{
-                    width: 32,
-                    height: 32,
-                    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                    borderRadius: 8,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'white',
-                    fontSize: 14,
-                    fontWeight: 600,
-                  }}>
+                <div className="navbar-user">
+                  <div className="user-avatar">
                     {user.first_name?.[0] || user.email?.[0] || 'U'}
                   </div>
-                  <span style={{ color: '#fff', fontSize: 14 }}>
+                  <span className="user-name-text">
                     {user.first_name || user.email?.split('@')[0]}
                   </span>
                 </div>
               )}
 
-              <button 
-                onClick={logout}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '8px 16px',
-                  background: 'rgba(239, 68, 68, 0.1)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  borderRadius: 10,
-                  color: '#ef4444',
-                  fontSize: 14,
-                  cursor: 'pointer',
-                }}
-              >
+              <button className="logout-btn" onClick={logout}>
                 <LogOut size={16} />
                 <span>Logout</span>
               </button>
@@ -265,13 +178,7 @@ export default function DashboardLayout({ children }) {
         )}
 
         {/* Page Content */}
-        <main style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: 24,
-          background: '#0b1120',
-          color: '#ffffff',
-        }}>
+        <main className="page-content">
           {children}
         </main>
       </div>

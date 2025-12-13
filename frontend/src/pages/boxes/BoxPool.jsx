@@ -1,8 +1,8 @@
-// ============================================
-// BOX POOL (Lager) - SCHNELLZUWEISUNG & TOP 10
-// - Schnellzuweisung: Anzahl eingeben → X Boxen zuweisen
-// - Erste 10 Boxen immer sichtbar
-// ============================================
+/* ============================================================
+   BOX POOL (Lager) - THEME-AWARE VERSION
+   - Alle Farben über CSS-Variablen
+   - Schnellzuweisung & Top 10
+   ============================================================ */
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -11,7 +11,6 @@ import {
   MagnifyingGlassIcon,
   MapPinIcon,
   Squares2X2Icon,
-  BuildingOfficeIcon,
   ArrowRightIcon,
   ArrowPathIcon,
   QrCodeIcon,
@@ -19,10 +18,10 @@ import {
   ClockIcon,
   ExclamationCircleIcon,
   ChevronDownIcon,
-  ChevronUpIcon,
   RocketLaunchIcon,
   CubeIcon
 } from "@heroicons/react/24/outline";
+import "./BoxPool.css";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -128,18 +127,18 @@ export default function BoxPool() {
 
   // Status-Badge
   const getStatusBadge = (box) => {
-    if (!box) return { label: "Fehler", color: "#ef4444", Icon: ExclamationCircleIcon };
-    if (!box.object_id) return { label: "Im Lager", color: "#6b7280", Icon: ArchiveBoxIcon };
+    if (!box) return { label: "Fehler", color: "red", Icon: ExclamationCircleIcon };
+    if (!box.object_id) return { label: "Im Lager", color: "gray", Icon: ArchiveBoxIcon };
     if (!box.position_type || box.position_type === "none") {
-      return { label: "Unplatziert", color: "#f59e0b", Icon: ClockIcon };
+      return { label: "Unplatziert", color: "yellow", Icon: ClockIcon };
     }
-    if (box.position_type === "gps") return { label: "Auf Karte", color: "#3b82f6", Icon: MapPinIcon };
-    if (box.position_type === "floorplan") return { label: "Auf Lageplan", color: "#8b5cf6", Icon: Squares2X2Icon };
-    return { label: "Aktiv", color: "#10b981", Icon: CheckCircleIcon };
+    if (box.position_type === "gps") return { label: "Auf Karte", color: "blue", Icon: MapPinIcon };
+    if (box.position_type === "floorplan") return { label: "Auf Lageplan", color: "purple", Icon: Squares2X2Icon };
+    return { label: "Aktiv", color: "green", Icon: CheckCircleIcon };
   };
 
   // ============================================
-  // SCHNELLZUWEISUNG: X Boxen einem Objekt zuweisen
+  // SCHNELLZUWEISUNG
   // ============================================
   const handleQuickAssign = async () => {
     const count = parseInt(quickCount, 10);
@@ -159,7 +158,6 @@ export default function BoxPool() {
       return;
     }
 
-    // Prüfen ob genug Boxen im Pool
     if (poolBoxes.length < count) {
       setAssignMessage({ 
         type: "error", 
@@ -168,7 +166,6 @@ export default function BoxPool() {
       return;
     }
 
-    // Die ersten X Pool-Boxen nehmen
     const boxesToAssign = poolBoxes.slice(0, count);
     
     setAssigning(true);
@@ -262,62 +259,40 @@ export default function BoxPool() {
   const remainingBoxes = useMemo(() => filteredBoxes.slice(10), [filteredBoxes]);
 
   return (
-    <div style={{ padding: 24 }}>
+    <div className="box-pool-page">
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: 12 }}>
-          <ArchiveBoxIcon style={{ width: 28, height: 28 }} />
+      <div className="box-pool-header">
+        <h1 className="box-pool-title">
+          <ArchiveBoxIcon className="title-icon" />
           Box-Lager
         </h1>
         <button 
           onClick={loadData} 
           disabled={loading}
-          style={{ 
-            padding: "8px 16px", 
-            background: loading ? "#1f2937" : "#374151", 
-            border: "none", 
-            borderRadius: 8, 
-            color: "#fff", 
-            cursor: loading ? "wait" : "pointer", 
-            display: "flex", 
-            alignItems: "center", 
-            gap: 8,
-            opacity: loading ? 0.6 : 1
-          }}
+          className={`refresh-btn ${loading ? 'loading' : ''}`}
         >
-          <ArrowPathIcon style={{ width: 16, height: 16, animation: loading ? "spin 1s linear infinite" : "none" }} />
+          <ArrowPathIcon className={`btn-icon ${loading ? 'spin' : ''}`} />
           {loading ? "Lädt..." : "Aktualisieren"}
         </button>
       </div>
 
-      {/* ============================================ */}
-      {/* SCHNELLZUWEISUNG - Mehrere Boxen auf einmal */}
-      {/* ============================================ */}
-      <div style={{ 
-        background: "linear-gradient(135deg, #1e3a5f 0%, #1e293b 100%)", 
-        borderRadius: 12, 
-        padding: 20, 
-        marginBottom: 24,
-        border: "1px solid #3b82f6"
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <RocketLaunchIcon style={{ width: 20, height: 20, color: "#60a5fa" }} />
-          <h2 style={{ color: "#fff", fontSize: 16, fontWeight: 600, margin: 0 }}>Schnellzuweisung</h2>
+      {/* Schnellzuweisung */}
+      <div className="quick-assign-card">
+        <div className="quick-assign-header">
+          <RocketLaunchIcon className="quick-assign-icon" />
+          <h2>Schnellzuweisung</h2>
         </div>
         
-        {/* Erklärung */}
-        <p style={{ color: "#94a3b8", fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}>
+        <p className="quick-assign-desc">
           Weise mehrere Boxen auf einmal einem Objekt zu. Gib die gewünschte Anzahl ein 
           und wähle das Ziel-Objekt. Die Boxen werden automatisch aus dem Lager-Pool genommen 
           (kleinste Nummern zuerst).
         </p>
 
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div className="quick-assign-form">
           {/* Anzahl Eingabe */}
-          <div style={{ flex: "0 0 140px" }}>
-            <label style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4, display: "block" }}>
-              Anzahl Boxen
-            </label>
+          <div className="form-group">
+            <label>Anzahl Boxen</label>
             <input
               type="number"
               min="1"
@@ -329,41 +304,20 @@ export default function BoxPool() {
                 setAssignMessage(null);
               }}
               onKeyDown={(e) => e.key === "Enter" && handleQuickAssign()}
-              style={{ 
-                width: "100%",
-                padding: "10px 12px", 
-                background: "#0f172a", 
-                border: "1px solid #374151", 
-                borderRadius: 8, 
-                color: "#fff", 
-                fontSize: 16,
-                fontWeight: 600,
-                textAlign: "center"
-              }}
+              className="count-input"
             />
           </div>
 
           {/* Objekt Dropdown */}
-          <div style={{ flex: "1 1 200px", minWidth: 180 }}>
-            <label style={{ color: "#9ca3af", fontSize: 12, marginBottom: 4, display: "block" }}>
-              Ziel-Objekt
-            </label>
+          <div className="form-group flex-grow">
+            <label>Ziel-Objekt</label>
             <select
               value={quickObjectId}
               onChange={(e) => {
                 setQuickObjectId(e.target.value);
                 setAssignMessage(null);
               }}
-              style={{ 
-                width: "100%",
-                padding: "10px 12px", 
-                background: "#0f172a", 
-                border: "1px solid #374151", 
-                borderRadius: 8, 
-                color: "#fff", 
-                fontSize: 14,
-                cursor: "pointer"
-              }}
+              className="object-select"
             >
               <option value="">-- Objekt wählen --</option>
               {activeObjects.map(obj => (
@@ -376,113 +330,94 @@ export default function BoxPool() {
           <button
             onClick={handleQuickAssign}
             disabled={assigning || !quickCount || !quickObjectId}
-            style={{ 
-              padding: "10px 24px", 
-              background: assigning ? "#374151" : "#3b82f6", 
-              border: "none", 
-              borderRadius: 8, 
-              color: "#fff", 
-              cursor: assigning ? "wait" : "pointer", 
-              fontSize: 14,
-              fontWeight: 600,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              opacity: (!quickCount || !quickObjectId) ? 0.5 : 1,
-              transition: "all 0.15s"
-            }}
+            className={`assign-btn ${assigning ? 'loading' : ''} ${(!quickCount || !quickObjectId) ? 'disabled' : ''}`}
           >
             {assigning ? (
-              <ArrowPathIcon style={{ width: 16, height: 16, animation: "spin 1s linear infinite" }} />
+              <ArrowPathIcon className="btn-icon spin" />
             ) : (
-              <ArrowRightIcon style={{ width: 16, height: 16 }} />
+              <ArrowRightIcon className="btn-icon" />
             )}
             {assigning ? "Zuweisen..." : "Zuweisen"}
           </button>
         </div>
 
         {/* Verfügbare Boxen Info */}
-        <div style={{ 
-          marginTop: 12, 
-          padding: "8px 12px", 
-          background: "#0f172a40", 
-          borderRadius: 6,
-          display: "flex",
-          alignItems: "center",
-          gap: 8
-        }}>
-          <CubeIcon style={{ width: 16, height: 16, color: "#6b7280" }} />
-          <span style={{ color: "#94a3b8", fontSize: 13 }}>
-            <strong style={{ color: "#10b981" }}>{stats.pool}</strong> Boxen verfügbar im Lager
+        <div className="pool-info">
+          <CubeIcon className="pool-info-icon" />
+          <span>
+            <strong className="pool-count">{stats.pool}</strong> Boxen verfügbar im Lager
           </span>
         </div>
 
         {/* Feedback Message */}
         {assignMessage && (
-          <div style={{ 
-            marginTop: 12, 
-            padding: "10px 14px", 
-            background: assignMessage.type === "success" ? "#10b98120" : 
-                        assignMessage.type === "error" ? "#ef444420" : 
-                        assignMessage.type === "warning" ? "#f59e0b20" : "#3b82f620",
-            borderRadius: 6,
-            color: assignMessage.type === "success" ? "#10b981" : 
-                   assignMessage.type === "error" ? "#ef4444" : 
-                   assignMessage.type === "warning" ? "#f59e0b" : "#60a5fa",
-            fontSize: 14,
-            fontWeight: 500
-          }}>
+          <div className={`assign-message ${assignMessage.type}`}>
             {assignMessage.text}
           </div>
         )}
       </div>
 
       {/* Stats-Karten */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 12, marginBottom: 24 }}>
-        <StatCard label="Im Lager" value={stats.pool} color="#6b7280" active={filter === "pool"} onClick={() => setFilter(filter === "pool" ? "all" : "pool")} icon={ArchiveBoxIcon} />
-        <StatCard label="Zugewiesen" value={stats.assigned} color="#f59e0b" active={filter === "assigned"} onClick={() => setFilter(filter === "assigned" ? "all" : "assigned")} icon={ClockIcon} />
-        <StatCard label="Platziert" value={stats.placed} color="#10b981" active={filter === "placed"} onClick={() => setFilter(filter === "placed" ? "all" : "placed")} icon={CheckCircleIcon} />
-        <StatCard label="Gesamt" value={stats.total} color="#3b82f6" active={filter === "all"} onClick={() => setFilter("all")} icon={Squares2X2Icon} />
+      <div className="stats-grid">
+        <StatCard 
+          label="Im Lager" 
+          value={stats.pool} 
+          color="gray" 
+          active={filter === "pool"} 
+          onClick={() => setFilter(filter === "pool" ? "all" : "pool")} 
+          icon={ArchiveBoxIcon} 
+        />
+        <StatCard 
+          label="Zugewiesen" 
+          value={stats.assigned} 
+          color="yellow" 
+          active={filter === "assigned"} 
+          onClick={() => setFilter(filter === "assigned" ? "all" : "assigned")} 
+          icon={ClockIcon} 
+        />
+        <StatCard 
+          label="Platziert" 
+          value={stats.placed} 
+          color="green" 
+          active={filter === "placed"} 
+          onClick={() => setFilter(filter === "placed" ? "all" : "placed")} 
+          icon={CheckCircleIcon} 
+        />
+        <StatCard 
+          label="Gesamt" 
+          value={stats.total} 
+          color="blue" 
+          active={filter === "all"} 
+          onClick={() => setFilter("all")} 
+          icon={Squares2X2Icon} 
+        />
       </div>
 
       {/* Suchfeld */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ position: "relative", maxWidth: 300 }}>
-          <MagnifyingGlassIcon style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 18, height: 18, color: "#6b7280" }} />
-          <input
-            type="text"
-            placeholder="Suchen..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ 
-              width: "100%", 
-              padding: "10px 12px 10px 40px", 
-              background: "#1f2937", 
-              border: "1px solid #374151", 
-              borderRadius: 8, 
-              color: "#fff", 
-              fontSize: 14 
-            }}
-          />
-        </div>
+      <div className="search-wrapper">
+        <MagnifyingGlassIcon className="search-icon" />
+        <input
+          type="text"
+          placeholder="Suchen..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="search-input"
+        />
       </div>
 
-      {/* ============================================ */}
-      {/* ERSTE 10 BOXEN - Immer sichtbar */}
-      {/* ============================================ */}
+      {/* Box Liste */}
       {loading ? (
-        <div style={{ textAlign: "center", padding: 40, color: "#9ca3af" }}>
-          <ArrowPathIcon style={{ width: 24, height: 24, margin: "0 auto 12px", animation: "spin 1s linear infinite" }} />
+        <div className="loading-state">
+          <ArrowPathIcon className="loading-spinner" />
           Laden...
         </div>
       ) : first10Boxes.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 40, color: "#9ca3af", background: "#1f2937", borderRadius: 8 }}>
+        <div className="empty-state">
           {boxes.length === 0 ? "Noch keine Boxen vorhanden." : "Keine Boxen gefunden"}
         </div>
       ) : (
         <>
-          {/* Box-Liste */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+          <div className="box-list">
             {first10Boxes.map(qr => (
               <BoxRow 
                 key={qr.id} 
@@ -497,28 +432,15 @@ export default function BoxPool() {
             ))}
           </div>
 
-          {/* ============================================ */}
-          {/* WEITERE BOXEN - Aufklappbar */}
-          {/* ============================================ */}
+          {/* Weitere Boxen */}
           {remainingBoxes.length > 0 && (
-            <details style={{ marginTop: 8 }}>
-              <summary style={{ 
-                color: "#9ca3af", 
-                cursor: "pointer", 
-                padding: "12px 16px",
-                fontSize: 14,
-                userSelect: "none",
-                background: "#1f2937",
-                borderRadius: 8,
-                display: "flex",
-                alignItems: "center",
-                gap: 8
-              }}>
-                <ChevronDownIcon style={{ width: 16, height: 16 }} />
+            <details className="more-boxes">
+              <summary className="more-boxes-summary">
+                <ChevronDownIcon className="chevron-icon" />
                 Weitere {remainingBoxes.length} Boxen anzeigen
               </summary>
               
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+              <div className="box-list">
                 {remainingBoxes.map(qr => (
                   <BoxRow 
                     key={qr.id} 
@@ -536,27 +458,6 @@ export default function BoxPool() {
           )}
         </>
       )}
-
-      {/* CSS */}
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        select option {
-          background: #1f2937;
-          color: #fff;
-        }
-        details summary::-webkit-details-marker {
-          display: none;
-        }
-        details[open] summary svg:first-child {
-          transform: rotate(180deg);
-        }
-        details summary svg:first-child {
-          transition: transform 0.2s;
-        }
-      `}</style>
     </div>
   );
 }
@@ -572,70 +473,35 @@ function BoxRow({ qr, extractNumber, getStatusBadge, activeObjects, onAssign, as
   const num = extractNumber(qr);
 
   return (
-    <div 
-      style={{ 
-        background: "#1f2937", 
-        borderRadius: 8, 
-        padding: "12px 16px", 
-        display: "flex", 
-        alignItems: "center", 
-        gap: 12, 
-        borderLeft: `4px solid ${status.color}`,
-        transition: "all 0.15s ease"
-      }}
-    >
+    <div className={`box-row status-${status.color}`}>
       {/* Nummer */}
-      <div style={{ 
-        width: 40, 
-        height: 40, 
-        background: `${status.color}20`, 
-        borderRadius: 6, 
-        display: "flex", 
-        alignItems: "center", 
-        justifyContent: "center",
-        flexShrink: 0
-      }}>
-        <span style={{ 
-          color: status.color, 
-          fontWeight: 700, 
-          fontSize: num > 999 ? 11 : 14,
-          fontFamily: "monospace"
-        }}>
+      <div className={`box-number bg-${status.color}`}>
+        <span className={num > 999 ? 'small' : ''}>
           {num < 999999 ? num : "?"}
         </span>
       </div>
 
       {/* Info */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-          <QrCodeIcon style={{ width: 12, height: 12, color: "#6b7280" }} />
-          <span style={{ color: "#9ca3af", fontSize: 11, fontFamily: "monospace" }}>{qr.id}</span>
+      <div className="box-info">
+        <div className="box-qr">
+          <QrCodeIcon className="qr-icon" />
+          <span>{qr.id}</span>
         </div>
-        <div style={{ color: "#d1d5db", fontSize: 13 }}>
-          {box?.objects?.name || <span style={{ color: "#6b7280" }}>Kein Objekt</span>}
+        <div className="box-object">
+          {box?.objects?.name || <span className="no-object">Kein Objekt</span>}
         </div>
       </div>
 
       {/* Status Badge */}
-      <div style={{ 
-        display: "flex", 
-        alignItems: "center", 
-        gap: 4, 
-        padding: "4px 10px", 
-        background: `${status.color}20`, 
-        borderRadius: 12, 
-        color: status.color, 
-        fontSize: 12,
-        flexShrink: 0
-      }}>
-        <StatusIcon style={{ width: 12, height: 12 }} />
+      <div className={`status-badge bg-${status.color}`}>
+        <StatusIcon className="status-icon" />
         {status.label}
       </div>
 
       {/* Actions */}
       {!box?.object_id ? (
         showAssign ? (
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div className="assign-dropdown">
             <select
               autoFocus
               onChange={(e) => {
@@ -646,16 +512,7 @@ function BoxRow({ qr, extractNumber, getStatusBadge, activeObjects, onAssign, as
               }}
               onBlur={() => setTimeout(() => setShowAssign(false), 200)}
               disabled={assigning}
-              style={{
-                padding: "6px 10px",
-                background: "#0f172a",
-                border: "1px solid #3b82f6",
-                borderRadius: 6,
-                color: "#fff",
-                fontSize: 13,
-                cursor: "pointer",
-                minWidth: 150
-              }}
+              className="assign-select"
             >
               <option value="">Objekt wählen...</option>
               {activeObjects.map(obj => (
@@ -664,15 +521,7 @@ function BoxRow({ qr, extractNumber, getStatusBadge, activeObjects, onAssign, as
             </select>
             <button
               onClick={() => setShowAssign(false)}
-              style={{
-                padding: "6px 10px",
-                background: "#374151",
-                border: "none",
-                borderRadius: 6,
-                color: "#fff",
-                cursor: "pointer",
-                fontSize: 12
-              }}
+              className="cancel-btn"
             >
               ✕
             </button>
@@ -680,37 +529,16 @@ function BoxRow({ qr, extractNumber, getStatusBadge, activeObjects, onAssign, as
         ) : (
           <button 
             onClick={() => setShowAssign(true)} 
-            style={{ 
-              padding: "6px 14px", 
-              background: "#3b82f6", 
-              border: "none", 
-              borderRadius: 6, 
-              color: "#fff", 
-              cursor: "pointer", 
-              display: "flex", 
-              alignItems: "center", 
-              gap: 4, 
-              fontSize: 13,
-              flexShrink: 0
-            }}
+            className="action-btn primary"
           >
-            <ArrowRightIcon style={{ width: 14, height: 14 }} />
+            <ArrowRightIcon className="btn-icon" />
             Zuweisen
           </button>
         )
       ) : (
         <button 
           onClick={() => navigate(`/objects/${box.object_id}`)} 
-          style={{ 
-            padding: "6px 14px", 
-            background: "#374151", 
-            border: "none", 
-            borderRadius: 6, 
-            color: "#fff", 
-            cursor: "pointer", 
-            fontSize: 13,
-            flexShrink: 0
-          }}
+          className="action-btn secondary"
         >
           Öffnen
         </button>
@@ -726,25 +554,13 @@ function StatCard({ label, value, color, active, onClick, icon: Icon }) {
   return (
     <button
       onClick={onClick}
-      style={{ 
-        background: active ? `${color}15` : "#1f2937", 
-        padding: 12, 
-        borderRadius: 8, 
-        borderLeft: `3px solid ${color}`,
-        border: active ? `2px solid ${color}` : "2px solid transparent",
-        cursor: "pointer",
-        textAlign: "left",
-        transition: "all 0.2s ease",
-        outline: "none"
-      }}
-      onMouseEnter={(e) => !active && (e.currentTarget.style.background = "#283548")}
-      onMouseLeave={(e) => !active && (e.currentTarget.style.background = "#1f2937")}
+      className={`stat-card color-${color} ${active ? 'active' : ''}`}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-        <Icon style={{ width: 14, height: 14, color: active ? color : "#6b7280" }} />
-        <span style={{ color: active ? color : "#9ca3af", fontSize: 11 }}>{label}</span>
+      <div className="stat-header">
+        <Icon className="stat-icon" />
+        <span className="stat-label">{label}</span>
       </div>
-      <div style={{ color: active ? color : "#fff", fontSize: 24, fontWeight: 700 }}>{value}</div>
+      <div className="stat-value">{value}</div>
     </button>
   );
 }

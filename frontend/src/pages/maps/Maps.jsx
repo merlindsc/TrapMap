@@ -379,35 +379,67 @@ export default function Maps() {
     loadPoolBoxes();
   }, [loadObjects, loadBoxTypes, loadPoolBoxes]);
 
-  // URL Parameter handling
+  // URL Parameter handling (object_id, flyTo, openBox)
   useEffect(() => {
-    if (urlObjectId && objects.length > 0 && urlFlyTo) {
+    if (urlObjectId && objects.length > 0) {
       const targetObject = objects.find(obj => String(obj.id) === urlObjectId);
-      if (targetObject && targetObject.lat && targetObject.lng) {
+      if (targetObject) {
         setSelectedObject(targetObject);
-        loadBoxes(targetObject.id);
-        setTimeout(() => {
-          if (mapRef.current) {
-            mapRef.current.flyTo([targetObject.lat, targetObject.lng], 18, { duration: 1.5 });
+        
+        // Boxen laden und dann ggf. Dialog öffnen
+        const loadAndOpenBox = async () => {
+          try {
+            const res = await fetch(`${API}/boxes?object_id=${targetObject.id}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const json = await res.json();
+            const boxesData = Array.isArray(json) ? json : json.data || [];
+            setBoxes(boxesData);
+            
+            // FlyTo wenn gewünscht
+            if (urlFlyTo && targetObject.lat && targetObject.lng) {
+              setTimeout(() => {
+                if (mapRef.current) {
+                  mapRef.current.flyTo([targetObject.lat, targetObject.lng], 18, { duration: 1.5 });
+                }
+              }, 500);
+            }
+            
+            // openBox - Dialog öffnen
+            if (urlOpenBox && boxesData.length > 0) {
+              const targetBox = boxesData.find(box => String(box.id) === urlOpenBox);
+              if (targetBox) {
+                // Kurz warten bis UI bereit
+                setTimeout(() => {
+                  setSelectedBox(targetBox);
+                  setControlDialogOpen(true);
+                }, 800);
+              }
+            }
+            
+            // URL-Parameter löschen
+            setSearchParams({});
+          } catch (e) {
+            console.error("❌ Fehler beim Laden:", e);
           }
-        }, 500);
-        setSearchParams({});
+        };
+        
+        loadAndOpenBox();
       }
     }
-  }, [urlObjectId, urlFlyTo, objects, loadBoxes, setSearchParams]);
+  }, [urlObjectId, urlFlyTo, urlOpenBox, objects, token, setSearchParams]);
 
-  // openBox Parameter - öffnet Kontrolle-Dialog nach QR-Scan
+  // openBox ohne object_id (falls Box direkt verlinkt)
   useEffect(() => {
-    if (urlOpenBox && boxes.length > 0) {
+    if (urlOpenBox && !urlObjectId && boxes.length > 0) {
       const targetBox = boxes.find(box => String(box.id) === urlOpenBox);
       if (targetBox) {
         setSelectedBox(targetBox);
         setControlDialogOpen(true);
-        // Parameter aus URL entfernen
         setSearchParams({});
       }
     }
-  }, [urlOpenBox, boxes, setSearchParams]);
+  }, [urlOpenBox, urlObjectId, boxes, setSearchParams]);
 
   useEffect(() => {
     if (selectedObject) {
