@@ -28,6 +28,8 @@ import LayoutCreate from "./pages/layouts/LayoutCreate";
 import Maps from "./pages/maps/Maps";
 import Scanner from "./pages/qr/Scanner";
 import AssignCode from "./pages/qr/AssignCode";
+import AssignObject from "./pages/qr/AssignObject";
+import QRRedirect from "./pages/qr/QRRedirect";
 import Settings from "./pages/settings/Settings";
 import Reports from "./pages/reports/Reports";
 import Admin from "./pages/admin/Admin";
@@ -150,6 +152,9 @@ function MainApp() {
     return (
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
+          {/* QR-Code Direct Links - auch ohne Login erreichbar */}
+          <Route path="/s/:code" element={<QRRedirect />} />
+          
           <Route path="/login" element={<Login />} />
           <Route path="/partner/login" element={<PartnerLogin />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
@@ -166,8 +171,13 @@ function MainApp() {
   // Gemeinsame Routes
   const CommonRoutes = (
     <>
+      {/* QR Routes */}
+      <Route path="/s/:code" element={<QRRedirect />} />
       <Route path="/qr/scanner" element={<DashboardLayout><Scanner /></DashboardLayout>} />
       <Route path="/qr/assign/:code" element={<DashboardLayout><AssignCode /></DashboardLayout>} />
+      <Route path="/qr/assign-object/:code" element={<DashboardLayout><AssignObject /></DashboardLayout>} />
+      
+      {/* Other common routes */}
       <Route path="/settings" element={<DashboardLayout><Settings /></DashboardLayout>} />
       <Route path="/reports" element={<DashboardLayout><Reports /></DashboardLayout>} />
       <Route path="/boxes" element={<DashboardLayout><BoxPool /></DashboardLayout>} />
