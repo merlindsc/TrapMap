@@ -1,6 +1,7 @@
 // ============================================
-// QR SERVICE - KOMPLETT
+// QR SERVICE - KOMPLETT (FIXED)
 // Bei Code-Generierung wird automatisch Box erstellt!
+// FIX: Sortierung nach sequence_number (aufsteigend)
 // ============================================
 
 const { supabase } = require("../config/supabase");
@@ -91,7 +92,7 @@ exports.checkCode = async (code) => {
   const { data, error } = await supabase
     .from("qr_codes")
     .select(`
-      id, organisation_id, box_id, assigned,
+      id, organisation_id, box_id, assigned, sequence_number,
       boxes:box_id (
         id, number, status, position_type, object_id, box_type_id, current_status,
         objects:object_id (id, name),
@@ -107,12 +108,13 @@ exports.checkCode = async (code) => {
 
 // ============================================
 // GET CODES BY ORGANISATION
+// FIX: Sortierung nach sequence_number AUFSTEIGEND (kleinste zuerst)
 // ============================================
 exports.getCodesByOrganisation = async (organisation_id) => {
   const { data, error } = await supabase
     .from("qr_codes")
     .select(`
-      id, box_id, assigned, created_at,
+      id, box_id, assigned, created_at, sequence_number,
       boxes:box_id (
         id, number, status, position_type, object_id, box_type_id, current_status,
         objects:object_id (id, name),
@@ -120,23 +122,28 @@ exports.getCodesByOrganisation = async (organisation_id) => {
       )
     `)
     .eq("organisation_id", parseInt(organisation_id))
-    .order("created_at", { ascending: false });
+    .order("sequence_number", { ascending: true, nullsFirst: false });
 
   if (error) throw new Error(error.message);
+  
+  // Debug logging
+  console.log(`📦 getCodesByOrganisation: ${data?.length || 0} Codes geladen für org ${organisation_id}`);
+  
   return data || [];
 };
 
 // ============================================
 // GET AVAILABLE (Pool-Boxen)
+// FIX: Sortierung nach number AUFSTEIGEND
 // ============================================
 exports.getAvailableCodes = async (organisation_id) => {
   const { data, error } = await supabase
     .from("boxes")
-    .select("id, qr_code, status, created_at")
+    .select("id, qr_code, number, status, created_at")
     .eq("organisation_id", parseInt(organisation_id))
     .eq("status", "pool")
     .eq("active", true)
-    .order("created_at", { ascending: true });
+    .order("number", { ascending: true, nullsFirst: false });
 
   if (error) throw new Error(error.message);
   return data || [];

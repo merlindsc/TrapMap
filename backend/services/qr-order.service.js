@@ -1,6 +1,7 @@
 /* ============================================================
-   TRAPMAP – QR-ORDER SERVICE
+   TRAPMAP – QR-ORDER SERVICE (FIXED)
    Automatisierte QR-Code Bestellungen pro Organisation
+   FIX: Besseres Error-Handling, keine Unterbrechung bei Einzelfehlern
    ============================================================ */
 
 const { supabase } = require('../config/supabase');
@@ -190,7 +191,8 @@ exports.createOrder = async (organisationId, quantity, createdBy) => {
 };
 
 // ============================================
-// CODES GENERIEREN
+// CODES GENERIEREN (FIXED)
+// FIX: Besseres Error-Handling, Progress-Logging
 // ============================================
 
 exports.generateCodesForOrder = async (orderId) => {
@@ -204,76 +206,130 @@ exports.generateCodesForOrder = async (orderId) => {
   if (orderError) throw new Error('Bestellung nicht gefunden');
   if (order.status !== 'pending') throw new Error('Bestellung wurde bereits verarbeitet');
 
-  console.log(`🔄 Generiere Codes + Boxen für Order ${orderId}: ${order.start_number} bis ${order.end_number}`);
+  const totalToGenerate = order.end_number - order.start_number + 1;
+  console.log(`🔄 Generiere ${totalToGenerate} Codes + Boxen für Order ${orderId}`);
+  console.log(`   Range: ${order.start_number} bis ${order.end_number}`);
 
   const codes = [];
   const errors = [];
+  let progressLog = 0;
 
   // 2. Codes UND Boxen generieren
   for (let i = order.start_number; i <= order.end_number; i++) {
     const codeId = `${order.prefix}-${String(i).padStart(4, '0')}`;
     const url = `${SCAN_BASE_URL}/${codeId}`;
 
-    // 2a. ERST QR-Code erstellen
-    const { error: codeError } = await supabase
-      .from('qr_codes')
-      .insert({
-        id: codeId,
-        organisation_id: order.organisation_id,
-        sequence_number: i,
-        order_id: orderId,
-        assigned: false
-      });
+    try {
+      // 2a. Prüfen ob Code bereits existiert
+      const { data: existingCode } = await supabase
+        .from('qr_codes')
+        .select('id')
+        .eq('id', codeId)
+        .maybeSingle();
 
-    if (codeError) {
-      console.error(`❌ Code ${codeId} fehlgeschlagen:`, codeError.message);
-      errors.push({ code: codeId, error: codeError.message });
-      continue;
+      if (existingCode) {
+        console.log(`⏭️ Code ${codeId} existiert bereits, überspringe...`);
+        // Trotzdem als erfolgreich zählen
+        const { data: existingBox } = await supabase
+          .from('boxes')
+          .select('id')
+          .eq('qr_code', codeId)
+          .maybeSingle();
+        
+        if (existingBox) {
+          codes.push({ id: codeId, url, number: i, box_id: existingBox.id, skipped: true });
+        }
+        continue;
+      }
+
+      // 2b. QR-Code erstellen
+      const { error: codeError } = await supabase
+        .from('qr_codes')
+        .insert({
+          id: codeId,
+          organisation_id: order.organisation_id,
+          sequence_number: i,
+          order_id: orderId,
+          assigned: false
+        });
+
+      if (codeError) {
+        console.error(`❌ Code ${codeId} fehlgeschlagen:`, codeError.message);
+        errors.push({ code: codeId, error: codeError.message, step: 'qr_code' });
+        continue;
+      }
+
+      // 2c. Box erstellen (im Pool) und mit QR-Code verknüpfen
+      const { data: box, error: boxError } = await supabase
+        .from('boxes')
+        .insert({
+          organisation_id: order.organisation_id,
+          qr_code: codeId,
+          number: i,
+          status: 'pool',
+          position_type: 'none',
+          current_status: 'green',
+          active: true
+        })
+        .select()
+        .single();
+
+      if (boxError) {
+        console.error(`❌ Box für ${codeId} fehlgeschlagen:`, boxError.message);
+        // Rollback: QR-Code wieder löschen
+        await supabase.from('qr_codes').delete().eq('id', codeId);
+        errors.push({ code: codeId, error: boxError.message, step: 'box' });
+        continue;
+      }
+
+      // 2d. QR-Code mit Box-ID aktualisieren
+      const { error: linkError } = await supabase
+        .from('qr_codes')
+        .update({ box_id: box.id, assigned: true })
+        .eq('id', codeId);
+
+      if (linkError) {
+        console.warn(`⚠️ Link-Update für ${codeId} fehlgeschlagen:`, linkError.message);
+        // Nicht kritisch - weiter machen
+      }
+
+      codes.push({ id: codeId, url, number: i, box_id: box.id });
+
+      // Progress-Logging alle 10 Codes
+      if (codes.length % 10 === 0 || codes.length === totalToGenerate) {
+        console.log(`   📊 Progress: ${codes.length}/${totalToGenerate} (${Math.round(codes.length/totalToGenerate*100)}%)`);
+      }
+
+    } catch (err) {
+      console.error(`❌ Unerwarteter Fehler bei ${codeId}:`, err.message);
+      errors.push({ code: codeId, error: err.message, step: 'unknown' });
+      // NICHT abbrechen - weiter mit nächstem Code!
     }
-
-    // 2b. DANN Box erstellen (im Pool) und mit QR-Code verknüpfen
-    const { data: box, error: boxError } = await supabase
-      .from('boxes')
-      .insert({
-        organisation_id: order.organisation_id,
-        qr_code: codeId,
-        number: i,
-        status: 'pool',
-        position_type: 'none',
-        current_status: 'green',
-        active: true
-      })
-      .select()
-      .single();
-
-    if (boxError) {
-      console.error(`❌ Box für ${codeId} fehlgeschlagen:`, boxError.message);
-      // Rollback: QR-Code wieder löschen
-      await supabase.from('qr_codes').delete().eq('id', codeId);
-      errors.push({ code: codeId, error: boxError.message });
-      continue;
-    }
-
-    // 2c. QR-Code mit Box-ID aktualisieren
-    await supabase
-      .from('qr_codes')
-      .update({ box_id: box.id, assigned: true })
-      .eq('id', codeId);
-
-    codes.push({ id: codeId, url, number: i, box_id: box.id });
   }
 
-  console.log(`✅ ${codes.length} Codes + Boxen erstellt, ${errors.length} Fehler`);
+  console.log(`✅ Fertig: ${codes.length} Codes + Boxen erstellt, ${errors.length} Fehler`);
 
   // Wenn KEINE Codes erstellt wurden, Fehler werfen
   if (codes.length === 0) {
     throw new Error(`Keine Codes erstellt! ${errors.length} Fehler. Erster Fehler: ${errors[0]?.error || 'unbekannt'}`);
   }
 
+  // Bei teilweisem Erfolg: Warnung loggen
+  if (errors.length > 0) {
+    console.warn(`⚠️ ${errors.length} Codes konnten nicht erstellt werden:`);
+    errors.slice(0, 5).forEach(e => console.warn(`   - ${e.code}: ${e.error} (${e.step})`));
+    if (errors.length > 5) console.warn(`   ... und ${errors.length - 5} weitere`);
+  }
+
   // 3. Status aktualisieren
+  const newStatus = errors.length === 0 ? 'generated' : 'generated_partial';
   await supabase
     .from('qr_orders')
-    .update({ status: 'generated' })
+    .update({ 
+      status: newStatus,
+      codes_generated: codes.length,
+      codes_failed: errors.length
+    })
     .eq('id', orderId);
 
   // 4. Organisation Statistik aktualisieren
