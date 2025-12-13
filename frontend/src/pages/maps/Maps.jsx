@@ -240,6 +240,7 @@ export default function Maps() {
   const [searchParams, setSearchParams] = useSearchParams();
   const urlObjectId = searchParams.get("object_id");
   const urlFlyTo = searchParams.get("flyTo") === "true";
+  const urlOpenBox = searchParams.get("openBox");
 
   // Data
   const [objects, setObjects] = useState([]);
@@ -394,6 +395,19 @@ export default function Maps() {
       }
     }
   }, [urlObjectId, urlFlyTo, objects, loadBoxes, setSearchParams]);
+
+  // openBox Parameter - öffnet Kontrolle-Dialog nach QR-Scan
+  useEffect(() => {
+    if (urlOpenBox && boxes.length > 0) {
+      const targetBox = boxes.find(box => String(box.id) === urlOpenBox);
+      if (targetBox) {
+        setSelectedBox(targetBox);
+        setControlDialogOpen(true);
+        // Parameter aus URL entfernen
+        setSearchParams({});
+      }
+    }
+  }, [urlOpenBox, boxes, setSearchParams]);
 
   useEffect(() => {
     if (selectedObject) {

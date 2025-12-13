@@ -125,10 +125,22 @@ export default function Scanner() {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      if (res.data.assigned === false) {
+      // Prüfen ob Code existiert und Box zugewiesen
+      if (!res.data || !res.data.box_id) {
+        // Neuer/unbekannter Code
+        navigate(`/qr/assign/${code}`);
+        return;
+      }
+
+      const boxId = res.data.box_id;
+      const objectId = res.data.boxes?.object_id;
+
+      if (!objectId) {
+        // Box existiert, aber noch keinem Objekt zugewiesen (im Pool)
         navigate(`/qr/assign/${code}`);
       } else {
-        navigate(`/boxes/${res.data.box_id}`);
+        // Zur Maps-Seite mit openBox Parameter → öffnet Kontrolle-Dialog
+        navigate(`/maps?object_id=${objectId}&openBox=${boxId}&flyTo=true`);
       }
     } catch (err) {
       console.error("QR check error:", err);
