@@ -1,12 +1,39 @@
-import React, { useEffect, useState } from "react";
+/* ============================================================
+   TRAPMAP - DASHBOARD V3 INTERACTIVE
+   - Klickbare KPI-Karten mit Detail-Ansichten
+   - Objekt-Filter Dropdown
+   - Überfällige Boxen (über Kontrollintervall)
+   - Letzte 10 Scans
+   - Sortierung: kleinste Box-Nummer zuerst
+   ============================================================ */
+
+import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
+import { 
+  Package, BarChart3, AlertTriangle, Radio, 
+  TrendingUp, CheckCircle, XCircle, Clock,
+  ChevronDown, X, ArrowLeft, Calendar,
+  Building2, Filter, ExternalLink
+} from "lucide-react";
+import { Link } from "react-router-dom";
+import "./Dashboard.css";
 
 const API = import.meta.env.VITE_API_URL;
 
 export default function Dashboard() {
+  // Data States
   const [stats, setStats] = useState(null);
-  const [recentScans, setRecentScans] = useState(null);
+  const [recentScans, setRecentScans] = useState([]);
+  const [allBoxes, setAllBoxes] = useState([]);
+  const [objects, setObjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // UI States
+  const [activeView, setActiveView] = useState("overview"); // overview, warnings, status, scans
+  const [selectedStatus, setSelectedStatus] = useState(null); // green, yellow, orange, red
+  const [selectedObject, setSelectedObject] = useState("all");
+  const [objectDropdownOpen, setObjectDropdownOpen] = useState(false);
 
   useEffect(() => {
     loadDashboard();
@@ -15,232 +42,598 @@ export default function Dashboard() {
   async function loadDashboard() {
     try {
       const token = localStorage.getItem("trapmap_token");
-      
-      const res = await axios.get(`${API}/dashboard/all`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      setStats(res.data.stats);
-      setRecentScans(res.data.recentScans);
+      const headers = { Authorization: `Bearer ${token}` };
+
+      // Parallel laden
+      const [dashRes, boxesRes, objectsRes] = await Promise.all([
+        axios.get(`${API}/dashboard/all`, { headers }),
+        axios.get(`${API}/boxes`, { headers }).catch(err => {
+          console.error("Boxes load error:", err);
+          return { data: [] };
+        }),
+        axios.get(`${API}/objects`, { headers }).catch(err => {
+          console.error("Objects load error:", err);
+          return { data: [] };
+        })
+      ]);
+
+      console.log("Dashboard response:", dashRes.data);
+      console.log("Boxes response:", boxesRes.data);
+      console.log("Objects response:", objectsRes.data);
+
+      setStats(dashRes.data.stats || {});
+      setRecentScans(dashRes.data.recentScans || []);
+      setAllBoxes(Array.isArray(boxesRes.data) ? boxesRes.data : []);
+      setObjects(Array.isArray(objectsRes.data) ? objectsRes.data : []);
     } catch (err) {
       console.error("Dashboard load error:", err);
+      setError(err.message);
+      setStats({ boxes: 0, scansToday: 0, warnings: 0, green: 0, yellow: 0, orange: 0, red: 0 });
     } finally {
       setLoading(false);
     }
   }
 
-  if (loading || !stats) {
+  // ============================================================
+  // BERECHNUNGEN
+  // ============================================================
+
+  // Box-Nummer aus QR-Code extrahieren (für Sortierung)
+  const getBoxNumber = (box) => {
+    const qr = box.qr_code || box.name || "";
+    const match = qr.match(/\d+/);
+    return match ? parseInt(match[0], 10) : 999999;
+  };
+
+  // Sortiere Boxen nach Nummer (kleinste zuerst)
+  const sortByNumber = (boxes) => {
+    return [...boxes].sort((a, b) => getBoxNumber(a) - getBoxNumber(b));
+  };
+
+  // Überfällige Boxen berechnen
+  const overdueBoxes = useMemo(() => {
+    const now = new Date();
+    return allBoxes.filter(box => {
+      if (!box.last_scan || box.status === 'archived') return false;
+      
+      const lastScan = new Date(box.last_scan);
+      const daysSince = Math.floor((now - lastScan) / (1000 * 60 * 60 * 24));
+      
+      // Check gegen Kontrollintervall
+      if (box.control_interval_type === 'range') {
+        return daysSince > (box.control_interval_max || 30);
+      } else {
+        return daysSince > (box.control_interval_days || 30);
+      }
+    });
+  }, [allBoxes]);
+
+  // Boxen nach Status filtern (current_status ist der Scan-Status)
+  const boxesByStatus = useMemo(() => {
+    return {
+      green: allBoxes.filter(b => b.current_status === 'green'),
+      yellow: allBoxes.filter(b => b.current_status === 'yellow'),
+      orange: allBoxes.filter(b => b.current_status === 'orange'),
+      red: allBoxes.filter(b => b.current_status === 'red'),
+    };
+  }, [allBoxes]);
+
+  // Objekt-Filter anwenden
+  const filterByObject = (items, objectField = 'object_id') => {
+    if (selectedObject === 'all') return items;
+    return items.filter(item => item[objectField] === selectedObject);
+  };
+
+  // Objekt-Name finden
+  const getObjectName = (objectId) => {
+    const obj = objects.find(o => o.id === objectId);
+    return obj?.name || 'Unbekannt';
+  };
+
+  // Tage seit letztem Scan
+  const getDaysSinceLastScan = (lastScanAt) => {
+    if (!lastScanAt) return null;
+    const now = new Date();
+    const lastScan = new Date(lastScanAt);
+    return Math.floor((now - lastScan) / (1000 * 60 * 60 * 24));
+  };
+
+  // ============================================================
+  // RENDER
+  // ============================================================
+
+  if (loading) {
     return <DashboardSkeleton />;
   }
 
+  const safeStats = stats || {};
+
   return (
-    <div className="space-y-10">
-      <h1 className="text-3xl font-bold tracking-wide text-white">Dashboard</h1>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KPI title="Aktive Boxen" value={stats.boxes} icon="📦" color="indigo" />
-        <KPI title="Scans heute" value={stats.scansToday} icon="📊" color="green" />
-        <KPI title="Warnungen" value={stats.warnings} icon="⚠️" color="yellow" />
-        <KPI title="Letzte Sync" value={formatTime(stats.lastSync)} icon="📡" color="purple" />
-      </div>
-
-      {/* Status Übersicht */}
-      <div className="bg-[#111827] border border-white/5 rounded-xl p-6 shadow-lg">
-        <h2 className="text-xl font-semibold text-white mb-4">Status Übersicht</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatusCard label="OK" count={stats.green || 0} color="green" />
-          <StatusCard label="Auffällig" count={stats.yellow || 0} color="yellow" />
-          <StatusCard label="Erhöht" count={stats.orange || 0} color="orange" />
-          <StatusCard label="Befall" count={stats.red || 0} color="red" />
+    <div className="dashboard">
+      {/* Header mit Objekt-Filter */}
+      <div className="dashboard-header">
+        <div className="header-left">
+          {activeView !== "overview" && (
+            <button className="back-btn" onClick={() => { setActiveView("overview"); setSelectedStatus(null); }}>
+              <ArrowLeft size={20} />
+            </button>
+          )}
+          <div>
+            <h1 className="dashboard-title">
+              {activeView === "overview" && "Dashboard"}
+              {activeView === "warnings" && "Überfällige Boxen"}
+              {activeView === "status" && `Status: ${getStatusLabel(selectedStatus)}`}
+              {activeView === "scans" && "Letzte Scans"}
+              {activeView === "boxes" && "Alle Boxen"}
+            </h1>
+            <p className="dashboard-subtitle">
+              {activeView === "overview" && "Übersicht über alle Aktivitäten"}
+              {activeView === "warnings" && `${filterByObject(sortByNumber(overdueBoxes)).length} Boxen über Kontrollintervall`}
+              {activeView === "status" && `${filterByObject(sortByNumber(boxesByStatus[selectedStatus] || [])).length} Boxen mit diesem Status`}
+              {activeView === "scans" && "Die letzten 10 Kontrollen"}
+              {activeView === "boxes" && `${filterByObject(sortByNumber(allBoxes)).length} aktive Boxen`}
+            </p>
+          </div>
         </div>
-      </div>
 
-      {/* Recent Scans - gruppiert nach Objekt */}
-      <RecentScansSection scans={recentScans} />
-    </div>
-  );
-}
+        {/* Objekt-Filter */}
+        <div className="object-filter">
+          <button 
+            className="object-filter-btn"
+            onClick={() => setObjectDropdownOpen(!objectDropdownOpen)}
+          >
+            <Building2 size={18} />
+            <span>{selectedObject === 'all' ? 'Alle Objekte' : getObjectName(selectedObject)}</span>
+            <ChevronDown size={16} className={objectDropdownOpen ? 'rotated' : ''} />
+          </button>
 
-// ============================================
-// KPI Card Component
-// ============================================
-function KPI({ title, value, color, icon }) {
-  const colorClasses = {
-    indigo: "text-indigo-400",
-    green: "text-green-400",
-    yellow: "text-yellow-400",
-    purple: "text-purple-400"
-  };
-
-  return (
-    <div className="bg-[#111827] border border-white/5 rounded-xl p-6 shadow-lg shadow-black/20 hover:shadow-indigo-900/30 transition duration-200">
-      <div className={`text-4xl mb-3 ${colorClasses[color]}`}>{icon}</div>
-      <div className="text-4xl font-bold text-white">{value}</div>
-      <div className="text-gray-400 text-sm mt-1">{title}</div>
-    </div>
-  );
-}
-
-// ============================================
-// Status Card Component
-// ============================================
-function StatusCard({ label, count, color }) {
-  const colors = {
-    green: "bg-green-500/20 text-green-400 border-green-500/30",
-    yellow: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
-    orange: "bg-orange-500/20 text-orange-400 border-orange-500/30",
-    red: "bg-red-500/20 text-red-400 border-red-500/30"
-  };
-
-  return (
-    <div className={`${colors[color]} border rounded-lg p-4 text-center`}>
-      <div className="text-2xl font-bold">{count}</div>
-      <div className="text-sm opacity-80">{label}</div>
-    </div>
-  );
-}
-
-// ============================================
-// Recent Scans Section - Gruppiert nach Objekt
-// ============================================
-function RecentScansSection({ scans }) {
-  if (!scans) return <ScanSkeleton />;
-
-  // Gruppiere Scans nach Objekt
-  const groupedScans = scans.reduce((acc, scan) => {
-    const objName = scan.object_name || "Sonstiges";
-    if (!acc[objName]) {
-      acc[objName] = [];
-    }
-    acc[objName].push(scan);
-    return acc;
-  }, {});
-
-  // Sortiere Objekte alphabetisch
-  const sortedObjects = Object.keys(groupedScans).sort((a, b) => 
-    a.localeCompare(b, 'de')
-  );
-
-  return (
-    <div className="bg-[#111827] border border-white/5 rounded-xl p-6 shadow-lg">
-      <h2 className="text-xl font-semibold text-white mb-5">Letzte Scans</h2>
-
-      {scans.length === 0 ? (
-        <p className="text-gray-400">Noch keine Scans vorhanden</p>
-      ) : (
-        <div className="space-y-6 max-h-[600px] overflow-y-auto pr-2">
-          {sortedObjects.map(objectName => (
-            <div key={objectName}>
-              {/* Objekt Header */}
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-2 h-2 bg-indigo-500 rounded-full"></div>
-                <h3 className="text-sm font-medium text-indigo-400 uppercase tracking-wide">
-                  {objectName}
-                </h3>
-                <div className="flex-1 h-px bg-white/10"></div>
-                <span className="text-xs text-gray-500">
-                  {groupedScans[objectName].length} Scans
-                </span>
+          {objectDropdownOpen && (
+            <div className="object-dropdown">
+              <div 
+                className={`dropdown-item ${selectedObject === 'all' ? 'active' : ''}`}
+                onClick={() => { setSelectedObject('all'); setObjectDropdownOpen(false); }}
+              >
+                <Filter size={16} />
+                Alle Objekte
               </div>
-
-              {/* Scans für dieses Objekt */}
-              <div className="space-y-2 ml-4">
-                {groupedScans[objectName].map((s) => (
-                  <div 
-                    key={s.id} 
-                    className="bg-[#0f1623] p-3 rounded-lg border border-white/5 flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-3">
-                      <StatusDot status={s.status} />
-                      <div>
-                        <div className="text-white font-medium text-sm">{s.box_name}</div>
-                        <div className="text-gray-400 text-xs">{s.message}</div>
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <div className="text-gray-500 text-xs">{timeAgo(s.created_at)}</div>
-                      <div className="text-gray-600 text-xs">{s.technician_name}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {objects.map(obj => (
+                <div 
+                  key={obj.id}
+                  className={`dropdown-item ${selectedObject === obj.id ? 'active' : ''}`}
+                  onClick={() => { setSelectedObject(obj.id); setObjectDropdownOpen(false); }}
+                >
+                  <Building2 size={16} />
+                  {obj.name}
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
+      </div>
+
+      {error && (
+        <div className="error-banner">
+          ⚠️ Verbindungsproblem: {error}
+        </div>
+      )}
+
+      {/* ============================================================
+          OVERVIEW - Klickbare KPIs
+          ============================================================ */}
+      {activeView === "overview" && (
+        <>
+          {/* KPI Cards - Klickbar! */}
+          <div className="kpi-grid">
+            <KPICard
+              title="Aktive Boxen"
+              value={filterByObject(allBoxes).length}
+              icon={Package}
+              color="indigo"
+              onClick={() => setActiveView("boxes")}
+              clickable
+            />
+            <KPICard
+              title="Scans heute"
+              value={safeStats.scansToday || 0}
+              icon={BarChart3}
+              color="green"
+              onClick={() => setActiveView("scans")}
+              clickable
+            />
+            <KPICard
+              title="Überfällig"
+              value={filterByObject(overdueBoxes).length}
+              icon={AlertTriangle}
+              color="yellow"
+              onClick={() => setActiveView("warnings")}
+              clickable
+              highlight={filterByObject(overdueBoxes).length > 0}
+            />
+            <KPICard
+              title="Letzte Sync"
+              value={formatTime(safeStats.lastSync)}
+              icon={Radio}
+              color="purple"
+              isText
+            />
+          </div>
+
+          {/* Status Cards - Klickbar! */}
+          <div className="status-section">
+            <h2 className="section-title">Status Übersicht</h2>
+            <div className="status-grid">
+              <StatusCard 
+                label="OK" 
+                count={filterByObject(boxesByStatus.green).length} 
+                color="green" 
+                icon={CheckCircle}
+                onClick={() => { setSelectedStatus('green'); setActiveView('status'); }}
+                clickable
+              />
+              <StatusCard 
+                label="Auffällig" 
+                count={filterByObject(boxesByStatus.yellow).length} 
+                color="yellow" 
+                icon={AlertTriangle}
+                onClick={() => { setSelectedStatus('yellow'); setActiveView('status'); }}
+                clickable
+              />
+              <StatusCard 
+                label="Erhöht" 
+                count={filterByObject(boxesByStatus.orange).length} 
+                color="orange" 
+                icon={TrendingUp}
+                onClick={() => { setSelectedStatus('orange'); setActiveView('status'); }}
+                clickable
+              />
+              <StatusCard 
+                label="Befall" 
+                count={filterByObject(boxesByStatus.red).length} 
+                color="red" 
+                icon={XCircle}
+                onClick={() => { setSelectedStatus('red'); setActiveView('status'); }}
+                clickable
+              />
+            </div>
+          </div>
+
+          {/* Recent Scans Preview */}
+          <RecentScansSection 
+            scans={filterByObject(recentScans, 'object_id').slice(0, 5)} 
+            objects={objects}
+            onViewAll={() => setActiveView("scans")}
+          />
+        </>
+      )}
+
+      {/* ============================================================
+          WARNINGS - Überfällige Boxen
+          ============================================================ */}
+      {activeView === "warnings" && (
+        <BoxList 
+          boxes={filterByObject(sortByNumber(overdueBoxes))}
+          objects={objects}
+          showDaysOverdue
+          emptyMessage="Keine überfälligen Boxen! 🎉"
+        />
+      )}
+
+      {/* ============================================================
+          STATUS - Boxen nach Status
+          ============================================================ */}
+      {activeView === "status" && selectedStatus && (
+        <BoxList 
+          boxes={filterByObject(sortByNumber(boxesByStatus[selectedStatus] || []))}
+          objects={objects}
+          emptyMessage={`Keine Boxen mit Status "${getStatusLabel(selectedStatus)}"`}
+        />
+      )}
+
+      {/* ============================================================
+          SCANS - Letzte 10 Scans
+          ============================================================ */}
+      {activeView === "scans" && (
+        <ScansList 
+          scans={filterByObject(recentScans, 'object_id').slice(0, 10)}
+          objects={objects}
+        />
+      )}
+
+      {/* ============================================================
+          BOXES - Alle Boxen
+          ============================================================ */}
+      {activeView === "boxes" && (
+        <BoxList 
+          boxes={filterByObject(sortByNumber(allBoxes))}
+          objects={objects}
+          emptyMessage="Keine Boxen gefunden"
+        />
       )}
     </div>
   );
 }
 
-// ============================================
-// Status Dot Component
-// ============================================
-function StatusDot({ status }) {
-  const colors = {
-    green: "bg-green-500",
-    yellow: "bg-yellow-500",
-    orange: "bg-orange-500",
-    red: "bg-red-500"
+/* ============================================================
+   KPI CARD (Klickbar)
+   ============================================================ */
+function KPICard({ title, value, icon: Icon, color, trend, isText, onClick, clickable, highlight }) {
+  const colorClasses = {
+    indigo: "kpi-indigo",
+    green: "kpi-green",
+    yellow: "kpi-yellow",
+    purple: "kpi-purple"
   };
 
   return (
-    <div className={`w-3 h-3 rounded-full ${colors[status] || "bg-gray-500"}`} />
-  );
-}
-
-// ============================================
-// Skeleton Loaders
-// ============================================
-function DashboardSkeleton() {
-  return (
-    <div className="animate-pulse space-y-10">
-      <div className="h-8 bg-gray-700 rounded w-40"></div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-28 bg-gray-800 rounded-xl"></div>
-        ))}
+    <div 
+      className={`kpi-card ${colorClasses[color]} ${clickable ? 'clickable' : ''} ${highlight ? 'highlight' : ''}`}
+      onClick={clickable ? onClick : undefined}
+    >
+      <div className="kpi-icon-wrapper">
+        <Icon className="kpi-icon" />
       </div>
-      <div className="h-32 bg-gray-800 rounded-xl"></div>
-      <div className="h-64 bg-gray-800 rounded-xl"></div>
+      <div className="kpi-content">
+        <div className={`kpi-value ${isText ? 'text' : ''}`}>{value}</div>
+        <div className="kpi-label">{title}</div>
+        {trend && <div className="kpi-trend">{trend}</div>}
+      </div>
+      {clickable && <ChevronDown size={16} className="kpi-arrow" style={{ transform: 'rotate(-90deg)' }} />}
     </div>
   );
 }
 
-function ScanSkeleton() {
+/* ============================================================
+   STATUS CARD (Klickbar)
+   ============================================================ */
+function StatusCard({ label, count, color, icon: Icon, onClick, clickable }) {
   return (
-    <div className="bg-[#111827] border border-white/5 rounded-xl p-6 shadow-lg animate-pulse">
-      <div className="h-5 w-32 bg-gray-700 rounded mb-6"></div>
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="h-20 bg-gray-800 rounded-xl mb-3"></div>
+    <div 
+      className={`status-card status-${color} ${clickable ? 'clickable' : ''}`}
+      onClick={clickable ? onClick : undefined}
+    >
+      <div className="status-icon-wrapper">
+        <Icon className="status-icon" />
+      </div>
+      <div className="status-count">{count}</div>
+      <div className="status-label">{label}</div>
+      {clickable && <div className="status-click-hint">Klicken für Details</div>}
+    </div>
+  );
+}
+
+/* ============================================================
+   BOX LIST (für Warnings, Status, Alle Boxen)
+   ============================================================ */
+function BoxList({ boxes, objects, showDaysOverdue, emptyMessage }) {
+  const getObjectName = (objectId) => {
+    const obj = objects.find(o => o.id === objectId);
+    return obj?.name || 'Unbekannt';
+  };
+
+  const getDaysOverdue = (box) => {
+    if (!box.last_scan) return null;
+    const now = new Date();
+    const lastScan = new Date(box.last_scan);
+    const daysSince = Math.floor((now - lastScan) / (1000 * 60 * 60 * 24));
+    
+    const maxDays = box.control_interval_type === 'range' 
+      ? (box.control_interval_max || 30)
+      : (box.control_interval_days || 30);
+    
+    return daysSince - maxDays;
+  };
+
+  if (boxes.length === 0) {
+    return (
+      <div className="empty-state">
+        <CheckCircle size={48} />
+        <p>{emptyMessage}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="box-list">
+      {boxes.map(box => {
+        const daysOverdue = showDaysOverdue ? getDaysOverdue(box) : null;
+        
+        return (
+          <Link 
+            key={box.id} 
+            to={`/boxes?highlight=${box.id}`}
+            className="box-list-item"
+          >
+            <div className="box-left">
+              <div className={`box-status-dot status-${box.current_status || box.status || 'gray'}`} />
+              <div className="box-info">
+                <div className="box-name">{box.qr_code || box.name || `Box ${box.id}`}</div>
+                <div className="box-object">{getObjectName(box.object_id)}</div>
+              </div>
+            </div>
+            <div className="box-right">
+              {showDaysOverdue && daysOverdue !== null && daysOverdue > 0 && (
+                <div className="days-overdue">
+                  <Clock size={14} />
+                  <span>{daysOverdue} Tage überfällig</span>
+                </div>
+              )}
+              {box.last_scan && (
+                <div className="last-scan">
+                  <Calendar size={14} />
+                  <span>Letzter Scan: {formatDate(box.last_scan)}</span>
+                </div>
+              )}
+              <ExternalLink size={16} className="link-icon" />
+            </div>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ============================================================
+   SCANS LIST
+   ============================================================ */
+function ScansList({ scans, objects }) {
+  const getObjectName = (objectId) => {
+    const obj = objects.find(o => o.id === objectId);
+    return obj?.name || 'Unbekannt';
+  };
+
+  if (scans.length === 0) {
+    return (
+      <div className="empty-state">
+        <BarChart3 size={48} />
+        <p>Keine Scans vorhanden</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="scans-list-detail">
+      {scans.map((scan, index) => (
+        <div key={scan.id || index} className="scan-detail-item">
+          <div className="scan-number">{index + 1}</div>
+          <div className={`scan-status-dot status-${scan.status || 'gray'}`} />
+          <div className="scan-info">
+            <div className="scan-box-name">{scan.box_name || 'Box'}</div>
+            <div className="scan-object">{scan.object_name || getObjectName(scan.object_id)}</div>
+            <div className="scan-message">{scan.message || `Status: ${scan.status}`}</div>
+          </div>
+          <div className="scan-meta">
+            <div className="scan-time">{timeAgo(scan.created_at)}</div>
+            <div className="scan-tech">{scan.technician_name || 'Unbekannt'}</div>
+          </div>
+        </div>
       ))}
     </div>
   );
 }
 
-// ============================================
-// Helper Functions
-// ============================================
+/* ============================================================
+   RECENT SCANS SECTION (Preview mit "Alle anzeigen")
+   ============================================================ */
+function RecentScansSection({ scans, objects, onViewAll }) {
+  if (!scans || scans.length === 0) {
+    return (
+      <div className="scans-section">
+        <div className="section-header">
+          <h2 className="section-title">Letzte Scans</h2>
+        </div>
+        <div className="empty-state small">
+          <BarChart3 size={32} />
+          <p>Noch keine Scans vorhanden</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Gruppiere nach Objekt
+  const groupedScans = scans.reduce((acc, scan) => {
+    const objName = scan.object_name || "Sonstiges";
+    if (!acc[objName]) acc[objName] = [];
+    acc[objName].push(scan);
+    return acc;
+  }, {});
+
+  return (
+    <div className="scans-section">
+      <div className="section-header">
+        <h2 className="section-title">Letzte Scans</h2>
+        <button className="view-all-btn" onClick={onViewAll}>
+          Alle anzeigen
+          <ChevronDown size={16} style={{ transform: 'rotate(-90deg)' }} />
+        </button>
+      </div>
+
+      <div className="scans-preview">
+        {Object.entries(groupedScans).map(([objectName, objScans]) => (
+          <div key={objectName} className="scan-group">
+            <div className="scan-group-header">
+              <div className="group-dot" />
+              <span className="group-title">{objectName}</span>
+              <div className="group-line" />
+              <span className="group-count">{objScans.length} Scans</span>
+            </div>
+            <div className="scan-items">
+              {objScans.slice(0, 3).map(scan => (
+                <div key={scan.id} className="scan-item">
+                  <div className="scan-left">
+                    <div className={`scan-dot status-${scan.status || 'gray'}`} />
+                    <div className="scan-info">
+                      <div className="scan-box">{scan.box_name || 'Box'}</div>
+                      <div className="scan-message">{scan.message || `Status: ${scan.status}`}</div>
+                    </div>
+                  </div>
+                  <div className="scan-right">
+                    <div className="scan-time">{timeAgo(scan.created_at)}</div>
+                    <div className="scan-tech">{scan.technician_name || 'Unbekannt'}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   SKELETON
+   ============================================================ */
+function DashboardSkeleton() {
+  return (
+    <div className="dashboard skeleton">
+      <div className="skeleton-header" />
+      <div className="kpi-grid">
+        {[1, 2, 3, 4].map(i => <div key={i} className="skeleton-card" />)}
+      </div>
+      <div className="skeleton-section" />
+      <div className="skeleton-section large" />
+    </div>
+  );
+}
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
 function formatTime(ts) {
   if (!ts) return "Keine Daten";
-
   const diff = (Date.now() - new Date(ts).getTime()) / 60000;
-
   if (diff < 1) return "Gerade eben";
   if (diff < 60) return `vor ${Math.round(diff)} Min`;
-
   const hours = Math.round(diff / 60);
   if (hours < 24) return `vor ${hours} Std`;
-  
   return `vor ${Math.round(hours / 24)} Tagen`;
 }
 
 function timeAgo(ts) {
+  if (!ts) return "";
   const diff = (Date.now() - new Date(ts).getTime()) / 60000;
   if (diff < 1) return "Gerade eben";
   if (diff < 60) return `vor ${Math.round(diff)} Min`;
   const h = Math.round(diff / 60);
   if (h < 24) return `vor ${h} Std`;
   return `vor ${Math.round(h / 24)} Tagen`;
+}
+
+function formatDate(ts) {
+  if (!ts) return "";
+  return new Date(ts).toLocaleDateString('de-DE', { 
+    day: '2-digit', 
+    month: '2-digit', 
+    year: 'numeric' 
+  });
+}
+
+function getStatusLabel(status) {
+  const labels = {
+    green: 'OK',
+    yellow: 'Auffällig',
+    orange: 'Erhöht',
+    red: 'Befall'
+  };
+  return labels[status] || status;
 }

@@ -1,6 +1,12 @@
+/* ============================================================
+   TRAPMAP - APP.JSX
+   Mit ThemeProvider für Dark/Light Mode
+   ============================================================ */
+
 import React, { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
+import { ThemeProvider } from "./components/layout/DashboardLayout";
 
 // Login
 import Login from "./pages/Login";
@@ -32,8 +38,54 @@ const SUPER_ADMINS = ["admin@demo.trapmap.de", "merlin@trapmap.de", "hilfe@die-s
 
 // Loading Fallback
 const LoadingFallback = () => (
-  <div className="min-h-screen flex justify-center items-center bg-gray-900 text-white">
-    Laden...
+  <div className="loading-screen">
+    <div className="loading-content">
+      <div className="loading-logo">
+        <span className="logo-trap">Trap</span>
+        <span className="logo-map">Map</span>
+      </div>
+      <div className="loading-spinner" />
+    </div>
+    <style>{`
+      .loading-screen {
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: var(--bg-primary, #0b1120);
+      }
+      .loading-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 24px;
+      }
+      .loading-logo {
+        font-size: 32px;
+        font-weight: 700;
+        display: flex;
+      }
+      .logo-trap {
+        color: var(--text-primary, #fff);
+      }
+      .logo-map {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+      .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid var(--border-color, rgba(255,255,255,0.1));
+        border-top-color: #6366f1;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    `}</style>
   </div>
 );
 
@@ -52,13 +104,15 @@ function isPartnerLoggedIn() {
 // ============================================
 function PartnerApp() {
   return (
-    <Suspense fallback={<LoadingFallback />}>
-      <Routes>
-        <Route path="/partner/dashboard" element={<PartnerDashboard />} />
-        <Route path="/partner/login" element={<Navigate to="/partner/dashboard" replace />} />
-        <Route path="*" element={<Navigate to="/partner/dashboard" replace />} />
-      </Routes>
-    </Suspense>
+    <ThemeProvider>
+      <Suspense fallback={<LoadingFallback />}>
+        <Routes>
+          <Route path="/partner/dashboard" element={<PartnerDashboard />} />
+          <Route path="/partner/login" element={<Navigate to="/partner/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/partner/dashboard" replace />} />
+        </Routes>
+      </Suspense>
+    </ThemeProvider>
   );
 }
 
@@ -72,7 +126,11 @@ export default function App() {
   }
 
   // Normale App mit useAuth
-  return <MainApp />;
+  return (
+    <ThemeProvider>
+      <MainApp />
+    </ThemeProvider>
+  );
 }
 
 // ============================================
@@ -139,6 +197,7 @@ function MainApp() {
           <Route path="/layouts/new" element={<DashboardLayout><LayoutCreate /></DashboardLayout>} />
           <Route path="/layouts/:id" element={<DashboardLayout><LayoutEditor /></DashboardLayout>} />
           <Route path="/maps" element={<DashboardLayout><Maps /></DashboardLayout>} />
+          <Route path="/technicians" element={<DashboardLayout><div className="p-8 text-white">Techniker-Verwaltung (coming soon)</div></DashboardLayout>} />
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </>
       )}

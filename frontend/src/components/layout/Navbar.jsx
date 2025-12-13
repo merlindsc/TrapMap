@@ -1,41 +1,47 @@
-import { Menu, LogOut, User } from "lucide-react";
-import { useAuth } from "../../hooks/useAuth";
+/* ============================================================
+   TRAPMAP - NAVBAR V2
+   Mit Dark/Light Mode Support
+   ============================================================ */
 
-export default function Navbar({ toggleSidebar }) {
+import { LogOut, User, Bell } from "lucide-react";
+import { useAuth } from "../../hooks/useAuth";
+import "./Navbar.css";
+
+export default function Navbar() {
   const { user, logout } = useAuth();
 
   return (
-    <header className="h-16 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4">
-      
-      <div className="flex items-center">
-        <button
-          onClick={toggleSidebar}
-          className="md:hidden p-2 rounded hover:bg-gray-700"
-        >
-          <Menu className="w-6 h-6 text-white" />
-        </button>
-
-        <h1 className="ml-4 text-xl font-semibold tracking-wide text-white">
-          TrapMap Dashboard
+    <header className="navbar">
+      <div className="navbar-left">
+        <h1 className="navbar-title">
+          <span className="title-trap">Trap</span>
+          <span className="title-map">Map</span>
+          <span className="title-dashboard">Dashboard</span>
         </h1>
       </div>
 
-      <div className="flex items-center gap-4 text-white">
+      <div className="navbar-right">
+        {/* Notifications (optional) */}
+        <button className="navbar-icon-btn" title="Benachrichtigungen">
+          <Bell className="navbar-icon" />
+        </button>
+
+        {/* User */}
         {user && (
-          <div className="flex items-center gap-2">
-            <User className="w-5 h-5 text-gray-300" />
-            <span className="text-sm opacity-80">
-              {user.first_name} {user.last_name}
+          <div className="navbar-user">
+            <div className="user-avatar">
+              {user.first_name?.[0] || user.email?.[0] || 'U'}
+            </div>
+            <span className="user-name">
+              {user.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : user.email?.split('@')[0]}
             </span>
           </div>
         )}
 
-        <button
-          onClick={logout}
-          className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md text-sm"
-        >
-          <LogOut className="w-4 h-4" />
-          Logout
+        {/* Logout */}
+        <button onClick={logout} className="logout-btn">
+          <LogOut className="logout-icon" />
+          <span>Logout</span>
         </button>
       </div>
     </header>

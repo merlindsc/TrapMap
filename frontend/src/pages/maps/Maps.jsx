@@ -1,17 +1,14 @@
 /* ============================================================
-   TRAPMAP - MAPS V6 PROFESSIONAL
-   - Popup-frei
-   - Sidebar automatisch
-   - Box-Klick - Kontrolle
-   - Objekt-Klick - Sidebar
-   - Icons nach Typ
-   - Kein Scrollen
-   - 48px Header
-   - DRAG & DROP für unplatzierte Boxen
+   TRAPMAP - MAPS V9 PROFESSIONAL
+   - TrapMap Logo im Header
+   - Adresssuche mit Mapbox Geocoding
+   - Rechte Sidebar: Objekte (A-Z) → Bei Auswahl: Boxen
+   - Boxen: Kleinste Nummer zuerst, Maps vor Floorplan
+   - Mobil-optimiert für App
    ============================================================ */
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   MapContainer,
   TileLayer,
@@ -22,15 +19,26 @@ import {
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
-import { Plus, Layers3, X, Search, MapPin } from "lucide-react";
+import { 
+  Plus, Layers3, X, Search, MapPin, Building2, 
+  ChevronLeft, ChevronRight, Map, LayoutGrid, Navigation,
+  ChevronDown, Clock, User
+} from "lucide-react";
 import "./Maps.css";
 
 // Components
-import ObjectSidebar from "./ObjectSidebar";
 import BoxScanDialog from "../../components/BoxScanDialog";
 import BoxEditDialog from "./BoxEditDialog";
 import ObjectCreateDialog from "./ObjectCreateDialog";
 import ObjectEditDialog from "./ObjectEditDialog";
+
+// Logo - optional, mit Fallback
+let logoImg = null;
+try {
+  logoImg = new URL("../../assets/trapmap-logo.png", import.meta.url).href;
+} catch (e) {
+  // Logo nicht vorhanden
+}
 
 /* ENV */
 const API = import.meta.env.VITE_API_URL;
@@ -39,14 +47,12 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 /* ============================================================
    MAPBOX TILE URLS
    ============================================================ */
-
 const MAPBOX_STREETS = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
 const MAPBOX_SAT = `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
 
 /* ============================================================
-   ICONS - Different per Box Type
+   ICONS
    ============================================================ */
-
 const createObjectIcon = () => {
   return L.divIcon({
     html: `<div style="background: #6366f1; width: 36px; height: 36px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;">
@@ -58,17 +64,36 @@ const createObjectIcon = () => {
   });
 };
 
-// Box-Nummer aus QR-Code extrahieren (DSE-0096 → 96, DSE-0145 → 145)
 const getBoxDisplayNumber = (box) => {
   if (box.qr_code) {
-    // Letzte Ziffern extrahieren und führende Nullen entfernen
     const match = box.qr_code.match(/(\d+)$/);
-    if (match) {
-      return parseInt(match[1], 10).toString(); // "0096" → "96"
-    }
+    if (match) return parseInt(match[1], 10).toString();
   }
-  // Fallback auf box.number oder ID
   return box.number || box.id;
+};
+
+/* ============================================================
+   STATUS COLOR HELPER
+   ============================================================ */
+const getStatusColor = (status) => {
+  const s = (status || "").toLowerCase();
+  if (s === "green" || s === "ok") return "green";
+  if (s === "yellow" || s.includes("gering")) return "yellow";
+  if (s === "orange" || s.includes("auffällig")) return "orange";
+  if (s === "red" || s.includes("befall")) return "red";
+  return "gray";
+};
+
+/* ============================================================
+   BOX ICON HELPER
+   ============================================================ */
+const getBoxIcon = (box) => {
+  const typeName = (box.box_type_name || "").toLowerCase();
+  if (typeName.includes("schlag") || typeName.includes("trap")) return "T";
+  if (typeName.includes("gift") || typeName.includes("bait") || typeName.includes("rodent") || typeName.includes("nager") || typeName.includes("köder") || typeName.includes("ratte") || typeName.includes("maus")) return "R";
+  if (typeName.includes("insekt") || typeName.includes("insect") || typeName.includes("käfer")) return "I";
+  if (typeName.includes("uv") || typeName.includes("licht")) return "L";
+  return "B";
 };
 
 const createBoxIcon = (displayNumber, status = "green") => {
@@ -80,7 +105,6 @@ const createBoxIcon = (displayNumber, status = "green") => {
     gray: "#6b7280",
     blue: "#3b82f6",
   };
-
   const color = colors[status] || colors.green;
 
   return L.divIcon({
@@ -92,7 +116,7 @@ const createBoxIcon = (displayNumber, status = "green") => {
 };
 
 /* ============================================================
-   BOX MARKER - NO POPUP, only onClick
+   BOX MARKER
    ============================================================ */
 function BoxMarker({ box, onClick }) {
   const displayNum = getBoxDisplayNumber(box);
@@ -100,76 +124,163 @@ function BoxMarker({ box, onClick }) {
     <Marker
       position={[box.lat, box.lng]}
       icon={createBoxIcon(displayNum, box.current_status || box.status)}
-      eventHandlers={{
-        click: () => onClick(box),
-      }}
+      eventHandlers={{ click: () => onClick(box) }}
     />
   );
 }
 
 /* ============================================================
-   OBJECT MARKER - NO POPUP, only onClick
+   OBJECT MARKER
    ============================================================ */
 function ObjectMarkerComponent({ object, isSelected, onSelect }) {
   return (
     <Marker
       position={[object.lat, object.lng]}
       icon={createObjectIcon()}
-      eventHandlers={{
-        click: () => onSelect(object),
-      }}
+      eventHandlers={{ click: () => onSelect(object) }}
     />
+  );
+}
+
+/* ============================================================
+   COLLAPSIBLE BOX SECTION (Aufklappbare Sektion)
+   ============================================================ */
+function CollapsibleBoxSection({ title, icon, count, variant = "default", defaultOpen = false, children }) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  const variantClasses = {
+    default: "",
+    warning: "variant-warning",
+    map: "variant-map",
+    floorplan: "variant-floorplan"
+  };
+
+  return (
+    <div className={`collapsible-section ${variantClasses[variant]} ${isOpen ? 'open' : 'closed'}`}>
+      <button className="collapsible-header" onClick={() => setIsOpen(!isOpen)}>
+        <div className="header-left">
+          {icon}
+          <span className="header-title">{title}</span>
+        </div>
+        <div className="header-right">
+          <span className="header-count">{count}</span>
+          <ChevronDown size={16} className={`chevron ${isOpen ? 'rotated' : ''}`} />
+        </div>
+      </button>
+      {isOpen && (
+        <div className="collapsible-content">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   BOX LIST ITEM (Mit Details: Letzte Kontrolle, Techniker)
+   ============================================================ */
+function BoxListItem({ box, onClick, showLocation = false, isFloorplan = false }) {
+  // Zeit seit letztem Scan formatieren
+  const formatLastScan = (lastScan) => {
+    if (!lastScan) return "Nie kontrolliert";
+    const date = new Date(lastScan);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return "Heute";
+    if (diffDays === 1) return "Gestern";
+    if (diffDays < 7) return `vor ${diffDays} Tagen`;
+    if (diffDays < 30) return `vor ${Math.floor(diffDays / 7)} Wochen`;
+    return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  };
+
+  const displayNum = getBoxDisplayNumber(box);
+  const statusColor = getStatusColor(box.current_status || box.status);
+
+  return (
+    <div className={`box-item-detailed ${isFloorplan ? 'floorplan' : ''}`} onClick={onClick}>
+      <div className="box-item-main">
+        <div className={`box-number-badge ${statusColor}`}>
+          {displayNum}
+        </div>
+        <div className="box-item-info">
+          <div className="box-item-name">
+            {box.box_type_name || 'Kein Typ'}
+            {isFloorplan && <LayoutGrid size={12} className="floorplan-badge" />}
+          </div>
+          <div className="box-item-meta">
+            <span className="last-scan">
+              <Clock size={11} />
+              {formatLastScan(box.last_scan)}
+            </span>
+            {box.last_scan_by && (
+              <span className="technician">
+                <User size={11} />
+                {box.last_scan_by}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="box-item-right">
+        <span className={`status-indicator ${statusColor}`} />
+        <ChevronRight size={14} className="item-chevron" />
+      </div>
+    </div>
   );
 }
 
 /* ============================================================
    MAIN COMPONENT
    ============================================================ */
-
 export default function Maps() {
   const token = localStorage.getItem("trapmap_token");
   const userStr = localStorage.getItem("trapmap_user");
   const user = userStr ? JSON.parse(userStr) : null;
-  const canEdit = user?.role === "admin" || user?.role === "editor";
+  const canEdit = user?.role === "admin" || user?.role === "supervisor" || user?.role === "editor";
+  const navigate = useNavigate();
 
-  // URL Parameters for deep linking
   const [searchParams, setSearchParams] = useSearchParams();
   const urlObjectId = searchParams.get("object_id");
   const urlFlyTo = searchParams.get("flyTo") === "true";
 
   // Data
   const [objects, setObjects] = useState([]);
-  const [filteredObjects, setFilteredObjects] = useState([]);
   const [boxes, setBoxes] = useState([]);
   const [boxTypes, setBoxTypes] = useState([]);
 
-  // Selected items
+  // Selected
   const [selectedObject, setSelectedObject] = useState(null);
   const [selectedBox, setSelectedBox] = useState(null);
 
   // UI State
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [controlDialogOpen, setControlDialogOpen] = useState(false);
   const [boxEditDialogOpen, setBoxEditDialogOpen] = useState(false);
-  const [isFirstSetup, setIsFirstSetup] = useState(false);  // Ersteinrichtung?
+  const [isFirstSetup, setIsFirstSetup] = useState(false);
   const [objectCreateDialogOpen, setObjectCreateDialogOpen] = useState(false);
   const [objectEditDialogOpen, setObjectEditDialogOpen] = useState(false);
+  const [floorplanDialogOpen, setFloorplanDialogOpen] = useState(false);
+  const [pendingFloorplanBox, setPendingFloorplanBox] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // Map
   const [mapStyle, setMapStyle] = useState("streets");
   const [styleOpen, setStyleOpen] = useState(false);
 
-  // Placing modes - NUR noch für Objekte
+  // Placing
   const [objectPlacingMode, setObjectPlacingMode] = useState(false);
   const [tempObjectLatLng, setTempObjectLatLng] = useState(null);
-  
-  // Box Position verschieben Modus
-  const [repositionBox, setRepositionBox] = useState(null);  // Box die verschoben werden soll
+  const [repositionBox, setRepositionBox] = useState(null);
 
-  // Search
+  // Search - Objekte
   const [objectSearchQuery, setObjectSearchQuery] = useState("");
-  const [addressSearchQuery, setAddressSearchQuery] = useState("");
+  
+  // Search - Adresse (Geocoding)
+  const [addressQuery, setAddressQuery] = useState("");
   const [addressResults, setAddressResults] = useState([]);
+  const [addressSearching, setAddressSearching] = useState(false);
+  const addressTimeoutRef = useRef(null);
 
   // Drag & Drop
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -178,96 +289,44 @@ export default function Maps() {
   const mapWrapperRef = useRef(null);
 
   /* ============================================================
-     ESC KEY HANDLER
-     ============================================================ */
-  useEffect(() => {
-    const handleEscape = (e) => {
-      if (e.key === "Escape") {
-        if (controlDialogOpen) {
-          setControlDialogOpen(false);
-          setSelectedBox(null);
-        } else if (boxEditDialogOpen) {
-          setBoxEditDialogOpen(false);
-        } else if (objectEditDialogOpen) {
-          setObjectEditDialogOpen(false);
-        } else if (objectCreateDialogOpen) {
-          setObjectCreateDialogOpen(false);
-          setTempObjectLatLng(null);
-          setObjectPlacingMode(false);
-        } else if (sidebarOpen) {
-          setSidebarOpen(false);
-          setSelectedObject(null);
-        }
-      }
-    };
-
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [controlDialogOpen, boxEditDialogOpen, objectEditDialogOpen, objectCreateDialogOpen, sidebarOpen]);
-
-  /* ============================================================
      LOAD DATA
      ============================================================ */
-
   const loadObjects = useCallback(async () => {
     try {
       const res = await fetch(`${API}/objects`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
       const json = await res.json();
       const arr = Array.isArray(json) ? json : [];
-
-      console.log("📍 Loaded objects:", arr.length);
+      // Alphabetisch sortieren
+      arr.sort((a, b) => (a.name || "").localeCompare(b.name || "", "de"));
       setObjects(arr);
-      setFilteredObjects(arr);
     } catch (e) {
       console.error("❌ Fehler beim Laden der Objekte:", e);
     }
   }, [token]);
 
-  const loadBoxes = useCallback(
-    async (objectId) => {
-      try {
-        console.log("📦 Fetching boxes for object:", objectId);
-
-        const res = await fetch(`${API}/boxes?object_id=${objectId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const json = await res.json();
-
-        let boxesData = [];
-        if (Array.isArray(json)) {
-          boxesData = json;
-        } else if (Array.isArray(json.data)) {
-          boxesData = json.data;
-        }
-
-        console.log("📦 Loaded boxes:", boxesData.length);
-        setBoxes(boxesData);
-      } catch (e) {
-        console.error("❌ Fehler beim Laden der Boxen:", e);
-        setBoxes([]);
-      }
-    },
-    [token]
-  );
+  const loadBoxes = useCallback(async (objectId) => {
+    try {
+      const res = await fetch(`${API}/boxes?object_id=${objectId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      let boxesData = Array.isArray(json) ? json : json.data || [];
+      setBoxes(boxesData);
+    } catch (e) {
+      console.error("❌ Fehler beim Laden der Boxen:", e);
+      setBoxes([]);
+    }
+  }, [token]);
 
   const loadBoxTypes = useCallback(async () => {
     try {
       const res = await fetch(`${API}/boxtypes`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
       const json = await res.json();
-
-      let types = [];
-      if (Array.isArray(json)) types = json;
-      else if (Array.isArray(json.data)) types = json.data;
-      else if (Array.isArray(json.boxtypes)) types = json.boxtypes;
-
-      console.log("📋 Loaded box types:", types.length);
+      let types = Array.isArray(json) ? json : json.data || json.boxtypes || [];
       setBoxTypes(types);
     } catch (e) {
       console.error("❌ Fehler beim Laden der Boxtypen:", e);
@@ -279,24 +338,18 @@ export default function Maps() {
     loadBoxTypes();
   }, [loadObjects, loadBoxTypes]);
 
-  // Handle URL parameter for deep linking (flyTo object)
+  // URL Parameter handling
   useEffect(() => {
     if (urlObjectId && objects.length > 0 && urlFlyTo) {
       const targetObject = objects.find(obj => String(obj.id) === urlObjectId);
       if (targetObject && targetObject.lat && targetObject.lng) {
-        console.log("[FLYTO] Flying to object from URL:", targetObject.name);
         setSelectedObject(targetObject);
         loadBoxes(targetObject.id);
-        setSidebarOpen(true);
-        
         setTimeout(() => {
           if (mapRef.current) {
-            mapRef.current.flyTo([targetObject.lat, targetObject.lng], 18, {
-              duration: 1.5,
-            });
+            mapRef.current.flyTo([targetObject.lat, targetObject.lng], 18, { duration: 1.5 });
           }
         }, 500);
-        
         setSearchParams({});
       }
     }
@@ -304,61 +357,151 @@ export default function Maps() {
 
   useEffect(() => {
     if (selectedObject) {
-      console.log("📦 Loading boxes for object:", selectedObject.id);
       loadBoxes(selectedObject.id);
-      setSidebarOpen(true);
     } else {
       setBoxes([]);
-      setSidebarOpen(false);
     }
   }, [selectedObject, loadBoxes]);
 
   /* ============================================================
-     HANDLERS
+     ADDRESS SEARCH (Mapbox Geocoding)
      ============================================================ */
+  const handleAddressSearch = useCallback((query) => {
+    // Clear previous timeout
+    if (addressTimeoutRef.current) {
+      clearTimeout(addressTimeoutRef.current);
+    }
 
-  const handleBoxClick = async (box) => {
-    // Nur platzierte Boxen können angeklickt werden
-    const isPlaced = box.position_type && box.position_type !== 'none';
-    if (!isPlaced) {
-      console.log("⚠️ Box ist nicht platziert, ignoriere Klick");
+    if (!query || query.length < 3) {
+      setAddressResults([]);
       return;
     }
-    
-    console.log("📦 Box clicked:", box);
+
+    // Debounce: Wait 300ms before searching
+    addressTimeoutRef.current = setTimeout(async () => {
+      setAddressSearching(true);
+      try {
+        // Mapbox Geocoding API
+        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN}&language=de&country=de,at,ch&limit=5`;
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        if (data.features) {
+          setAddressResults(data.features.map(f => ({
+            place_name: f.place_name,
+            center: f.center, // [lng, lat]
+          })));
+        }
+      } catch (err) {
+        console.error("Geocoding error:", err);
+        setAddressResults([]);
+      } finally {
+        setAddressSearching(false);
+      }
+    }, 300);
+  }, []);
+
+  const handleAddressSelect = (result) => {
+    if (result.center && mapRef.current) {
+      const [lng, lat] = result.center;
+      mapRef.current.flyTo([lat, lng], 17, { duration: 1.2 });
+    }
+    setAddressQuery(result.place_name);
+    setAddressResults([]);
+  };
+
+  /* ============================================================
+     SORTED & FILTERED DATA
+     ============================================================ */
+  const filteredObjects = useMemo(() => {
+    if (!objectSearchQuery.trim()) return objects;
+    const q = objectSearchQuery.toLowerCase();
+    return objects.filter(o =>
+      o.name?.toLowerCase().includes(q) ||
+      o.address?.toLowerCase().includes(q) ||
+      o.city?.toLowerCase().includes(q)
+    );
+  }, [objects, objectSearchQuery]);
+
+  // Boxen sortiert: Kleinste Nummer zuerst, Maps vor Floorplan
+  const sortedBoxes = useMemo(() => {
+    if (!boxes.length) return { mapBoxes: [], floorplanBoxes: [], unplacedBoxes: [] };
+
+    // Nummer aus QR-Code oder Box extrahieren
+    const getNumber = (box) => {
+      if (box.qr_code) {
+        const match = box.qr_code.match(/(\d+)$/);
+        if (match) return parseInt(match[1], 10);
+      }
+      if (box.number) return parseInt(box.number, 10);
+      return box.id || 9999;
+    };
+
+    // Sortierung: kleinste Nummer zuerst (aufsteigend)
+    const sortByNumber = (a, b) => getNumber(a) - getNumber(b);
+
+    // GPS/Map Boxen (position_type kann 'gps' oder 'map' sein)
+    const mapBoxes = boxes
+      .filter(b => (b.position_type === 'gps' || b.position_type === 'map') && b.lat && b.lng)
+      .sort(sortByNumber);
+
+    const floorplanBoxes = boxes
+      .filter(b => b.position_type === 'floorplan')
+      .sort(sortByNumber);
+
+    const unplacedBoxes = boxes
+      .filter(b => !b.position_type || b.position_type === 'none' || b.position_type === 'pool')
+      .sort(sortByNumber);
+
+    return { mapBoxes, floorplanBoxes, unplacedBoxes };
+  }, [boxes]);
+
+  /* ============================================================
+     HANDLERS
+     ============================================================ */
+  const handleObjectClick = (obj) => {
+    setSelectedObject(obj);
+    if (obj.lat && obj.lng && mapRef.current) {
+      mapRef.current.flyTo([obj.lat, obj.lng], 17, { duration: 1.0 });
+    }
+  };
+
+  const handleBoxClick = (box) => {
+    // Floorplan-Box? → Dialog zeigen
+    if (box.position_type === 'floorplan') {
+      setPendingFloorplanBox(box);
+      setFloorplanDialogOpen(true);
+      return;
+    }
+
+    // Normale Map-Box
     setSelectedBox(box);
-
-    // Prüfen ob Ersteinrichtung nötig: Kein Box-Typ gesetzt = Ersteinrichtung
     const needsSetup = !box.box_type_id;
-
     if (needsSetup) {
-      console.log("🔧 Ersteinrichtung nötig - BoxEditDialog öffnen");
       setIsFirstSetup(true);
       setBoxEditDialogOpen(true);
     } else {
-      console.log("📋 Kontrolle - BoxScanDialog öffnen");
       setIsFirstSetup(false);
       setControlDialogOpen(true);
     }
   };
 
-  const handleObjectClick = (obj) => {
-    console.log("[OBJ] Object clicked:", obj);
-    setSelectedObject(obj);
-    loadBoxes(obj.id);
-    setSidebarOpen(true);
-    
-    if (mapRef.current) {
-      mapRef.current.flyTo([obj.lat, obj.lng], 18, {
-        duration: 1.0,
-      });
+  const handleGoToFloorplan = () => {
+    if (pendingFloorplanBox && selectedObject) {
+      navigate(`/layouts/${selectedObject.id}`);
     }
+    setFloorplanDialogOpen(false);
+    setPendingFloorplanBox(null);
+  };
+
+  const handleBackToObjects = () => {
+    setSelectedObject(null);
+    setBoxes([]);
   };
 
   /* ============================================================
-     DRAG & DROP - Box auf Karte platzieren
+     DRAG & DROP
      ============================================================ */
-
   const handleDragOver = (e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
@@ -378,23 +521,15 @@ export default function Maps() {
 
     try {
       const box = JSON.parse(boxData);
-      console.log("📍 Box dropped:", box.qr_code || box.id);
-
-      // Pixel-Position relativ zum Map-Container berechnen
       const mapWrapper = mapWrapperRef.current;
       if (!mapWrapper || !mapRef.current) return;
 
       const rect = mapWrapper.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
-
-      // Pixel zu LatLng konvertieren
       const point = L.point(x, y);
       const latlng = mapRef.current.containerPointToLatLng(point);
 
-      console.log("📍 Drop position:", latlng.lat, latlng.lng);
-
-      // Box auf Karte platzieren via API
       const res = await fetch(`${API}/boxes/${box.id}/place-map`, {
         method: 'POST',
         headers: {
@@ -410,9 +545,6 @@ export default function Maps() {
 
       if (res.ok) {
         const placedBox = await res.json();
-        console.log("✅ Box platziert!", placedBox);
-
-        // Box mit Object-Daten anreichern für Dialoge
         const enrichedBox = {
           ...placedBox,
           objects: selectedObject,
@@ -420,149 +552,62 @@ export default function Maps() {
         };
 
         setSelectedBox(enrichedBox);
-
-        // Prüfen ob Ersteinrichtung nötig: Kein Box-Typ = Ersteinrichtung
         const needsSetup = !placedBox.box_type_id;
-
         if (needsSetup) {
-          console.log("🔧 Ersteinrichtung - BoxEditDialog öffnen");
           setIsFirstSetup(true);
           setBoxEditDialogOpen(true);
         } else {
-          console.log("📋 Kontrolle - BoxScanDialog öffnen");
           setIsFirstSetup(false);
           setControlDialogOpen(true);
         }
 
-        // Boxen neu laden
-        if (selectedObject) {
-          loadBoxes(selectedObject.id);
-        }
+        if (selectedObject) loadBoxes(selectedObject.id);
       } else {
         const err = await res.json();
-        console.error("❌ Platzierung fehlgeschlagen:", err);
-        alert(err.error || 'Fehler beim Platzieren der Box');
+        alert(err.error || 'Fehler beim Platzieren');
       }
     } catch (err) {
-      console.error("❌ Drop error:", err);
+      console.error("Drop error:", err);
     }
-  };
-
-  /* ============================================================
-     ADDRESS SEARCH (Nominatim)
-     ============================================================ */
-
-  const searchAddress = async (query) => {
-    if (!query || query.length < 3) {
-      setAddressResults([]);
-      return;
-    }
-
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`
-      );
-      const data = await res.json();
-      setAddressResults(data);
-    } catch (e) {
-      console.error("❌ Address search error:", e);
-    }
-  };
-
-  const selectAddress = (result) => {
-    if (mapRef.current) {
-      mapRef.current.flyTo([parseFloat(result.lat), parseFloat(result.lon)], 16, {
-        duration: 1.0,
-      });
-    }
-    setAddressResults([]);
-    setAddressSearchQuery("");
-  };
-
-  /* ============================================================
-     OBJECT SEARCH
-     ============================================================ */
-
-  const filterObjects = (query) => {
-    setObjectSearchQuery(query);
-    if (!query.trim()) {
-      setFilteredObjects(objects);
-      return;
-    }
-
-    const v = query.toLowerCase();
-    setFilteredObjects(
-      objects.filter(
-        (o) =>
-          o.name?.toLowerCase().includes(v) ||
-          o.address?.toLowerCase().includes(v) ||
-          o.city?.toLowerCase().includes(v)
-      )
-    );
   };
 
   /* ============================================================
      MAP HANDLERS
      ============================================================ */
-
   function MapReadyHandler() {
     const map = useMap();
-    useEffect(() => {
-      mapRef.current = map;
-    }, [map]);
+    useEffect(() => { mapRef.current = map; }, [map]);
     return null;
   }
 
   function MapEventsHandler() {
     useMapEvents({
       click(e) {
-        // Box Position verschieben Modus
         if (repositionBox) {
           handleRepositionBox(e.latlng);
           return;
         }
-        
         if (objectPlacingMode) {
           setTempObjectLatLng(e.latlng);
           setObjectCreateDialogOpen(true);
-          return;
         }
       },
     });
-
     return null;
   }
 
-  // Box an neue Position verschieben
   const handleRepositionBox = async (latlng) => {
     if (!repositionBox) return;
-    
     try {
       const res = await fetch(`${API}/boxes/${repositionBox.id}/location`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ lat: latlng.lat, lng: latlng.lng })
       });
-      
-      if (res.ok) {
-        console.log("✅ Box verschoben:", latlng.lat, latlng.lng);
-        // Boxen neu laden
-        if (selectedObject) {
-          loadBoxes(selectedObject.id);
-        }
-      } else {
-        const err = await res.json();
-        alert("Fehler: " + (err.error || "Position konnte nicht gespeichert werden"));
-      }
+      if (res.ok && selectedObject) loadBoxes(selectedObject.id);
     } catch (err) {
       console.error("Reposition error:", err);
-      alert("Fehler beim Verschieben der Box");
     }
-    
-    // Modus beenden
     setRepositionBox(null);
   };
 
@@ -574,334 +619,418 @@ export default function Maps() {
   /* ============================================================
      RENDER
      ============================================================ */
-
   return (
     <div className="maps-page">
       {/* ============================================================
-          HEADER (48px kompakt)
+          HEADER - Adresssuche + Actions
           ============================================================ */}
-      <div className="maps-header-v6">
-        {/* Objekt-Suche */}
-        <div className="search-group">
-          <Search size={18} className="search-icon" />
-          <input
-            className="object-search-input-v6"
-            placeholder="Objekte suchen..."
-            value={objectSearchQuery}
-            onChange={(e) => filterObjects(e.target.value)}
-          />
-          {filteredObjects.length > 0 && objectSearchQuery && (
-            <div className="object-dropdown">
-              {filteredObjects.map((obj) => (
-                <div
-                  key={obj.id}
-                  className="object-dropdown-item"
-                  onClick={() => {
-                    handleObjectClick(obj);
-                    setObjectSearchQuery("");
-                  }}
-                >
-                  <span className="object-name">{obj.name}</span>
-                  <span className="object-address">{obj.address}, {obj.city}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Adress-Suche */}
-        <div className="search-group">
-          <Search size={18} className="search-icon" />
-          <input
-            className="object-search-input-v6"
-            placeholder="Adresse suchen..."
-            value={addressSearchQuery}
-            onChange={(e) => {
-              setAddressSearchQuery(e.target.value);
-              searchAddress(e.target.value);
-            }}
-          />
-          {addressResults.length > 0 && (
-            <div className="object-dropdown">
-              {addressResults.map((res, i) => (
-                <div
-                  key={i}
-                  className="object-dropdown-item"
-                  onClick={() => selectAddress(res)}
-                >
-                  <span className="object-name">{res.display_name}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Aktionen */}
-        {canEdit && (
-          <div className="header-actions-v6">
-            <button
-              className={`btn-action ${objectPlacingMode ? "active" : ""}`}
-              onClick={() => {
-                setObjectPlacingMode(!objectPlacingMode);
-                setBoxPlacingMode(false);
-              }}
-            >
-              <Plus size={16} />
-              Objekt
-            </button>
+      <header className="maps-header-modern">
+        <div className="header-left">
+          <div className="header-logo">
+            {logoImg && <img src={logoImg} alt="TrapMap" onError={(e) => { e.target.style.display = 'none'; }} />}
+            <span className="logo-text">TrapMap</span>
           </div>
-        )}
-
-        {/* Map Style Toggle */}
-        <div className="style-toggle-v6">
-          <button onClick={() => setStyleOpen(!styleOpen)}>
-            <Layers3 size={18} />
-          </button>
-
-          {styleOpen && (
-            <div className="style-dropdown-v6">
-              <button
-                className={mapStyle === "streets" ? "active" : ""}
-                onClick={() => {
-                  setMapStyle("streets");
-                  setStyleOpen(false);
-                }}
-              >
-                🗺️ Straßen
-              </button>
-
-              <button
-                className={mapStyle === "satellite" ? "active" : ""}
-                onClick={() => {
-                  setMapStyle("satellite");
-                  setStyleOpen(false);
-                }}
-              >
-                🛰️ Satellit
-              </button>
-
-              <button
-                className={mapStyle === "hybrid" ? "active" : ""}
-                onClick={() => {
-                  setMapStyle("hybrid");
-                  setStyleOpen(false);
-                }}
-              >
-                🌍 Hybrid
-              </button>
-            </div>
-          )}
         </div>
-      </div>
 
-      {/* ============================================================
-          PLACING MODE HINTS
-          ============================================================ */}
+        <div className="header-center">
+          {/* Adresssuche */}
+          <div className="header-search">
+            <MapPin size={18} />
+            <input
+              type="text"
+              placeholder="Adresse suchen..."
+              value={addressQuery}
+              onChange={(e) => {
+                setAddressQuery(e.target.value);
+                handleAddressSearch(e.target.value);
+              }}
+            />
+            {addressSearching && <div className="search-spinner" />}
+            {addressQuery && !addressSearching && (
+              <button onClick={() => { setAddressQuery(""); setAddressResults([]); }} className="search-clear">
+                <X size={16} />
+              </button>
+            )}
+            {/* Adress-Dropdown */}
+            {addressResults.length > 0 && (
+              <div className="search-dropdown">
+                {addressResults.map((result, idx) => (
+                  <div
+                    key={idx}
+                    className="dropdown-item"
+                    onClick={() => handleAddressSelect(result)}
+                  >
+                    <MapPin size={14} />
+                    <span>{result.place_name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="header-right">
+          {canEdit && (
+            <button
+              className={`header-btn ${objectPlacingMode ? 'active' : ''}`}
+              onClick={() => setObjectPlacingMode(!objectPlacingMode)}
+            >
+              <Plus size={18} />
+              <span>Objekt</span>
+            </button>
+          )}
+
+          <div className="map-style-toggle">
+            <button onClick={() => setStyleOpen(!styleOpen)}>
+              <Layers3 size={18} />
+            </button>
+            {styleOpen && (
+              <div className="style-dropdown">
+                <button className={mapStyle === "streets" ? "active" : ""} onClick={() => { setMapStyle("streets"); setStyleOpen(false); }}>
+                  🗺️ Straßen
+                </button>
+                <button className={mapStyle === "satellite" ? "active" : ""} onClick={() => { setMapStyle("satellite"); setStyleOpen(false); }}>
+                  🛰️ Satellit
+                </button>
+                <button className={mapStyle === "hybrid" ? "active" : ""} onClick={() => { setMapStyle("hybrid"); setStyleOpen(false); }}>
+                  🌍 Hybrid
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Mobile: Sidebar Toggle */}
+          <button 
+            className="sidebar-toggle-btn"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+          >
+            {sidebarOpen ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          </button>
+        </div>
+      </header>
+
+      {/* Placing Hints */}
       {objectPlacingMode && (
         <div className="placing-hint">
-          Klicke auf die Karte, um ein neues Objekt zu erstellen
+          <MapPin size={18} />
+          <span>Klicke auf die Karte um ein neues Objekt zu erstellen</span>
           <button onClick={() => setObjectPlacingMode(false)}>
             <X size={16} /> Abbrechen
           </button>
         </div>
       )}
 
-      {/* Reposition Box Banner */}
       {repositionBox && (
-        <div style={{
-          position: "absolute",
-          top: 70,
-          left: "50%",
-          transform: "translateX(-50%)",
-          zIndex: 1000,
-          background: "#1f6feb",
-          color: "#fff",
-          padding: "12px 20px",
-          borderRadius: 8,
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-          fontSize: 14,
-          fontWeight: 500
-        }}>
-          <MapPin size={18} />
-          Klicke auf die Karte um Box #{repositionBox.qr_code?.match(/(\d+)$/)?.[1] || repositionBox.id} zu verschieben
-          <button 
-            onClick={() => setRepositionBox(null)}
-            style={{
-              background: "rgba(255,255,255,0.2)",
-              border: "none",
-              borderRadius: 4,
-              color: "#fff",
-              padding: "6px 12px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              fontSize: 13
-            }}
-          >
-            <X size={14} /> Abbrechen
+        <div className="placing-hint reposition">
+          <Navigation size={18} />
+          <span>Klicke auf die Karte um Box #{getBoxDisplayNumber(repositionBox)} zu verschieben</span>
+          <button onClick={() => setRepositionBox(null)}>
+            <X size={16} /> Abbrechen
           </button>
         </div>
       )}
 
       {/* ============================================================
-          MAP - Mit Drag & Drop Support
+          MAIN CONTENT: Map + Sidebar
           ============================================================ */}
-      <div 
-        className={`map-wrapper-v6 ${isDraggingOver ? 'drag-over' : ''}`}
-        ref={mapWrapperRef}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        {/* Drop Zone Indicator */}
-        {isDraggingOver && (
-          <div className="drop-zone-indicator">
-            <div className="drop-zone-content">
-              📍 Box hier platzieren
-            </div>
-          </div>
-        )}
-
-        <MapContainer
-          center={[51.1657, 10.4515]}
-          zoom={6}
-          maxZoom={22}
-          zoomControl={false}
-          scrollWheelZoom={true}
-          style={{ width: "100%", height: "100%" }}
+      <div className="maps-content">
+        {/* MAP */}
+        <div 
+          className={`map-container ${isDraggingOver ? 'drag-over' : ''}`}
+          ref={mapWrapperRef}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
         >
-          <TileLayer
-            key={`base-${mapStyle}`}
-            url={getTileUrl()}
-            attribution='&copy; <a href="https://www.mapbox.com/">Mapbox</a>'
-            tileSize={512}
-            zoomOffset={-1}
-            maxNativeZoom={20}
-            maxZoom={22}
-          />
+          {isDraggingOver && (
+            <div className="drop-zone-indicator">
+              <div className="drop-zone-content">📍 Box hier platzieren</div>
+            </div>
+          )}
 
-          {mapStyle === "hybrid" && (
+          <MapContainer
+            center={[51.1657, 10.4515]}
+            zoom={6}
+            maxZoom={22}
+            zoomControl={false}
+            scrollWheelZoom={true}
+            style={{ width: "100%", height: "100%" }}
+          >
             <TileLayer
-              key="hybrid-labels"
-              url={MAPBOX_STREETS}
+              key={`base-${mapStyle}`}
+              url={getTileUrl()}
+              attribution='&copy; Mapbox'
               tileSize={512}
               zoomOffset={-1}
-              opacity={0.6}
               maxNativeZoom={20}
               maxZoom={22}
             />
-          )}
+            {mapStyle === "hybrid" && (
+              <TileLayer key="hybrid-labels" url={MAPBOX_STREETS} tileSize={512} zoomOffset={-1} opacity={0.6} maxNativeZoom={20} maxZoom={22} />
+            )}
 
-          <MapReadyHandler />
-          <MapEventsHandler />
+            <MapReadyHandler />
+            <MapEventsHandler />
 
-          {/* Objects - nur mit Koordinaten! */}
-          {objects.filter(obj => obj.lat && obj.lng).map((obj) => (
-            <ObjectMarkerComponent
-              key={obj.id}
-              object={obj}
-              isSelected={selectedObject?.id === obj.id}
-              onSelect={handleObjectClick}
-            />
-          ))}
-
-          {/* Boxes - nur platzierte anzeigen! */}
-          {boxes
-            .filter(box => box.lat && box.lng)
-            .map((box) => (
-              <BoxMarker
-                key={box.id}
-                box={box}
-                onClick={handleBoxClick}
+            {/* Objects */}
+            {objects.filter(obj => obj.lat && obj.lng).map((obj) => (
+              <ObjectMarkerComponent
+                key={obj.id}
+                object={obj}
+                isSelected={selectedObject?.id === obj.id}
+                onSelect={handleObjectClick}
               />
             ))}
-        </MapContainer>
 
-        {/* Zoom Buttons - mittig rechts */}
-        <div className="zoom-buttons-v6">
-          <button onClick={() => mapRef.current?.zoomIn()}>+</button>
-          <button onClick={() => mapRef.current?.zoomOut()}>-</button>
+            {/* Boxes - nur Map-Boxen anzeigen */}
+            {sortedBoxes.mapBoxes.map((box) => (
+              <BoxMarker key={box.id} box={box} onClick={handleBoxClick} />
+            ))}
+          </MapContainer>
+
+          {/* Zoom Buttons */}
+          <div className="zoom-controls">
+            <button onClick={() => mapRef.current?.zoomIn()}>+</button>
+            <button onClick={() => mapRef.current?.zoomOut()}>−</button>
+          </div>
         </div>
+
+        {/* ============================================================
+            SIDEBAR - Objekte oder Boxen
+            ============================================================ */}
+        <aside className={`maps-sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
+          {!selectedObject ? (
+            /* OBJEKT-LISTE */
+            <>
+              <div className="sidebar-header">
+                <div className="sidebar-title row">
+                  <Building2 size={20} />
+                  <h2>Objekte</h2>
+                  <span className="count">{filteredObjects.length}</span>
+                </div>
+              </div>
+
+              {/* Objekt-Suche */}
+              <div className="sidebar-search">
+                <Search size={16} />
+                <input
+                  type="text"
+                  placeholder="Objekt suchen..."
+                  value={objectSearchQuery}
+                  onChange={(e) => setObjectSearchQuery(e.target.value)}
+                />
+                {objectSearchQuery && (
+                  <button onClick={() => setObjectSearchQuery("")}>
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              <div className="sidebar-content">
+                {filteredObjects.length === 0 ? (
+                  <div className="empty-state">
+                    <Building2 size={32} />
+                    <p>Keine Objekte gefunden</p>
+                  </div>
+                ) : (
+                  <div className="object-list">
+                    {filteredObjects.map((obj) => (
+                      <div
+                        key={obj.id}
+                        className="object-item"
+                        onClick={() => handleObjectClick(obj)}
+                      >
+                        <div className="object-icon">
+                          <Building2 size={18} />
+                        </div>
+                        <div className="object-info">
+                          <h4>{obj.name}</h4>
+                          <p>{obj.address}{obj.city ? `, ${obj.city}` : ''}</p>
+                        </div>
+                        <ChevronRight size={18} className="chevron" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            /* BOX-LISTE für ausgewähltes Objekt */
+            <>
+              <div className="sidebar-header with-back">
+                <button className="back-btn" onClick={handleBackToObjects}>
+                  <ChevronLeft size={20} />
+                </button>
+                <div className="sidebar-title">
+                  <h2>{selectedObject.name}</h2>
+                  <p>{selectedObject.address}</p>
+                </div>
+                <button className="edit-btn" onClick={() => setObjectEditDialogOpen(true)}>
+                  Bearbeiten
+                </button>
+              </div>
+
+              <div className="sidebar-content">
+                {/* Statistik-Übersicht */}
+                <div className="box-stats-row">
+                  <div className="stat-item">
+                    <span className="stat-value">{boxes.length}</span>
+                    <span className="stat-label">Gesamt</span>
+                  </div>
+                  <div className="stat-item map">
+                    <span className="stat-value">{sortedBoxes.mapBoxes.length}</span>
+                    <span className="stat-label">Karte</span>
+                  </div>
+                  <div className="stat-item floorplan">
+                    <span className="stat-value">{sortedBoxes.floorplanBoxes.length}</span>
+                    <span className="stat-label">Lageplan</span>
+                  </div>
+                  <div className="stat-item warning">
+                    <span className="stat-value">{sortedBoxes.unplacedBoxes.length}</span>
+                    <span className="stat-label">Offen</span>
+                  </div>
+                </div>
+
+                {/* Unplatzierte Boxen - Aufklappbar */}
+                <CollapsibleBoxSection
+                  title="Unplatzierte Boxen"
+                  icon={<MapPin size={16} />}
+                  count={sortedBoxes.unplacedBoxes.length}
+                  variant="warning"
+                  defaultOpen={sortedBoxes.unplacedBoxes.length > 0}
+                >
+                  {sortedBoxes.unplacedBoxes.length === 0 ? (
+                    <div className="section-empty">Alle Boxen sind platziert ✓</div>
+                  ) : (
+                    sortedBoxes.unplacedBoxes.map((box) => (
+                      <div
+                        key={box.id}
+                        className="box-item unplaced"
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData('box', JSON.stringify(box));
+                          e.dataTransfer.effectAllowed = 'move';
+                        }}
+                      >
+                        <span className="box-icon">{getBoxIcon(box)}</span>
+                        <div className="box-info">
+                          <h4>{getBoxDisplayNumber(box)}</h4>
+                          <p>{box.box_type_name || 'Kein Typ'}</p>
+                        </div>
+                        <span className="drag-hint">⇢ Ziehen</span>
+                      </div>
+                    ))
+                  )}
+                </CollapsibleBoxSection>
+
+                {/* Karten-Boxen - Aufklappbar */}
+                <CollapsibleBoxSection
+                  title="Karten-Boxen"
+                  icon={<Map size={16} />}
+                  count={sortedBoxes.mapBoxes.length}
+                  variant="map"
+                  defaultOpen={true}
+                >
+                  {sortedBoxes.mapBoxes.length === 0 ? (
+                    <div className="section-empty">Keine Boxen auf der Karte</div>
+                  ) : (
+                    sortedBoxes.mapBoxes.map((box) => (
+                      <BoxListItem 
+                        key={box.id} 
+                        box={box} 
+                        onClick={() => handleBoxClick(box)}
+                        showLocation={false}
+                      />
+                    ))
+                  )}
+                </CollapsibleBoxSection>
+
+                {/* Lageplan-Boxen - Aufklappbar */}
+                <CollapsibleBoxSection
+                  title="Lageplan-Boxen"
+                  icon={<LayoutGrid size={16} />}
+                  count={sortedBoxes.floorplanBoxes.length}
+                  variant="floorplan"
+                  defaultOpen={sortedBoxes.floorplanBoxes.length > 0}
+                >
+                  {sortedBoxes.floorplanBoxes.length === 0 ? (
+                    <div className="section-empty">Keine Boxen auf Lageplänen</div>
+                  ) : (
+                    sortedBoxes.floorplanBoxes.map((box) => (
+                      <BoxListItem 
+                        key={box.id} 
+                        box={box} 
+                        onClick={() => handleBoxClick(box)}
+                        showLocation={true}
+                        isFloorplan={true}
+                      />
+                    ))
+                  )}
+                </CollapsibleBoxSection>
+
+                {/* Keine Boxen */}
+                {boxes.length === 0 && (
+                  <div className="empty-state">
+                    <MapPin size={32} />
+                    <p>Keine Boxen vorhanden</p>
+                    <small>Boxen per QR-Code scannen oder im Box-Pool zuweisen</small>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </aside>
       </div>
 
       {/* ============================================================
-          SIDEBAR (350px, slide-in)
+          DIALOGS
           ============================================================ */}
-      {sidebarOpen && selectedObject && (
-        <ObjectSidebar
-          object={selectedObject}
-          boxes={boxes}
-          onClose={() => {
-            setSidebarOpen(false);
-            setSelectedObject(null);
-          }}
-          onBoxClick={handleBoxClick}
-          onEditObject={() => {
-            setObjectEditDialogOpen(true);
-          }}
-        />
+
+      {/* Floorplan Dialog */}
+      {floorplanDialogOpen && (
+        <div className="dialog-overlay" onClick={() => setFloorplanDialogOpen(false)}>
+          <div className="dialog-compact" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-icon">
+              <LayoutGrid size={32} />
+            </div>
+            <h3>Zum Lageplan wechseln?</h3>
+            <p>Diese Box befindet sich auf dem Lageplan von <strong>{selectedObject?.name}</strong>.</p>
+            <div className="dialog-buttons">
+              <button className="btn-secondary" onClick={() => setFloorplanDialogOpen(false)}>
+                Abbrechen
+              </button>
+              <button className="btn-primary" onClick={handleGoToFloorplan}>
+                <LayoutGrid size={16} />
+                Zum Lageplan
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* ============================================================
-          CONTROL DIALOG
-          ============================================================ */}
+      {/* Control Dialog */}
       {controlDialogOpen && selectedBox && (
         <BoxScanDialog
           box={selectedBox}
-          onClose={() => {
-            setControlDialogOpen(false);
-            setSelectedBox(null);
-          }}
-          onEdit={() => {
-            setIsFirstSetup(false);
-            setBoxEditDialogOpen(true);
-            setControlDialogOpen(false);
-          }}
-          onSave={() => {
-            setControlDialogOpen(false);
-            setSelectedBox(null);
-            if (selectedObject) {
-              loadBoxes(selectedObject.id);
-            }
-          }}
-          onAdjustPosition={(box) => {
-            // Reposition-Modus aktivieren
-            setControlDialogOpen(false);
-            setRepositionBox(box);
-            setSelectedBox(null);
-          }}
+          onClose={() => { setControlDialogOpen(false); setSelectedBox(null); }}
+          onEdit={() => { setIsFirstSetup(false); setBoxEditDialogOpen(true); setControlDialogOpen(false); }}
+          onSave={() => { setControlDialogOpen(false); setSelectedBox(null); if (selectedObject) loadBoxes(selectedObject.id); }}
+          onAdjustPosition={(box) => { setControlDialogOpen(false); setRepositionBox(box); setSelectedBox(null); }}
           onSetGPS={(box) => {
-            // GPS-Position holen (nur auf Mobil)
             setControlDialogOpen(false);
             if (navigator.geolocation) {
               navigator.geolocation.getCurrentPosition(
                 async (pos) => {
-                  const { latitude, longitude } = pos.coords;
                   try {
-                    const res = await fetch(`${API}/boxes/${box.id}/location`, {
+                    await fetch(`${API}/boxes/${box.id}/location`, {
                       method: 'PATCH',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`
-                      },
-                      body: JSON.stringify({ lat: latitude, lng: longitude })
+                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                      body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
                     });
-                    if (res.ok) {
-                      alert(`✅ GPS-Position gesetzt!`);
-                      if (selectedObject) loadBoxes(selectedObject.id);
-                    }
-                  } catch (err) {
-                    console.error("GPS error:", err);
-                    alert("Fehler beim Setzen der GPS-Position");
-                  }
+                    if (selectedObject) loadBoxes(selectedObject.id);
+                  } catch (err) { console.error(err); }
                 },
-                (err) => {
-                  alert("GPS nicht verfügbar: " + err.message);
-                },
+                (err) => alert("GPS nicht verfügbar"),
                 { enableHighAccuracy: true }
               );
             }
@@ -910,62 +1039,30 @@ export default function Maps() {
         />
       )}
 
-      {/* ============================================================
-          BOX EDIT DIALOG
-          ============================================================ */}
+      {/* Box Edit Dialog */}
       {boxEditDialogOpen && selectedBox && (
         <BoxEditDialog
           box={selectedBox}
           boxTypes={boxTypes}
           isFirstSetup={isFirstSetup}
-          onClose={() => {
-            setBoxEditDialogOpen(false);
-            setSelectedBox(null);
-            setIsFirstSetup(false);
-          }}
-          onSave={() => {
-            setBoxEditDialogOpen(false);
-            setSelectedBox(null);
-            setIsFirstSetup(false);
-            if (selectedObject) {
-              loadBoxes(selectedObject.id);
-            }
-          }}
-          onAdjustPosition={() => {
-            // Reposition-Modus aktivieren
-            setBoxEditDialogOpen(false);
-            setRepositionBox(selectedBox);
-            setIsFirstSetup(false);
-            setSelectedBox(null);
-          }}
+          onClose={() => { setBoxEditDialogOpen(false); setSelectedBox(null); setIsFirstSetup(false); }}
+          onSave={() => { setBoxEditDialogOpen(false); setSelectedBox(null); setIsFirstSetup(false); if (selectedObject) loadBoxes(selectedObject.id); }}
+          onAdjustPosition={() => { setBoxEditDialogOpen(false); setRepositionBox(selectedBox); setIsFirstSetup(false); setSelectedBox(null); }}
           onSetGPS={() => {
-            // GPS nur auf Mobil - Prüfung im Dialog selbst
             setBoxEditDialogOpen(false);
             if (navigator.geolocation) {
               navigator.geolocation.getCurrentPosition(
                 async (pos) => {
-                  const { latitude, longitude } = pos.coords;
                   try {
-                    const res = await fetch(`${API}/boxes/${selectedBox.id}/location`, {
+                    await fetch(`${API}/boxes/${selectedBox.id}/location`, {
                       method: 'PATCH',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`
-                      },
-                      body: JSON.stringify({ lat: latitude, lng: longitude })
+                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                      body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
                     });
-                    if (res.ok) {
-                      alert(`✅ GPS-Position gesetzt!`);
-                      if (selectedObject) loadBoxes(selectedObject.id);
-                    }
-                  } catch (err) {
-                    console.error("GPS error:", err);
-                    alert("Fehler beim Setzen der GPS-Position");
-                  }
+                    if (selectedObject) loadBoxes(selectedObject.id);
+                  } catch (err) { console.error(err); }
                 },
-                (err) => {
-                  alert("GPS nicht verfügbar: " + err.message);
-                },
+                (err) => alert("GPS nicht verfügbar"),
                 { enableHighAccuracy: true }
               );
             }
@@ -975,20 +1072,13 @@ export default function Maps() {
         />
       )}
 
-      {/* ============================================================
-          OBJECT CREATE DIALOG
-          ============================================================ */}
+      {/* Object Create Dialog */}
       {objectCreateDialogOpen && tempObjectLatLng && (
         <ObjectCreateDialog
           latLng={tempObjectLatLng}
-          onClose={() => {
-            setObjectCreateDialogOpen(false);
-            setTempObjectLatLng(null);
-            setObjectPlacingMode(false);
-          }}
+          onClose={() => { setObjectCreateDialogOpen(false); setTempObjectLatLng(null); setObjectPlacingMode(false); }}
           onSave={(newObject) => {
-            setObjects((prev) => [...prev, newObject]);
-            setFilteredObjects((prev) => [...prev, newObject]);
+            setObjects((prev) => [...prev, newObject].sort((a, b) => (a.name || "").localeCompare(b.name || "", "de")));
             setSelectedObject(newObject);
             setObjectCreateDialogOpen(false);
             setTempObjectLatLng(null);
@@ -997,26 +1087,19 @@ export default function Maps() {
         />
       )}
 
-      {/* ============================================================
-          OBJECT EDIT DIALOG
-          ============================================================ */}
+      {/* Object Edit Dialog */}
       {objectEditDialogOpen && selectedObject && (
         <ObjectEditDialog
           object={selectedObject}
-          onClose={() => {
-            setObjectEditDialogOpen(false);
-          }}
+          onClose={() => setObjectEditDialogOpen(false)}
           onSave={(updated) => {
-            setObjects((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
-            setFilteredObjects((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+            setObjects((prev) => prev.map((o) => (o.id === updated.id ? updated : o)).sort((a, b) => (a.name || "").localeCompare(b.name || "", "de")));
             setSelectedObject(updated);
             setObjectEditDialogOpen(false);
           }}
           onDelete={(id) => {
             setObjects((prev) => prev.filter((o) => o.id !== id));
-            setFilteredObjects((prev) => prev.filter((o) => o.id !== id));
             setSelectedObject(null);
-            setSidebarOpen(false);
             setObjectEditDialogOpen(false);
           }}
         />

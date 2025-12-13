@@ -1,6 +1,7 @@
 // ============================================
 // BOXES CONTROLLER
 // Mit Audit-Support für alle Änderungen
+// Mit Re-Nummerierung
 // ============================================
 
 const boxesService = require("../services/boxes.service");
@@ -31,6 +32,44 @@ exports.getById = async (req, res) => {
     return res.json(result.data);
   } catch (err) {
     console.error("getById box error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// Alias für Routes die getOne erwarten
+exports.getOne = exports.getById;
+
+// GET /api/boxes/unplaced/:objectId - Unplatzierte Boxen eines Objekts
+exports.getUnplaced = async (req, res) => {
+  try {
+    const result = await boxesService.getUnplacedByObject(
+      req.params.objectId, 
+      req.user.organisation_id
+    );
+    if (!result.success) return res.status(400).json({ error: result.message });
+    
+    return res.json(result.data);
+  } catch (err) {
+    console.error("getUnplaced error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// GET /api/boxes/:id/scans - Scan-Historie einer Box
+exports.getScans = async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 90;
+    
+    const result = await boxesService.getScans(
+      req.params.id, 
+      req.user.organisation_id,
+      days
+    );
+    if (!result.success) return res.status(400).json({ error: result.message });
+    
+    return res.json(result.data);
+  } catch (err) {
+    console.error("getScans error:", err);
     res.status(500).json({ error: "Server error" });
   }
 };
@@ -70,6 +109,9 @@ exports.delete = async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 };
+
+// Alias für Routes die remove erwarten
+exports.remove = exports.delete;
 
 // PATCH /api/boxes/:id/location - GPS Position ändern
 exports.updateLocation = async (req, res) => {
@@ -279,6 +321,61 @@ exports.unassignFromObject = async (req, res) => {
     return res.json(result.data);
   } catch (err) {
     console.error("unassignFromObject error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// POST /api/boxes/:id/return-to-pool - Alias für returnToPool Route
+exports.returnToPool = exports.unassignFromObject;
+
+// ============================================
+// RE-NUMMERIERUNG
+// ============================================
+
+// POST /api/boxes/renumber/:objectId - Boxen eines Objekts neu nummerieren
+exports.renumberObject = async (req, res) => {
+  try {
+    const result = await boxesService.renumberBoxesForObject(
+      req.params.objectId,
+      req.user.organisation_id
+    );
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.message });
+    }
+
+    return res.json({
+      success: true,
+      message: `${result.data?.length || 0} von ${result.total || 0} Boxen neu nummeriert`,
+      updated: result.data
+    });
+  } catch (err) {
+    console.error("renumberObject error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// POST /api/boxes/renumber-all - ALLE Boxen der Organisation neu nummerieren
+exports.renumberAll = async (req, res) => {
+  try {
+    // Nur für Admins
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: "Nur Admins können alle Boxen neu nummerieren" });
+    }
+
+    const result = await boxesService.renumberAllBoxes(req.user.organisation_id);
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.message });
+    }
+
+    return res.json({
+      success: true,
+      message: "Alle Boxen wurden neu nummeriert",
+      objects: result.data
+    });
+  } catch (err) {
+    console.error("renumberAll error:", err);
     res.status(500).json({ error: "Server error" });
   }
 };

@@ -1,13 +1,46 @@
 // ============================================
 // BOXES SERVICE - KOMPLETT
 // Alle CRUD Operationen + GPS + Scans + Lageplan + Pool
+// Mit last_scan_by für Techniker-Namen
+// Mit automatischer Nummerierung pro Objekt
 // ============================================
 
 const { supabase } = require("../config/supabase");
 const auditService = require("./audit.service");
 
 // ============================================
-// GET ALL BOXES
+// HELPER: Nächste freie Nummer für ein Objekt
+// ============================================
+async function getNextNumberForObject(objectId, organisationId) {
+  if (!objectId) return null;
+  
+  const { data } = await supabase
+    .from("boxes")
+    .select("number")
+    .eq("object_id", objectId)
+    .eq("organisation_id", organisationId)
+    .eq("active", true)
+    .not("number", "is", null)
+    .order("number", { ascending: false })
+    .limit(1);
+
+  if (data && data.length > 0 && data[0].number) {
+    return data[0].number + 1;
+  }
+  return 1;
+}
+
+// ============================================
+// HELPER: Nummer aus QR-Code extrahieren (Fallback)
+// ============================================
+function extractNumberFromQR(qrCode) {
+  if (!qrCode) return null;
+  const match = qrCode.match(/(\d+)$/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+// ============================================
+// GET ALL BOXES (mit Techniker-Info)
 // ============================================
 exports.getAll = async (organisationId, objectId = null) => {
   let query = supabase
@@ -30,12 +63,49 @@ exports.getAll = async (organisationId, objectId = null) => {
   const { data, error } = await query.order("number", { ascending: true });
   if (error) return { success: false, message: error.message };
 
+  // Hole letzte Scans mit Techniker-Info für alle Boxen
+  const boxIds = data.map(b => b.id);
+  
+  let lastScansMap = {};
+  if (boxIds.length > 0) {
+    // Hole den letzten Scan pro Box mit Techniker-Info
+    const { data: scansData } = await supabase
+      .from("scans")
+      .select(`
+        box_id,
+        scanned_at,
+        status,
+        users:user_id (
+          first_name,
+          last_name
+        )
+      `)
+      .in("box_id", boxIds)
+      .order("scanned_at", { ascending: false });
+
+    // Gruppiere nach box_id und nimm nur den neuesten Scan
+    if (scansData) {
+      for (const scan of scansData) {
+        if (!lastScansMap[scan.box_id]) {
+          lastScansMap[scan.box_id] = {
+            last_scan: scan.scanned_at,
+            last_scan_status: scan.status,
+            last_scan_by: scan.users 
+              ? `${scan.users.first_name || ''} ${scan.users.last_name || ''}`.trim() 
+              : null
+          };
+        }
+      }
+    }
+  }
+
   const now = new Date();
 
   const enriched = data.map((box) => {
+    const scanInfo = lastScansMap[box.id] || {};
     const interval = box.control_interval_days || 30;
-    const lastScan = box.last_scan
-      ? new Date(box.last_scan)
+    const lastScan = scanInfo.last_scan || box.last_scan
+      ? new Date(scanInfo.last_scan || box.last_scan)
       : new Date(box.created_at);
 
     const nextControl = new Date(lastScan.getTime() + interval * 86400000);
@@ -53,7 +123,11 @@ exports.getAll = async (organisationId, objectId = null) => {
       requires_symbol: box.box_types?.requires_symbol || false,
       next_control: nextControl.toISOString(),
       due_in_days: diffDays,
-      due_status
+      due_status,
+      // Scan-Info
+      last_scan: scanInfo.last_scan || box.last_scan,
+      last_scan_by: scanInfo.last_scan_by || null,
+      last_scan_status: scanInfo.last_scan_status || box.current_status
     };
   });
 
@@ -84,6 +158,22 @@ exports.getOne = async (id, organisationId) => {
     return { success: false, message: "Box not found" };
   }
 
+  // Hole letzten Scan mit Techniker-Info
+  const { data: lastScanData } = await supabase
+    .from("scans")
+    .select(`
+      scanned_at,
+      status,
+      users:user_id (
+        first_name,
+        last_name
+      )
+    `)
+    .eq("box_id", id)
+    .order("scanned_at", { ascending: false })
+    .limit(1)
+    .single();
+
   return {
     success: true,
     data: {
@@ -91,7 +181,12 @@ exports.getOne = async (id, organisationId) => {
       box_type_name: data.box_types?.name || null,
       box_type_category: data.box_types?.category || null,
       box_type_border: data.box_types?.border_color || null,
-      requires_symbol: data.box_types?.requires_symbol || false
+      requires_symbol: data.box_types?.requires_symbol || false,
+      last_scan: lastScanData?.scanned_at || data.last_scan,
+      last_scan_by: lastScanData?.users 
+        ? `${lastScanData.users.first_name || ''} ${lastScanData.users.last_name || ''}`.trim()
+        : null,
+      last_scan_status: lastScanData?.status || data.current_status
     }
   };
 };
@@ -363,7 +458,7 @@ exports.getUnplacedByObject = async (objectId, organisationId) => {
   return { success: true, data: data || [] };
 };
 
-// Box einem Objekt zuweisen (aus Pool)
+// Box einem Objekt zuweisen (aus Pool) - MIT AUTOMATISCHER NUMMER
 exports.assignToObject = async (boxId, objectId, organisationId) => {
   const { data: obj } = await supabase
     .from("objects")
@@ -376,10 +471,14 @@ exports.assignToObject = async (boxId, objectId, organisationId) => {
     return { success: false, message: "Objekt nicht gefunden" };
   }
 
+  // Nächste freie Nummer für dieses Objekt holen
+  const nextNumber = await getNextNumberForObject(objectId, organisationId);
+
   const { data, error } = await supabase
     .from("boxes")
     .update({
       object_id: objectId,
+      number: nextNumber,
       status: "assigned",
       updated_at: new Date().toISOString()
     })
@@ -389,15 +488,18 @@ exports.assignToObject = async (boxId, objectId, organisationId) => {
     .single();
 
   if (error) return { success: false, message: error.message };
+  
+  console.log(`✅ Box ${boxId} zu Objekt ${obj.name} zugewiesen mit Nummer ${nextNumber}`);
   return { success: true, data };
 };
 
-// Box zurück in Pool
+// Box zurück in Pool - Nummer wird zurückgesetzt
 exports.returnToPool = async (boxId, organisationId) => {
   const { data, error } = await supabase
     .from("boxes")
     .update({
       object_id: null,
+      number: null,  // Nummer zurücksetzen
       status: "pool",
       position_type: "none",
       lat: null,
@@ -413,15 +515,17 @@ exports.returnToPool = async (boxId, organisationId) => {
     .single();
 
   if (error) return { success: false, message: error.message };
+  
+  console.log(`✅ Box ${boxId} zurück in Pool`);
   return { success: true, data };
 };
 
-// Box auf GPS platzieren
+// Box auf GPS platzieren - MIT AUTOMATISCHER NUMMER wenn Objekt zugewiesen
 exports.placeOnMap = async (boxId, organisationId, lat, lng, boxTypeId = null, objectId = null, userId = null) => {
   // Alte Werte holen für Audit
   const { data: oldBox } = await supabase
     .from("boxes")
-    .select("lat, lng, object_id, box_type_id, status")
+    .select("lat, lng, object_id, box_type_id, status, number")
     .eq("id", boxId)
     .eq("organisation_id", organisationId)
     .single();
@@ -444,6 +548,12 @@ exports.placeOnMap = async (boxId, organisationId, lat, lng, boxTypeId = null, o
   // Objekt-ID setzen wenn vorhanden (für Drag & Drop aus Pool)
   if (objectId) {
     updateData.object_id = parseInt(objectId);
+    
+    // Wenn Box noch keine Nummer hat ODER zu neuem Objekt wechselt → neue Nummer vergeben
+    if (!oldBox?.number || (oldBox?.object_id && oldBox.object_id !== parseInt(objectId))) {
+      updateData.number = await getNextNumberForObject(parseInt(objectId), organisationId);
+      console.log(`📦 Box ${boxId} bekommt Nummer ${updateData.number} für Objekt ${objectId}`);
+    }
   }
 
   const { data, error } = await supabase
@@ -502,7 +612,7 @@ exports.placeOnFloorPlan = async (boxId, organisationId, floorPlanId, posX, posY
   return { success: true, data };
 };
 
-// Box zu anderem Objekt verschieben
+// Box zu anderem Objekt verschieben - MIT AUTOMATISCHER NUMMER
 exports.moveToObject = async (boxId, newObjectId, organisationId) => {
   const { data: obj } = await supabase
     .from("objects")
@@ -515,10 +625,14 @@ exports.moveToObject = async (boxId, newObjectId, organisationId) => {
     return { success: false, message: "Ziel-Objekt nicht gefunden" };
   }
 
+  // Nächste freie Nummer für das NEUE Objekt holen
+  const nextNumber = await getNextNumberForObject(newObjectId, organisationId);
+
   const { data, error } = await supabase
     .from("boxes")
     .update({
       object_id: newObjectId,
+      number: nextNumber,  // Neue Nummer im neuen Objekt
       status: "assigned",
       position_type: "none",
       lat: null,
@@ -534,5 +648,90 @@ exports.moveToObject = async (boxId, newObjectId, organisationId) => {
     .single();
 
   if (error) return { success: false, message: error.message };
+  
+  console.log(`✅ Box ${boxId} zu Objekt ${obj.name} verschoben mit Nummer ${nextNumber}`);
   return { success: true, data };
+};
+
+// ============================================
+// RE-NUMMERIEREN: Alle Boxen eines Objekts neu durchnummerieren
+// Sortiert nach QR-Code (kleinste Nummer zuerst)
+// ============================================
+exports.renumberBoxesForObject = async (objectId, organisationId) => {
+  // Alle aktiven Boxen des Objekts holen, sortiert nach QR-Code
+  const { data: boxes, error } = await supabase
+    .from("boxes")
+    .select("id, qr_code, number")
+    .eq("object_id", objectId)
+    .eq("organisation_id", organisationId)
+    .eq("active", true)
+    .order("qr_code", { ascending: true });
+
+  if (error) return { success: false, message: error.message };
+  if (!boxes || boxes.length === 0) return { success: true, data: [], message: "Keine Boxen gefunden" };
+
+  // Sortiere nach der Nummer im QR-Code
+  const sortedBoxes = boxes.sort((a, b) => {
+    const numA = extractNumberFromQR(a.qr_code) || 9999999;
+    const numB = extractNumberFromQR(b.qr_code) || 9999999;
+    return numA - numB;
+  });
+
+  // Jeder Box eine neue Nummer zuweisen (1, 2, 3, ...)
+  const updates = [];
+  for (let i = 0; i < sortedBoxes.length; i++) {
+    const newNumber = i + 1;
+    const box = sortedBoxes[i];
+    
+    if (box.number !== newNumber) {
+      const { error: updateError } = await supabase
+        .from("boxes")
+        .update({ 
+          number: newNumber,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", box.id);
+      
+      if (!updateError) {
+        updates.push({ id: box.id, qr_code: box.qr_code, oldNumber: box.number, newNumber });
+      }
+    }
+  }
+
+  console.log(`✅ ${updates.length} Boxen für Objekt ${objectId} neu nummeriert`);
+  return { success: true, data: updates, total: sortedBoxes.length };
+};
+
+// ============================================
+// RE-NUMMERIEREN: ALLE Objekte einer Organisation
+// ============================================
+exports.renumberAllBoxes = async (organisationId) => {
+  // Alle Objekte holen
+  const { data: objects } = await supabase
+    .from("objects")
+    .select("id, name")
+    .eq("organisation_id", organisationId);
+
+  if (!objects) return { success: false, message: "Keine Objekte gefunden" };
+
+  const results = [];
+  for (const obj of objects) {
+    const result = await exports.renumberBoxesForObject(obj.id, organisationId);
+    results.push({
+      object_id: obj.id,
+      object_name: obj.name,
+      updated: result.data?.length || 0,
+      total: result.total || 0
+    });
+  }
+
+  // Pool-Boxen auf null setzen
+  await supabase
+    .from("boxes")
+    .update({ number: null })
+    .eq("organisation_id", organisationId)
+    .is("object_id", null);
+
+  console.log(`✅ Alle Boxen für Organisation ${organisationId} neu nummeriert`);
+  return { success: true, data: results };
 };

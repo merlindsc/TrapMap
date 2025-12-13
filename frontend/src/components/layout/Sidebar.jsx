@@ -1,6 +1,12 @@
+/* ============================================================
+   TRAPMAP - SIDEBAR (FINAL VERSION)
+   Mit funktionierendem Theme-Toggle
+   ============================================================ */
+
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from './DashboardLayout';
 import './Sidebar.css';
 
 import {
@@ -12,19 +18,22 @@ import {
   QrCodeIcon,
   MapIcon,
   DocumentTextIcon,
-  ShieldCheckIcon
+  ShieldCheckIcon,
+  XMarkIcon,
+  SunIcon,
+  MoonIcon
 } from '@heroicons/react/24/outline';
 
-// Super-Admin E-Mails
 const SUPER_ADMINS = [
   "admin@demo.trapmap.de",
   "merlin@trapmap.de",
   "hilfe@die-schaedlingsexperten.de"
 ];
 
-const Sidebar = () => {
+export default function Sidebar({ isMobile, onClose }) {
   const location = useLocation();
   const { user } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const isActive = (path) => {
     return location.pathname === path || location.pathname.startsWith(path + '/');
@@ -32,15 +41,11 @@ const Sidebar = () => {
 
   const isSuperAdmin = user && SUPER_ADMINS.includes(user.email);
 
-  // Holt Navigationseinträge basierend auf Rolle
   const getNavigationItems = () => {
     const role = user?.role;
 
-    const items = [];
-
-    // Admin
     if (role === "admin") {
-      items.push(
+      const items = [
         { name: 'Dashboard', path: '/dashboard', icon: HomeIcon },
         { name: 'Objekte', path: '/objects', icon: BuildingOfficeIcon },
         { name: 'Boxen', path: '/boxes', icon: ArchiveBoxIcon },
@@ -49,43 +54,35 @@ const Sidebar = () => {
         { name: 'Reports', path: '/reports', icon: DocumentTextIcon },
         { name: 'QR-Scanner', path: '/qr/scanner', icon: QrCodeIcon },
         { name: 'Einstellungen', path: '/settings', icon: CogIcon }
-      );
-      
-      // Super-Admin Link hinzufügen
+      ];
       if (isSuperAdmin) {
         items.push({ name: 'Admin', path: '/admin', icon: ShieldCheckIcon });
       }
-      
       return items;
     }
 
-    // Supervisor
     if (role === "supervisor") {
       return [
         { name: 'Dashboard', path: '/dashboard', icon: HomeIcon },
         { name: 'Objekte', path: '/objects', icon: BuildingOfficeIcon },
         { name: 'Boxen', path: '/boxes', icon: ArchiveBoxIcon },
         { name: 'Maps', path: '/maps', icon: MapIcon },
-        { name: 'Scans', path: '/scans', icon: QrCodeIcon },
         { name: 'QR-Scanner', path: '/qr/scanner', icon: QrCodeIcon },
         { name: 'Reports', path: '/reports', icon: DocumentTextIcon },
         { name: 'Einstellungen', path: '/settings', icon: CogIcon }
       ];
     }
 
-    // Techniker
     if (role === "technician") {
       return [
         { name: 'Dashboard', path: '/dashboard', icon: HomeIcon },
         { name: 'Maps', path: '/maps', icon: MapIcon },
         { name: 'QR-Scanner', path: '/qr/scanner', icon: QrCodeIcon },
-        { name: 'Scans', path: '/scans', icon: QrCodeIcon },
         { name: 'Boxen', path: '/boxes', icon: ArchiveBoxIcon },
         { name: 'Einstellungen', path: '/settings', icon: CogIcon }
       ];
     }
 
-    // Auditor
     if (role === "auditor") {
       return [
         { name: 'Dashboard', path: '/dashboard', icon: HomeIcon },
@@ -96,7 +93,6 @@ const Sidebar = () => {
       ];
     }
 
-    // Viewer / Kunde
     if (role === "viewer") {
       return [
         { name: 'Dashboard', path: '/dashboard', icon: HomeIcon },
@@ -107,31 +103,23 @@ const Sidebar = () => {
       ];
     }
 
-    // Partnerfirma
     if (role === "partner") {
       return [
         { name: 'Dashboard', path: '/dashboard', icon: HomeIcon },
         { name: 'Maps', path: '/maps', icon: MapIcon },
         { name: 'QR-Scanner', path: '/qr/scanner', icon: QrCodeIcon },
-        { name: 'Scans', path: '/scans', icon: QrCodeIcon },
         { name: 'Boxen', path: '/boxes', icon: ArchiveBoxIcon },
         { name: 'Reports', path: '/reports', icon: DocumentTextIcon }
       ];
     }
 
-    // Fallback
-    return [
-      { name: 'Dashboard', path: '/dashboard', icon: HomeIcon }
-    ];
+    return [{ name: 'Dashboard', path: '/dashboard', icon: HomeIcon }];
   };
 
   const navigationItems = getNavigationItems();
 
-  // Rolle als Text (ohne Emojis - die waren kaputt)
   const getRoleBadge = () => {
-    if (user?.role === 'admin') {
-      return isSuperAdmin ? 'Super-Admin' : 'Admin';
-    }
+    if (user?.role === 'admin') return isSuperAdmin ? 'Super-Admin' : 'Admin';
     if (user?.role === 'supervisor') return 'Supervisor';
     if (user?.role === 'technician') return 'Techniker';
     if (user?.role === 'auditor') return 'Auditor';
@@ -140,7 +128,6 @@ const Sidebar = () => {
     return user?.role || '';
   };
 
-  // Badge Farbe basierend auf Rolle
   const getBadgeClass = () => {
     if (user?.role === 'admin' && isSuperAdmin) return 'badge-super-admin';
     if (user?.role === 'admin') return 'badge-admin';
@@ -151,12 +138,22 @@ const Sidebar = () => {
 
   return (
     <div className="sidebar">
-      
       {/* Header */}
       <div className="sidebar-header">
-        <Link to="/dashboard" className="sidebar-brand">
-          <h1>TrapMap</h1>
-        </Link>
+        <div className="sidebar-header-row">
+          <Link to="/dashboard" className="sidebar-brand">
+            <div className="sidebar-logo-text">
+              <span className="logo-trap">Trap</span>
+              <span className="logo-map">Map</span>
+            </div>
+          </Link>
+
+          {isMobile && (
+            <button className="sidebar-close-btn" onClick={onClose}>
+              <XMarkIcon style={{ width: 24, height: 24 }} />
+            </button>
+          )}
+        </div>
 
         {user && (
           <div className="sidebar-user-info">
@@ -174,28 +171,38 @@ const Sidebar = () => {
             key={item.path}
             to={item.path}
             className={`sidebar-nav-item ${isActive(item.path) ? 'active' : ''}`}
-            title={item.description}
+            onClick={isMobile ? onClose : undefined}
           >
             <item.icon className="sidebar-nav-icon" />
             <span className="sidebar-nav-text">{item.name}</span>
-            {item.badge && (
-              <span className="sidebar-nav-badge">{item.badge}</span>
-            )}
           </Link>
         ))}
       </nav>
 
       {/* Footer */}
-      {user && (
-        <div className="sidebar-footer">
+      <div className="sidebar-footer">
+        {/* Theme Toggle */}
+        <button className="theme-toggle" onClick={toggleTheme}>
+          {theme === 'dark' ? (
+            <>
+              <SunIcon style={{ width: 18, height: 18 }} />
+              <span>Hell</span>
+            </>
+          ) : (
+            <>
+              <MoonIcon style={{ width: 18, height: 18 }} />
+              <span>Dunkel</span>
+            </>
+          )}
+        </button>
+
+        {user && (
           <div className="sidebar-user-details">
-            <div className="user-name">{user.name || user.email}</div>
+            <div className="user-name">{user.name || user.email?.split('@')[0]}</div>
             <div className="user-email">{user.email}</div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
-};
-
-export default Sidebar;
+}

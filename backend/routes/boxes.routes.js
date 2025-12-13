@@ -1,13 +1,14 @@
 // ============================================
 // BOXES ROUTES - KOMPLETT
 // Inkl. Pool-Funktionen für Box-Lager
+// Inkl. Re-Nummerierung
 // ============================================
 
 const express = require("express");
 const router = express.Router();
 
 const boxesController = require("../controllers/boxes.controller");
-const { authenticate, requireEditor } = require("../middleware/auth");
+const { authenticate, requireEditor, requireAdmin } = require("../middleware/auth");
 const { asyncHandler } = require("../middleware/errorHandler");
 
 // ============================================
@@ -51,7 +52,7 @@ router.patch("/:id/undo-location", authenticate, requireEditor, asyncHandler(box
 router.delete("/:id", authenticate, requireEditor, asyncHandler(boxesController.remove));
 
 // ============================================
-// POOL & PLATZIERUNG ROUTES (NEU!)
+// POOL & PLATZIERUNG ROUTES
 // ============================================
 
 // Box einem Objekt zuweisen (aus Pool)
@@ -68,5 +69,15 @@ router.post("/:id/place-floorplan", authenticate, requireEditor, asyncHandler(bo
 
 // Box zu anderem Objekt verschieben
 router.put("/:id/move", authenticate, requireEditor, asyncHandler(boxesController.moveToObject));
+
+// ============================================
+// RE-NUMMERIERUNG ROUTES (NEU!)
+// ============================================
+
+// Boxen eines einzelnen Objekts neu nummerieren
+router.post("/renumber/:objectId", authenticate, requireEditor, asyncHandler(boxesController.renumberObject));
+
+// ALLE Boxen der Organisation neu nummerieren (nur Admin)
+router.post("/renumber-all", authenticate, requireAdmin, asyncHandler(boxesController.renumberAll));
 
 module.exports = router;

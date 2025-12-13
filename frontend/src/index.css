@@ -1,21 +1,99 @@
+/* ============================================================
+   TRAPMAP - GLOBAL STYLES
+   Dark/Light Mode Theme System
+   ============================================================ */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* GLOBAL RESET */
+/* ============================================================
+   CSS VARIABLES - GLOBAL THEME
+   ============================================================ */
+:root {
+  /* Dark Theme (Default) */
+  --bg-primary: #0b1120;
+  --bg-secondary: #111827;
+  --bg-card: #1f2937;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  
+  --text-primary: #ffffff;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  
+  --border-color: rgba(255, 255, 255, 0.08);
+  
+  --accent-indigo: #6366f1;
+  --accent-purple: #8b5cf6;
+  --accent-blue: #3b82f6;
+  
+  --status-green: #10b981;
+  --status-yellow: #eab308;
+  --status-orange: #f97316;
+  --status-red: #ef4444;
+  
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.4);
+
+  /* Sidebar specific */
+  --sidebar-bg: linear-gradient(180deg, #1a1f3a 0%, #0f1419 100%);
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-text: #94a3b8;
+  --sidebar-text-hover: #ffffff;
+  --sidebar-item-hover: rgba(255, 255, 255, 0.05);
+  --sidebar-item-active-bg: rgba(99, 102, 241, 0.15);
+  --sidebar-item-active-border: #6366f1;
+  --sidebar-item-active-text: #818cf8;
+  --sidebar-footer-bg: rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================================
+   LIGHT THEME
+   ============================================================ */
+[data-theme="light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-hover: rgba(0, 0, 0, 0.03);
+  
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  
+  --border-color: rgba(0, 0, 0, 0.08);
+  
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1);
+
+  /* Sidebar Light */
+  --sidebar-bg: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+  --sidebar-border: rgba(0, 0, 0, 0.08);
+  --sidebar-text: #64748b;
+  --sidebar-text-hover: #1e293b;
+  --sidebar-item-hover: rgba(0, 0, 0, 0.04);
+  --sidebar-item-active-bg: rgba(99, 102, 241, 0.1);
+  --sidebar-item-active-border: #6366f1;
+  --sidebar-item-active-text: #4f46e5;
+  --sidebar-footer-bg: rgba(0, 0, 0, 0.03);
+}
+
+/* ============================================================
+   GLOBAL RESET
+   ============================================================ */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-/* ROOT + BODY (Dark Mode) */
 html,
 body,
 #root {
   height: 100%;
-  background-color: #111827; /* bg-gray-900 */
-  color: #ffffff;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
     'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans',
     'Helvetica Neue', sans-serif;
@@ -23,38 +101,126 @@ body,
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* FIX: Avoid unstyled flash (FOUT) */
-body {
-  @apply bg-gray-900 text-white;
-}
-
-/* LEAFLET MAP FIX */
-.leaflet-container {
-  width: 100%;
-  height: 100%;
-  background: #1f2937; /* bg-gray-800 */
-}
-
-/* CUSTOM SCROLLBARS (Dark Mode) */
+/* ============================================================
+   SCROLLBARS
+   ============================================================ */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #111827; /* dark */
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #374151; /* gray-700 */
+  background: var(--border-color);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #4b5563; /* gray-600 */
+  background: var(--text-muted);
 }
 
-/* TAILWIND FLASH PROTECTION (optional helper class) */
-.twm {
-  @apply bg-gray-900 text-white;
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+
+/* ============================================================
+   LEAFLET MAP FIX
+   ============================================================ */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background: var(--bg-card);
+}
+
+/* ============================================================
+   GLOBAL UTILITY CLASSES
+   ============================================================ */
+
+/* Cards */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.btn-primary {
+  background: var(--accent-indigo);
+  color: white;
+  border-color: var(--accent-indigo);
+}
+
+.btn-primary:hover {
+  background: #5558e3;
+}
+
+.btn-secondary {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-muted);
+}
+
+/* Status Colors */
+.status-green { color: var(--status-green); }
+.status-yellow { color: var(--status-yellow); }
+.status-orange { color: var(--status-orange); }
+.status-red { color: var(--status-red); }
+
+.bg-status-green { background: rgba(16, 185, 129, 0.15); }
+.bg-status-yellow { background: rgba(234, 179, 8, 0.15); }
+.bg-status-orange { background: rgba(249, 115, 22, 0.15); }
+.bg-status-red { background: rgba(239, 68, 68, 0.15); }
+
+/* ============================================================
+   LOADING SPINNER
+   ============================================================ */
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--accent-indigo);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   TRANSITIONS
+   ============================================================ */
+.fade-in {
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }

@@ -1,14 +1,17 @@
-/* ============================================
-   SIDEBAR - MOBILE RESPONSIVE
-   ============================================ */
+/* ============================================================
+   TRAPMAP - SIDEBAR CSS (FINAL)
+   Mit Theme-Toggle und responsive Design
+   ============================================================ */
 
-/* Base Sidebar Container */
+/* ============================================================
+   SIDEBAR BASE
+   ============================================================ */
 .sidebar {
-  width: 280px;
-  min-width: 280px;
+  width: 260px;
+  min-width: 260px;
   height: 100vh;
-  background: linear-gradient(180deg, #1a1f3a 0%, #0f1419 100%);
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--sidebar-bg, linear-gradient(180deg, #1a1f3a 0%, #0f1419 100%));
+  border-right: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
   display: flex;
   flex-direction: column;
   position: relative;
@@ -17,10 +20,12 @@
   overflow-x: hidden;
 }
 
-/* Header Section */
+/* ============================================================
+   HEADER
+   ============================================================ */
 .sidebar-header {
   padding: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
   flex-shrink: 0;
 }
 
@@ -32,45 +37,57 @@
 }
 
 .sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   text-decoration: none;
-  display: block;
 }
 
-.sidebar-brand h1 {
-  color: #ffffff;
+.sidebar-logo-text {
+  display: flex;
   font-size: 22px;
   font-weight: 700;
-  margin: 0;
   letter-spacing: -0.5px;
 }
 
-/* Close Button */
+.logo-trap {
+  color: var(--text-primary, #ffffff);
+}
+
+.logo-map {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Close Button (Mobile) */
 .sidebar-close-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 44px;
   height: 44px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--sidebar-item-hover, rgba(255, 255, 255, 0.05));
   border: none;
   border-radius: 10px;
-  color: #ffffff;
+  color: var(--text-primary, #ffffff);
   cursor: pointer;
   transition: all 0.2s ease;
-  -webkit-tap-highlight-color: transparent;
 }
 
-.sidebar-close-btn:hover,
-.sidebar-close-btn:active {
-  background: rgba(255, 255, 255, 0.2);
-  transform: scale(1.05);
+.sidebar-close-btn:hover {
+  background: rgba(99, 102, 241, 0.15);
 }
 
+/* User Info */
 .sidebar-user-info {
   margin-top: 12px;
 }
 
-/* Role Badges */
+/* ============================================================
+   ROLE BADGES
+   ============================================================ */
 .user-role-badge {
   display: inline-flex;
   align-items: center;
@@ -84,48 +101,45 @@
   letter-spacing: 0.5px;
 }
 
-/* Super-Admin Badge - Gold/Orange */
 .user-role-badge.badge-super-admin {
   background: rgba(251, 146, 60, 0.15);
   border-color: rgba(251, 146, 60, 0.4);
   color: #fb923c;
 }
 
-/* Admin Badge - Purple */
 .user-role-badge.badge-admin {
   background: rgba(168, 85, 247, 0.15);
   border-color: rgba(168, 85, 247, 0.4);
   color: #a855f7;
 }
 
-/* Supervisor Badge - Blue */
 .user-role-badge.badge-supervisor {
   background: rgba(59, 130, 246, 0.15);
   border-color: rgba(59, 130, 246, 0.4);
   color: #3b82f6;
 }
 
-/* Technician Badge - Green */
 .user-role-badge.badge-technician {
   background: rgba(16, 185, 129, 0.15);
   border-color: rgba(16, 185, 129, 0.4);
   color: #10b981;
 }
 
-/* Default Badge */
 .user-role-badge.badge-default {
   background: rgba(107, 114, 128, 0.15);
   border-color: rgba(107, 114, 128, 0.4);
   color: #9ca3af;
 }
 
-/* Navigation */
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
 .sidebar-nav {
   flex: 1;
   padding: 16px 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   overflow-y: auto;
 }
 
@@ -133,8 +147,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 16px;
-  color: #94a3b8;
+  padding: 12px 16px;
+  color: var(--sidebar-text, #94a3b8);
   text-decoration: none;
   border-radius: 10px;
   transition: all 0.2s ease;
@@ -142,58 +156,86 @@
   font-size: 15px;
   font-weight: 500;
   white-space: nowrap;
-  min-height: 48px;
-  -webkit-tap-highlight-color: transparent;
+  min-height: 44px;
+  border-left: 3px solid transparent;
 }
 
 .sidebar-nav-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #ffffff;
-}
-
-.sidebar-nav-item:active {
-  background: rgba(255, 255, 255, 0.1);
-  transform: scale(0.98);
+  background: var(--sidebar-item-hover, rgba(255, 255, 255, 0.05));
+  color: var(--sidebar-text-hover, #ffffff);
 }
 
 .sidebar-nav-item.active {
   background: rgba(99, 102, 241, 0.15);
   color: #818cf8;
-  border-left: 3px solid #6366f1;
-  padding-left: 13px;
+  border-left-color: #6366f1;
 }
 
 .sidebar-nav-icon {
   width: 22px;
   height: 22px;
   min-width: 22px;
-  min-height: 22px;
   flex-shrink: 0;
 }
 
 .sidebar-nav-text {
   flex: 1;
-  font-size: 15px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Footer */
+/* ============================================================
+   FOOTER
+   ============================================================ */
 .sidebar-footer {
   padding: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.2);
+  border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  background: var(--sidebar-footer-bg, rgba(0, 0, 0, 0.2));
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
+/* Theme Toggle */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--sidebar-item-hover, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 10px;
+  color: var(--sidebar-text, #94a3b8);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+.theme-toggle:hover {
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.theme-toggle:active {
+  transform: scale(0.98);
+}
+
+/* User Details */
 .sidebar-user-details {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
 }
 
 .user-name {
-  color: #ffffff;
+  color: var(--text-primary, #ffffff);
   font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
@@ -202,53 +244,40 @@
 }
 
 .user-email {
-  color: #64748b;
+  color: var(--sidebar-text, #94a3b8);
   font-size: 12px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  opacity: 0.7;
 }
 
-/* Scrollbar */
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
 .sidebar::-webkit-scrollbar {
   width: 5px;
 }
 
 .sidebar::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.2);
+  background: transparent;
 }
 
 .sidebar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--border-color, rgba(255, 255, 255, 0.08));
   border-radius: 3px;
 }
 
-.sidebar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-/* ============================================
+/* ============================================================
    RESPONSIVE
-   ============================================ */
-
-@media (min-width: 768px) {
+   ============================================================ */
+@media (max-width: 768px) {
   .sidebar {
-    width: 260px;
-    min-width: 260px;
-  }
-  
-  .sidebar-close-btn {
-    display: none;
+    width: 280px;
   }
   
   .sidebar-nav-item {
-    padding: 10px 14px;
-    min-height: 40px;
-    font-size: 14px;
-  }
-  
-  .sidebar-nav-icon {
-    width: 20px;
-    height: 20px;
+    padding: 14px 16px;
+    min-height: 48px;
   }
 }
