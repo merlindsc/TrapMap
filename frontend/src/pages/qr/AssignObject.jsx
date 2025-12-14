@@ -1,13 +1,22 @@
 /* ============================================================
    TRAPMAP - ASSIGN OBJECT PAGE
    Box aus Pool einem Objekt zuweisen
+   
+   FLOW:
+   1. Objekt auswählen
+   2. Box wird zugewiesen
+   3. Platzierungsauswahl (GPS oder Lageplan)
+   4. → Weiterleitung zur gewählten Ansicht
    ============================================================ */
 
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useAuth } from "../../context/AuthContext";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
-import { Building2, MapPin, ChevronRight, Package, ArrowLeft } from "lucide-react";
+import { 
+  Building2, MapPin, ChevronRight, Package, ArrowLeft,
+  Navigation, Layers, CheckCircle
+} from "lucide-react";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -19,11 +28,17 @@ export default function AssignObject() {
   const { token } = useAuth();
   const navigate = useNavigate();
 
+  // States
   const [objects, setObjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Platzierungsauswahl State
+  const [showPlacementChoice, setShowPlacementChoice] = useState(false);
+  const [selectedObject, setSelectedObject] = useState(null);
+  const [objectFloorplans, setObjectFloorplans] = useState([]);
 
   // Objekte laden
   useEffect(() => {
@@ -44,31 +59,59 @@ export default function AssignObject() {
   }, [token]);
 
   // Box einem Objekt zuweisen
-  const handleAssign = async (objectId) => {
+  const handleAssign = async (object) => {
     if (!boxId || assigning) return;
     
     setAssigning(true);
     setError(null);
 
     try {
+      // Box zuweisen
       await axios.post(
         `${API}/qr/assign-object`,
         {
           box_id: parseInt(boxId),
-          object_id: parseInt(objectId),
+          object_id: parseInt(object.id),
         },
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
 
-      // Zur Maps-Seite mit Ersteinrichtung
-      navigate(`/maps?object_id=${objectId}&openBox=${boxId}&firstSetup=true&flyTo=true`);
+      // Lagepläne des Objekts laden
+      let floorplans = [];
+      try {
+        const floorplanRes = await axios.get(`${API}/floorplans/object/${object.id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        floorplans = floorplanRes.data || [];
+      } catch (err) {
+        console.error("Floorplan load error:", err);
+      }
+
+      // Platzierungsauswahl anzeigen
+      setSelectedObject(object);
+      setObjectFloorplans(floorplans);
+      setAssigning(false);
+      setShowPlacementChoice(true);
+
     } catch (err) {
       console.error("Zuweisungsfehler:", err);
       setError(err.response?.data?.error || "Zuweisung fehlgeschlagen");
       setAssigning(false);
     }
+  };
+
+  // Platzierungsauswahl: GPS
+  const handleChooseGPS = () => {
+    if (!selectedObject) return;
+    navigate(`/maps?object_id=${selectedObject.id}&openBox=${boxId}&firstSetup=true`);
+  };
+
+  // Platzierungsauswahl: Lageplan
+  const handleChooseFloorplan = () => {
+    if (!selectedObject) return;
+    navigate(`/objects/${selectedObject.id}?tab=floorplan&openBox=${boxId}&place=true`);
   };
 
   // Objekte filtern
@@ -78,6 +121,7 @@ export default function AssignObject() {
     obj.city?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Loading State
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -89,6 +133,120 @@ export default function AssignObject() {
     );
   }
 
+  // ============================================
+  // RENDER: PLATZIERUNGSAUSWAHL
+  // ============================================
+  if (showPlacementChoice && selectedObject) {
+    const hasFloorplans = objectFloorplans.length > 0;
+
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] text-white">
+        {/* Header */}
+        <div className="bg-[#0d1117] border-b border-white/10 px-4 py-4">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
+              <CheckCircle size={24} className="text-green-400" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold">Box zugewiesen!</h1>
+              <p className="text-sm text-gray-400">{selectedObject.name}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-4 space-y-6">
+          {/* Info */}
+          <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-green-500/30 rounded-lg flex items-center justify-center">
+                <Package size={20} className="text-green-400" />
+              </div>
+              <div>
+                <p className="font-semibold text-green-300">Erfolgreich zugewiesen</p>
+                <p className="text-sm text-gray-400">Code: {code}</p>
+              </div>
+            </div>
+            <p className="text-green-200/80 text-sm">
+              Wo soll die Box jetzt positioniert werden?
+            </p>
+          </div>
+
+          {/* Auswahl */}
+          <div className="space-y-3">
+            {/* GPS Option */}
+            <button
+              onClick={handleChooseGPS}
+              className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-green-500/50 rounded-xl p-5 text-left transition-all"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Navigation size={28} className="text-green-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-lg text-white">GPS-Karte</h3>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Auf der Karte platzieren mit GPS-Koordinaten.
+                    Ideal für Außenbereiche.
+                  </p>
+                </div>
+              </div>
+            </button>
+
+            {/* Lageplan Option */}
+            {hasFloorplans ? (
+              <button
+                onClick={handleChooseFloorplan}
+                className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-blue-500/50 rounded-xl p-5 text-left transition-all"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Layers size={28} className="text-blue-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-lg text-white">Lageplan</h3>
+                    <p className="text-sm text-gray-400 mt-1">
+                      Auf einem Gebäudeplan platzieren mit Grid-Position.
+                      Ideal für Innenbereiche.
+                    </p>
+                    <p className="text-xs text-blue-400 mt-2">
+                      {objectFloorplans.length} Lageplan{objectFloorplans.length > 1 ? 'e' : ''} verfügbar
+                    </p>
+                  </div>
+                </div>
+              </button>
+            ) : (
+              <div className="w-full bg-[#111] border border-white/5 rounded-xl p-5 opacity-50">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 bg-gray-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Layers size={28} className="text-gray-500" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-lg text-gray-400">Lageplan</h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Kein Lageplan für dieses Objekt vorhanden.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Später platzieren */}
+          <button
+            onClick={() => navigate(`/objects/${selectedObject.id}`)}
+            className="w-full py-3 text-gray-400 hover:text-white text-sm"
+          >
+            Später platzieren →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================
+  // RENDER: OBJEKT-AUSWAHL
+  // ============================================
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       {/* Header */}
@@ -150,7 +308,7 @@ export default function AssignObject() {
             filteredObjects.map((obj) => (
               <button
                 key={obj.id}
-                onClick={() => handleAssign(obj.id)}
+                onClick={() => handleAssign(obj)}
                 disabled={assigning}
                 className="w-full bg-[#0d1117] hover:bg-[#161b22] border border-white/10 hover:border-indigo-500/50 rounded-xl p-4 text-left transition-all flex items-center gap-4 disabled:opacity-50"
               >
