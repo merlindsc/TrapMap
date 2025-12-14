@@ -270,7 +270,6 @@ export default function Scanner() {
     }
     setIsScanning(false);
   };
-  };
 
   // ============================================
   // GPS POSITION HOLEN
@@ -1248,3 +1247,5 @@ export default function Scanner() {
       `}</style>
     </div>
   );
+
+}
