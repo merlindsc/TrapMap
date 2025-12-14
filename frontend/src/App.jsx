@@ -1,6 +1,6 @@
 /* ============================================================
    TRAPMAP - APP.JSX
-   Mit ThemeProvider für Dark/Light Mode
+   Mit ThemeProvider und Landing Page
    ============================================================ */
 
 import React, { lazy, Suspense } from "react";
@@ -8,7 +8,8 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
 import { ThemeProvider } from "./components/layout/DashboardLayout";
 
-// Login
+// Public Pages
+import LandingPage from "./pages/public/LandingPage";
 import Login from "./pages/Login";
 
 // Partner Components (lazy loaded)
@@ -92,6 +93,101 @@ const LoadingFallback = () => (
 );
 
 // ============================================
+// STATISCHE SEITEN (Impressum, etc.)
+// ============================================
+const Impressum = () => (
+  <div style={{ 
+    minHeight: '100vh', 
+    background: '#0b1120', 
+    color: '#fff', 
+    padding: '120px 24px 60px' 
+  }}>
+    <div style={{ maxWidth: 800, margin: '0 auto' }}>
+      <a href="/" style={{ color: '#6366f1', textDecoration: 'none', marginBottom: 24, display: 'inline-block' }}>
+        ← Zurück zur Startseite
+      </a>
+      <h1>Impressum</h1>
+      <h2>Angaben gemäß § 5 TMG</h2>
+      <p>
+        TrapMap<br />
+        [Deine Firma]<br />
+        [Straße Nr.]<br />
+        [PLZ Stadt]
+      </p>
+      <h2>Kontakt</h2>
+      <p>
+        Telefon: [Telefonnummer]<br />
+        E-Mail: info@trap-map.de
+      </p>
+      <h2>Verantwortlich für den Inhalt nach § 55 Abs. 2 RStV</h2>
+      <p>
+        [Name]<br />
+        [Adresse]
+      </p>
+    </div>
+  </div>
+);
+
+const Datenschutz = () => (
+  <div style={{ 
+    minHeight: '100vh', 
+    background: '#0b1120', 
+    color: '#fff', 
+    padding: '120px 24px 60px' 
+  }}>
+    <div style={{ maxWidth: 800, margin: '0 auto' }}>
+      <a href="/" style={{ color: '#6366f1', textDecoration: 'none', marginBottom: 24, display: 'inline-block' }}>
+        ← Zurück zur Startseite
+      </a>
+      <h1>Datenschutzerklärung</h1>
+      <h2>1. Datenschutz auf einen Blick</h2>
+      <h3>Allgemeine Hinweise</h3>
+      <p>
+        Die folgenden Hinweise geben einen einfachen Überblick darüber, was mit Ihren 
+        personenbezogenen Daten passiert, wenn Sie diese Website besuchen.
+      </p>
+      <h2>2. Hosting</h2>
+      <p>
+        Wir hosten die Inhalte unserer Website bei Render (render.com).
+      </p>
+      <h2>3. Allgemeine Hinweise und Pflichtinformationen</h2>
+      <h3>Datenschutz</h3>
+      <p>
+        Die Betreiber dieser Seiten nehmen den Schutz Ihrer persönlichen Daten sehr ernst.
+      </p>
+      {/* Hier vollständige Datenschutzerklärung einfügen */}
+    </div>
+  </div>
+);
+
+const AGB = () => (
+  <div style={{ 
+    minHeight: '100vh', 
+    background: '#0b1120', 
+    color: '#fff', 
+    padding: '120px 24px 60px' 
+  }}>
+    <div style={{ maxWidth: 800, margin: '0 auto' }}>
+      <a href="/" style={{ color: '#6366f1', textDecoration: 'none', marginBottom: 24, display: 'inline-block' }}>
+        ← Zurück zur Startseite
+      </a>
+      <h1>Allgemeine Geschäftsbedingungen</h1>
+      <h2>§ 1 Geltungsbereich</h2>
+      <p>
+        Diese Allgemeinen Geschäftsbedingungen gelten für alle Verträge zwischen 
+        TrapMap und dem Kunden.
+      </p>
+      <h2>§ 2 Vertragsgegenstand</h2>
+      <p>
+        Gegenstand des Vertrages ist die Bereitstellung der TrapMap Software zur 
+        digitalen Dokumentation von Schädlingsmonitoring.
+      </p>
+      {/* Hier vollständige AGB einfügen */}
+    </div>
+  </div>
+);
+
+// ============================================
 // PARTNER CHECK - VOR useAuth!
 // ============================================
 function isPartnerLoggedIn() {
@@ -146,25 +242,36 @@ function MainApp() {
   }
 
   // ============================================
-  // NICHT EINGELOGGT - Login-Seiten zeigen
+  // NICHT EINGELOGGT - Public Pages zeigen
   // ============================================
   if (!user) {
     return (
       <Suspense fallback={<LoadingFallback />}>
         <Routes>
+          {/* Landing Page */}
+          <Route path="/" element={<LandingPage />} />
+          
+          {/* Auth Pages */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/partner/login" element={<PartnerLogin />} />
+          
+          {/* Statische Seiten */}
+          <Route path="/impressum" element={<Impressum />} />
+          <Route path="/datenschutz" element={<Datenschutz />} />
+          <Route path="/agb" element={<AGB />} />
+          
           {/* QR-Code Direct Links - auch ohne Login erreichbar */}
           <Route path="/s/:code" element={<QRRedirect />} />
           
-          <Route path="/login" element={<Login />} />
-          <Route path="/partner/login" element={<PartnerLogin />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          {/* Alles andere → Landing Page */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
     );
   }
 
   // ============================================
-  // NORMALER USER - Dashboard zeigen
+  // EINGELOGGT - Dashboard zeigen
   // ============================================
   const isSuperAdmin = SUPER_ADMINS.includes(user.email);
 
@@ -182,19 +289,28 @@ function MainApp() {
       <Route path="/reports" element={<DashboardLayout><Reports /></DashboardLayout>} />
       <Route path="/boxes" element={<DashboardLayout><BoxPool /></DashboardLayout>} />
       {isSuperAdmin && (
-        <Route path="/admin" element={<DashboardLayout><Admin /></DashboardLayout>} />
+        <Route path="/admin/*" element={<DashboardLayout><Admin /></DashboardLayout>} />
       )}
     </>
   );
 
   return (
     <Routes>
+      {/* Public Pages auch wenn eingeloggt erreichbar */}
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/impressum" element={<Impressum />} />
+      <Route path="/datenschutz" element={<Datenschutz />} />
+      <Route path="/agb" element={<AGB />} />
+      
       {/* Partner-Login auch wenn eingeloggt erreichbar */}
       <Route path="/partner/login" element={
         <Suspense fallback={<LoadingFallback />}>
           <PartnerLogin />
         </Suspense>
       } />
+
+      {/* Login redirect wenn schon eingeloggt */}
+      <Route path="/login" element={<Navigate to="/dashboard" replace />} />
 
       {["admin", "supervisor"].includes(user.role) && (
         <>
@@ -208,7 +324,6 @@ function MainApp() {
           <Route path="/layouts/:id" element={<DashboardLayout><LayoutEditor /></DashboardLayout>} />
           <Route path="/maps" element={<DashboardLayout><Maps /></DashboardLayout>} />
           <Route path="/technicians" element={<DashboardLayout><div className="p-8 text-white">Techniker-Verwaltung (coming soon)</div></DashboardLayout>} />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </>
       )}
 
@@ -217,7 +332,6 @@ function MainApp() {
           {CommonRoutes}
           <Route path="/dashboard" element={<DashboardLayout><TechnicianHome /></DashboardLayout>} />
           <Route path="/maps" element={<DashboardLayout><Maps /></DashboardLayout>} />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </>
       )}
 
@@ -227,11 +341,10 @@ function MainApp() {
           <Route path="/dashboard" element={<DashboardLayout><Dashboard /></DashboardLayout>} />
           <Route path="/objects" element={<DashboardLayout><ObjectList /></DashboardLayout>} />
           <Route path="/maps" element={<DashboardLayout><Maps /></DashboardLayout>} />
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
         </>
       )}
 
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 }
