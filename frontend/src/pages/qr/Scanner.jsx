@@ -1,12 +1,16 @@
 /* ============================================================
-   TRAPMAP - QR SCANNER V8
+   TRAPMAP - QR SCANNER V9
    
-   Neu mit @zxing/browser - zuverlässiger und einfacher!
+   Mit @zxing/browser - alle Features der alten Version!
    
    FEATURES:
-   - Schnellkontrolle: BoxScanDialog direkt im Scanner
+   - Taschenlampe (Torch) Support
+   - Kamera-Berechtigung Handling mit Hinweisen
    - GPS-Distanz Check bei GPS-Boxen (>10m Warnung)
    - Platzierungsauswahl für nicht-platzierte Boxen
+   - Ersteinrichtung mit BoxEditDialog
+   - BoxTypes werden beim Init geladen
+   - Blocked Code UI mit Entsperren-Button
    - Nach Speichern → Scanner sofort wieder aktiv
    ============================================================ */
 
@@ -52,14 +56,23 @@ export default function Scanner() {
   // Refs
   const videoRef = useRef(null);
   const codeReaderRef = useRef(null);
+  const streamRef = useRef(null); // Für Torch
   const lastScannedCodeRef = useRef(null);
   const isPausedRef = useRef(false);
   
   // Scanner State
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState("");
+  const [permissionState, setPermissionState] = useState("checking"); // checking | granted | denied
   const [cameras, setCameras] = useState([]);
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
+  
+  // Torch State
+  const [torchOn, setTorchOn] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
+  
+  // Blocked Code State
+  const [blockedCode, setBlockedCode] = useState(null);
 
   // Box State
   const [currentBox, setCurrentBox] = useState(null);
@@ -93,22 +106,36 @@ export default function Scanner() {
   const hasActiveDialog = showScanDialog || showGPSWarning || showPlacementChoice || showFirstSetup;
 
   // ============================================
-  // SCANNER INITIALISIEREN
+  // INIT: Scanner + BoxTypes laden
   // ============================================
   useEffect(() => {
     initScanner();
+    loadBoxTypes();
     
     return () => {
-      if (codeReaderRef.current) {
-        codeReaderRef.current.reset();
-        codeReaderRef.current = null;
-      }
+      stopScanner();
     };
   }, []);
 
+  // BoxTypes laden (für Ersteinrichtung)
+  const loadBoxTypes = async () => {
+    try {
+      const res = await axios.get(`${API}/box-types`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setBoxTypes(Array.isArray(res.data) ? res.data : res.data?.data || []);
+    } catch (err) {
+      console.error("Load box types error:", err);
+    }
+  };
+
+  // ============================================
+  // SCANNER INITIALISIEREN
+  // ============================================
   const initScanner = async () => {
     try {
       setError("");
+      setPermissionState("checking");
       
       // Code Reader erstellen
       codeReaderRef.current = new BrowserMultiFormatReader();
@@ -119,13 +146,14 @@ export default function Scanner() {
       
       if (!devices || devices.length === 0) {
         setError("Keine Kamera gefunden");
+        setPermissionState("denied");
         return;
       }
 
       setCameras(devices);
       
       // Bevorzuge Rückkamera
-      let cameraIndex = devices.length - 1; // Default: letzte (meist Rückkamera)
+      let cameraIndex = devices.length - 1;
       const backIndex = devices.findIndex(d => 
         d.label.toLowerCase().includes("back") || 
         d.label.toLowerCase().includes("rück") ||
@@ -138,7 +166,14 @@ export default function Scanner() {
       
     } catch (err) {
       console.error("Init error:", err);
-      setError("Kamera konnte nicht gestartet werden: " + err.message);
+      
+      // Permission denied?
+      if (err.name === "NotAllowedError" || err.message?.includes("Permission")) {
+        setPermissionState("denied");
+        setError("Kamera-Zugriff verweigert");
+      } else {
+        setError("Kamera konnte nicht gestartet werden: " + err.message);
+      }
     }
   };
 
@@ -152,27 +187,88 @@ export default function Scanner() {
       console.log("🎥 Starte Scanner mit Kamera:", deviceId);
       isPausedRef.current = false;
       
+      // DecodeFromVideoDevice gibt Controls zurück
       await codeReaderRef.current.decodeFromVideoDevice(
         deviceId,
         videoRef.current,
         (result, error) => {
-          // Ignorieren wenn pausiert
           if (isPausedRef.current) return;
-          
           if (result) {
             handleScanResult(result.getText());
           }
-          // Fehler ignorieren (kontinuierliches Scannen)
         }
       );
       
+      // Stream für Torch speichern
+      if (videoRef.current.srcObject) {
+        streamRef.current = videoRef.current.srcObject;
+        checkTorchSupport();
+      }
+      
       setIsScanning(true);
+      setPermissionState("granted");
       setError("");
       console.log("✅ Scanner läuft");
       
     } catch (err) {
       console.error("Start error:", err);
-      setError("Scanner konnte nicht gestartet werden");
+      
+      if (err.name === "NotAllowedError") {
+        setPermissionState("denied");
+        setError("Kamera-Zugriff verweigert");
+      } else {
+        setError("Scanner konnte nicht gestartet werden");
+      }
+    }
+  };
+
+  // ============================================
+  // SCANNER STOPPEN
+  // ============================================
+  const stopScanner = () => {
+    if (codeReaderRef.current) {
+      try {
+        codeReaderRef.current.reset();
+      } catch (e) {}
+      codeReaderRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setIsScanning(false);
+  };
+
+  // ============================================
+  // TORCH (TASCHENLAMPE)
+  // ============================================
+  const checkTorchSupport = () => {
+    if (!streamRef.current) return;
+    
+    try {
+      const track = streamRef.current.getVideoTracks()[0];
+      if (track && track.getCapabilities) {
+        const capabilities = track.getCapabilities();
+        setTorchSupported(capabilities?.torch === true);
+      }
+    } catch (e) {
+      setTorchSupported(false);
+    }
+  };
+
+  const toggleTorch = async () => {
+    if (!streamRef.current || !torchSupported) return;
+    
+    try {
+      const track = streamRef.current.getVideoTracks()[0];
+      if (track) {
+        await track.applyConstraints({
+          advanced: [{ torch: !torchOn }]
+        });
+        setTorchOn(!torchOn);
+      }
+    } catch (err) {
+      console.error("Torch error:", err);
     }
   };
 
@@ -196,9 +292,10 @@ export default function Scanner() {
     // NEUER CODE!
     console.log(`📱 Scan: ${code}`);
     
-    // Scanner pausieren (nicht stoppen!)
+    // Scanner pausieren
     isPausedRef.current = true;
     lastScannedCodeRef.current = code;
+    setBlockedCode(code);
     
     // Vibration
     if (navigator.vibrate) {
@@ -323,18 +420,12 @@ export default function Scanner() {
   // ============================================
   const loadPlacementData = async (boxData) => {
     try {
-      const [fpRes, btRes] = await Promise.all([
-        axios.get(`${API}/floorplans/object/${boxData.object_id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        axios.get(`${API}/box-types`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-      ]);
+      const fpRes = await axios.get(`${API}/floorplans/object/${boxData.object_id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setObjectFloorplans(fpRes.data || []);
-      setBoxTypes(btRes.data || []);
     } catch (err) {
-      console.error("Load placement error:", err);
+      console.error("Load floorplans error:", err);
     }
 
     setPendingPlacement({
@@ -375,14 +466,21 @@ export default function Scanner() {
     setCurrentGPS(null);
     setError("");
     setBoxLoading(false);
+    setBlockedCode(null);
     
     // Kurzer Cooldown damit nicht sofort der gleiche Code wieder erkannt wird
-    // (falls er noch im Bild ist)
     setTimeout(() => {
       lastScannedCodeRef.current = null;
       isPausedRef.current = false;
       console.log("✅ Scanner bereit für neuen Scan");
     }, 800);
+  };
+
+  // Code entsperren (manuell)
+  const unlockLastCode = () => {
+    lastScannedCodeRef.current = null;
+    setBlockedCode(null);
+    isPausedRef.current = false;
   };
 
   // ============================================
@@ -452,7 +550,12 @@ export default function Scanner() {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      setCurrentBox(prev => ({ ...prev, lat: position.lat, lng: position.lng, position_type: 'gps' }));
+      setCurrentBox(prev => ({ 
+        ...prev, 
+        lat: position.lat, 
+        lng: position.lng, 
+        position_type: 'gps' 
+      }));
       setGpsLoading(false);
       setShowPlacementChoice(false);
       setShowFirstSetup(true);
@@ -493,6 +596,10 @@ export default function Scanner() {
     const nextIndex = (currentCameraIndex + 1) % cameras.length;
     setCurrentCameraIndex(nextIndex);
     
+    // Torch aus beim Wechseln
+    setTorchOn(false);
+    setTorchSupported(false);
+    
     // Scanner neu starten mit neuer Kamera
     if (codeReaderRef.current) {
       codeReaderRef.current.reset();
@@ -507,7 +614,7 @@ export default function Scanner() {
     <div className="min-h-screen bg-[#0a0a0a] text-white">
       {/* Success Toast */}
       {showSuccess && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-green-600 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-green-600 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2 animate-fade-in">
           <CheckCircle size={20} />
           <span className="font-medium">{successMessage}</span>
         </div>
@@ -529,7 +636,7 @@ export default function Scanner() {
           <div className="p-4 space-y-4">
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
               <div className="flex items-start gap-3">
-                <AlertTriangle size={24} className="text-yellow-400 flex-shrink-0" />
+                <AlertTriangle size={24} className="text-yellow-400 flex-shrink-0 mt-0.5" />
                 <div>
                   <h3 className="font-semibold text-yellow-300">Position stimmt nicht überein</h3>
                   <p className="text-yellow-200/80 text-sm mt-1">
@@ -538,8 +645,10 @@ export default function Scanner() {
                 </div>
               </div>
             </div>
+
+            {/* Box Info */}
             <div className="bg-[#111] border border-white/10 rounded-xl p-4">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 mb-3">
                 <div className="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center">
                   <Package size={24} className="text-indigo-400" />
                 </div>
@@ -548,12 +657,31 @@ export default function Scanner() {
                   <p className="text-sm text-gray-400">{currentBox.qr_code}</p>
                 </div>
               </div>
+              
+              {currentBox.grid_position && (
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <MapPin size={14} />
+                  <span>Position: {currentBox.grid_position}</span>
+                </div>
+              )}
             </div>
+
+            {/* Gründe */}
+            <div className="bg-[#111] border border-white/10 rounded-xl p-4">
+              <p className="text-sm text-gray-400 mb-2">Mögliche Gründe:</p>
+              <ul className="text-sm text-gray-300 space-y-1">
+                <li>• Box wurde verschoben</li>
+                <li>• GPS-Signal ungenau</li>
+                <li>• Ursprüngliche Position war falsch</li>
+              </ul>
+            </div>
+
+            {/* Actions */}
             <div className="flex gap-3">
               <button
                 onClick={handleUpdateGPSPosition}
                 disabled={gpsLoading}
-                className="flex-1 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 rounded-xl font-semibold flex items-center justify-center gap-2"
+                className="flex-1 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors"
               >
                 {gpsLoading ? (
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -564,9 +692,9 @@ export default function Scanner() {
               </button>
               <button
                 onClick={handleIgnoreGPSWarning}
-                className="flex-1 py-4 bg-[#222] hover:bg-[#333] border border-white/10 rounded-xl font-semibold"
+                className="flex-1 py-4 bg-[#222] hover:bg-[#333] border border-white/10 rounded-xl font-semibold transition-colors"
               >
-                Trotzdem prüfen
+                Trotzdem kontrollieren
               </button>
             </div>
           </div>
@@ -617,56 +745,98 @@ export default function Scanner() {
             <div className="w-10" />
           </div>
           <div className="p-4 space-y-4">
+            {/* Info */}
             <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4">
               <div className="flex items-center gap-3">
                 <Package size={24} className="text-indigo-400" />
                 <div>
                   <p className="font-semibold">{pendingPlacement.code}</p>
-                  <p className="text-indigo-300 text-sm">Box ist zugewiesen aber nicht platziert.</p>
+                  <p className="text-indigo-300 text-sm">
+                    Diese Box ist zugewiesen, aber noch nicht platziert. Wo soll sie positioniert werden?
+                  </p>
                 </div>
               </div>
             </div>
+
+            {/* Auswahl */}
             <div className="space-y-3">
+              {/* GPS Option */}
               <button
                 onClick={handleChooseGPS}
                 disabled={gpsLoading}
-                className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-green-500/50 rounded-xl p-5 text-left"
+                className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-green-500/50 rounded-xl p-5 text-left transition-all disabled:opacity-70"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center">
+                  <div className="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
                     {gpsLoading ? (
                       <div className="w-6 h-6 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
                     ) : (
                       <Navigation size={28} className="text-green-400" />
                     )}
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-lg">{isMobile ? "GPS-Position" : "Karte öffnen"}</h3>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-lg text-white">
+                      {gpsLoading 
+                        ? "GPS wird ermittelt..." 
+                        : isMobile 
+                          ? "GPS-Position" 
+                          : "Karte öffnen"
+                      }
+                    </h3>
                     <p className="text-sm text-gray-400 mt-1">
-                      {isMobile ? "An aktueller Position platzieren" : "Zur Karte navigieren"}
+                      {gpsLoading 
+                        ? "Box wird an deiner aktuellen Position platziert"
+                        : isMobile
+                          ? "Automatisch an deiner aktuellen GPS-Position platzieren"
+                          : "Zur Karte navigieren und Position manuell wählen"
+                      }
                     </p>
                   </div>
                 </div>
               </button>
-              {objectFloorplans.length > 0 && (
+
+              {/* Lageplan Option */}
+              {objectFloorplans.length > 0 ? (
                 <button
                   onClick={handleChooseFloorplan}
-                  className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-blue-500/50 rounded-xl p-5 text-left"
+                  className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-blue-500/50 rounded-xl p-5 text-left transition-all"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                    <div className="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
                       <Layers size={28} className="text-blue-400" />
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-lg">Auf Lageplan</h3>
-                      <p className="text-sm text-gray-400 mt-1">{objectFloorplans.length} Lageplan(e)</p>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg text-white">Auf Lageplan platzieren</h3>
+                      <p className="text-sm text-gray-400 mt-1">
+                        {objectFloorplans.length} Lageplan{objectFloorplans.length > 1 ? "e" : ""} verfügbar
+                      </p>
                     </div>
+                    <ArrowRight size={20} className="text-gray-400" />
                   </div>
                 </button>
+              ) : (
+                <div className="w-full bg-[#0a0a0a] border border-white/5 rounded-xl p-5 opacity-50">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-gray-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Layers size={28} className="text-gray-500" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg text-gray-400">Lageplan</h3>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Kein Lageplan für dieses Objekt vorhanden.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
-            <button onClick={resetScanner} className="w-full py-3 text-gray-400 hover:text-white text-sm">
-              ← Abbrechen
+
+            {/* Zurück */}
+            <button
+              onClick={resetScanner}
+              className="w-full py-3 text-gray-400 hover:text-white text-sm"
+            >
+              ← Anderen Code scannen
             </button>
           </div>
         </div>
@@ -685,8 +855,17 @@ export default function Scanner() {
           </h1>
           <div className="flex gap-2">
             {cameras.length > 1 && (
-              <button onClick={switchCamera} className="p-2 text-gray-400 hover:text-white">
+              <button onClick={switchCamera} className="p-2 text-gray-400 hover:text-white" title="Kamera wechseln">
                 <SwitchCamera size={20} />
+              </button>
+            )}
+            {torchSupported && (
+              <button
+                onClick={toggleTorch}
+                className={`p-2 ${torchOn ? "text-yellow-400" : "text-gray-400"} hover:text-white`}
+                title="Taschenlampe"
+              >
+                <Flashlight size={20} />
               </button>
             )}
           </div>
@@ -696,6 +875,19 @@ export default function Scanner() {
         {error && (
           <div className="m-4 p-4 bg-red-900/50 border border-red-500/50 rounded-xl">
             <p className="text-red-300 mb-3">{error}</p>
+            
+            {/* Kamera-Berechtigung Hinweise */}
+            {permissionState === "denied" && (
+              <div className="text-sm text-gray-400 space-y-2 mb-4">
+                <p>So aktivierst du die Kamera:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Tippe auf das 🔒 in der Adressleiste</li>
+                  <li>Wähle "Website-Einstellungen"</li>
+                  <li>Erlaube "Kamera"</li>
+                </ul>
+              </div>
+            )}
+            
             <button
               onClick={initScanner}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg flex items-center gap-2"
@@ -707,10 +899,12 @@ export default function Scanner() {
         )}
 
         {/* Loading */}
-        {boxLoading && (
+        {(permissionState === "checking" || boxLoading) && !error && (
           <div className="flex flex-col items-center justify-center py-20">
             <div className="animate-spin w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full mb-4" />
-            <p className="text-gray-400">Box wird geladen...</p>
+            <p className="text-gray-400">
+              {boxLoading ? "Box wird geladen..." : "Kamera wird aktiviert..."}
+            </p>
           </div>
         )}
 
@@ -719,8 +913,28 @@ export default function Scanner() {
           <video 
             ref={videoRef} 
             className="w-full"
-            style={{ display: isScanning && !boxLoading ? 'block' : 'none' }}
+            style={{ display: permissionState === "granted" && !boxLoading ? 'block' : 'none' }}
           />
+          
+          {/* Blocked Code Hinweis */}
+          {isScanning && blockedCode && !hasActiveDialog && !boxLoading && (
+            <div className="absolute bottom-4 left-4 right-4 bg-yellow-900/90 border border-yellow-600/50 rounded-xl p-3 backdrop-blur-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <AlertTriangle size={18} className="text-yellow-400 flex-shrink-0" />
+                  <p className="text-yellow-200 text-sm truncate">
+                    <strong>{blockedCode}</strong> wird ignoriert
+                  </p>
+                </div>
+                <button
+                  onClick={unlockLastCode}
+                  className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-500 text-white text-xs font-medium rounded-lg flex-shrink-0 transition-colors"
+                >
+                  Entsperren
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Scan Overlay */}
           {isScanning && !boxLoading && !hasActiveDialog && (
@@ -758,6 +972,11 @@ export default function Scanner() {
           50% { top: calc(100% - 2px); opacity: 1; }
         }
         .animate-scan { animation: scan 2s ease-in-out infinite; }
+        @keyframes fade-in {
+          from { opacity: 0; transform: translate(-50%, -20px); }
+          to { opacity: 1; transform: translate(-50%, 0); }
+        }
+        .animate-fade-in { animation: fade-in 0.3s ease-out; }
       `}</style>
     </div>
   );
