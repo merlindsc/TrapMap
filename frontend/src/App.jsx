@@ -190,25 +190,6 @@ function MainApp() {
   // ============================================
   const isSuperAdmin = SUPER_ADMINS.includes(user.email);
 
-  // Gemeinsame Routes
-  const CommonRoutes = (
-    <>
-      {/* QR Routes */}
-      <Route path="/s/:code" element={<QRRedirect />} />
-      <Route path="/qr/scanner" element={<DashboardLayout><Scanner /></DashboardLayout>} />
-      <Route path="/qr/assign/:code" element={<DashboardLayout><AssignCode /></DashboardLayout>} />
-      <Route path="/qr/assign-object/:code" element={<DashboardLayout><AssignObject /></DashboardLayout>} />
-      
-      {/* Other common routes */}
-      <Route path="/settings" element={<DashboardLayout><Settings /></DashboardLayout>} />
-      <Route path="/reports" element={<DashboardLayout><Reports /></DashboardLayout>} />
-      <Route path="/boxes" element={<DashboardLayout><BoxPool /></DashboardLayout>} />
-      {isSuperAdmin && (
-        <Route path="/admin/*" element={<DashboardLayout><Admin /></DashboardLayout>} />
-      )}
-    </>
-  );
-
   return (
     <Routes>
       {/* Public Pages auch wenn eingeloggt erreichbar */}
@@ -227,9 +208,27 @@ function MainApp() {
       {/* Login redirect wenn schon eingeloggt */}
       <Route path="/login" element={<Navigate to="/dashboard" replace />} />
 
+      {/* ========================================
+          GEMEINSAME ROUTES FÜR ALLE ROLLEN
+          ======================================== */}
+      <Route path="/s/:code" element={<QRRedirect />} />
+      <Route path="/qr/scanner" element={<DashboardLayout><Scanner /></DashboardLayout>} />
+      <Route path="/qr/assign-code" element={<DashboardLayout><AssignCode /></DashboardLayout>} />
+      <Route path="/qr/assign-object" element={<DashboardLayout><AssignObject /></DashboardLayout>} />
+      <Route path="/settings" element={<DashboardLayout><Settings /></DashboardLayout>} />
+      <Route path="/reports" element={<DashboardLayout><Reports /></DashboardLayout>} />
+      <Route path="/boxes" element={<DashboardLayout><BoxPool /></DashboardLayout>} />
+      
+      {/* Super-Admin Route */}
+      {isSuperAdmin && (
+        <Route path="/admin/*" element={<DashboardLayout><Admin /></DashboardLayout>} />
+      )}
+
+      {/* ========================================
+          ADMIN / SUPERVISOR ROUTES
+          ======================================== */}
       {["admin", "supervisor"].includes(user.role) && (
         <>
-          {CommonRoutes}
           <Route path="/dashboard" element={<DashboardLayout><Dashboard /></DashboardLayout>} />
           <Route path="/objects" element={<DashboardLayout><ObjectList /></DashboardLayout>} />
           <Route path="/objects/new" element={<DashboardLayout><ObjectCreate /></DashboardLayout>} />
@@ -242,23 +241,28 @@ function MainApp() {
         </>
       )}
 
+      {/* ========================================
+          TECHNIKER ROUTES
+          ======================================== */}
       {user.role === "technician" && (
         <>
-          {CommonRoutes}
           <Route path="/dashboard" element={<DashboardLayout><TechnicianHome /></DashboardLayout>} />
           <Route path="/maps" element={<DashboardLayout><Maps /></DashboardLayout>} />
         </>
       )}
 
+      {/* ========================================
+          AUDITOR / VIEWER / PARTNER ROUTES
+          ======================================== */}
       {["auditor", "viewer", "partner"].includes(user.role) && (
         <>
-          {CommonRoutes}
           <Route path="/dashboard" element={<DashboardLayout><Dashboard /></DashboardLayout>} />
           <Route path="/objects" element={<DashboardLayout><ObjectList /></DashboardLayout>} />
           <Route path="/maps" element={<DashboardLayout><Maps /></DashboardLayout>} />
         </>
       )}
 
+      {/* Fallback */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
