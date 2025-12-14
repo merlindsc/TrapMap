@@ -23,6 +23,56 @@ const STATUS = {
   red: { label: "Stark", color: "#da3633" }
 };
 
+// BoxType aus Name erkennen
+function detectBoxType(box) {
+  const typeName = (box?.box_types?.name || box?.box_type_name || "").toLowerCase();
+  
+  if (typeName.includes("schlag") || typeName.includes("snap") || typeName.includes("trap"))
+    return "schlagfalle";
+  if (typeName.includes("gift") || typeName.includes("bait") || typeName.includes("köder"))
+    return "giftbox";
+  if (typeName.includes("nager") || typeName.includes("rodent") || typeName.includes("maus") || typeName.includes("ratte"))
+    return "monitoring_rodent";
+  if (typeName.includes("insekt") || typeName.includes("insect") || typeName.includes("fliege") || typeName.includes("motte"))
+    return "monitoring_insect";
+  
+  return "default";
+}
+
+// Automatische Status-Berechnung basierend auf BoxType
+function autoStatus(boxType, consumption, quantity, trapState) {
+  // Schlagfalle
+  if (boxType === "schlagfalle") {
+    if (trapState === 0) return "green";   // nicht ausgelöst
+    if (trapState === 1) return "yellow";  // ausgelöst
+    if (trapState === 2) return "red";     // Tier drin
+  }
+
+  // Köder / Monitoring Nager
+  if (boxType === "monitoring_rodent" || boxType === "giftbox") {
+    const c = parseInt(consumption) || 0;
+    if (c === 0) return "green"; 
+    if (c <= 25) return "yellow";
+    if (c <= 50) return "orange";
+    return "red";
+  }
+
+  // Insekten
+  if (boxType === "monitoring_insect") {
+    if (quantity === "none" || quantity === "0") return "green";
+    if (quantity === "0-5") return "yellow";
+    if (quantity === "5-10") return "orange";
+    return "red"; // 10–20, 20+
+  }
+
+  // Default: consumption-basiert
+  const c = parseInt(consumption) || 0;
+  if (c === 0) return "green";
+  if (c <= 25) return "yellow";
+  if (c <= 75) return "orange";
+  return "red";
+}
+
 // QR-Nummer extrahieren (ohne führende Null, ohne Prefix)
 const getShortQr = (box) => {
   if (box?.qr_code) {
@@ -137,6 +187,8 @@ export default function BoxScanDialog({
   
   // Form
   const [consumption, setConsumption] = useState("0");
+  const [trapState, setTrapState] = useState(0);        // Für Schlagfallen
+  const [quantity, setQuantity] = useState("none");     // Für Insektenmonitore
   const [status, setStatus] = useState("green");
   const [notes, setNotes] = useState("");
   const [photo, setPhoto] = useState(null);
@@ -154,6 +206,7 @@ export default function BoxScanDialog({
   // Box-Info extrahieren
   const boxInfo = getBoxDisplayInfo(box);
   const typeName = box?.box_types?.name || box?.box_type_name || "Unbekannt";
+  const boxType = detectBoxType(box); // NEU: BoxType erkennen
   
   // Position Type
   const isFloorplanBox = box?.position_type === 'floorplan' || box?.floor_plan_id;
@@ -204,14 +257,11 @@ export default function BoxScanDialog({
     return () => navigator.geolocation.clearWatch(watchId);
   }, [hasGPS, box?.lat, box?.lng, isMobile]);
 
-  // Status auto
+  // Status automatisch berechnen basierend auf BoxType
   useEffect(() => {
-    const c = parseInt(consumption);
-    if (c === 0) setStatus("green");
-    else if (c <= 25) setStatus("yellow");
-    else if (c <= 75) setStatus("orange");
-    else setStatus("red");
-  }, [consumption]);
+    const newStatus = autoStatus(boxType, consumption, quantity, trapState);
+    setStatus(newStatus);
+  }, [consumption, quantity, trapState, boxType]);
 
   // History laden
   useEffect(() => {
@@ -250,9 +300,18 @@ export default function BoxScanDialog({
       fd.append("box_id", box.id);
       fd.append("object_id", box.object_id || box.objects?.id || "");
       fd.append("status", status);
-      fd.append("consumption", consumption);
       fd.append("notes", notes);
       if (photo) fd.append("photo", photo);
+      
+      // BoxType-spezifische Felder
+      if (boxType === "schlagfalle") {
+        fd.append("trap_state", trapState);
+      } else if (boxType === "monitoring_insect") {
+        fd.append("quantity", quantity);
+      } else {
+        // Default: consumption für Köder/Nager/Default
+        fd.append("consumption", consumption);
+      }
 
       const r = await fetch(`${API}/scans`, {
         method: "POST",
@@ -548,25 +607,75 @@ export default function BoxScanDialog({
                   </div>
                 )}
 
-                {/* Verbrauch */}
-                <div style={{ marginBottom: 14 }}>
-                  <label style={{ display: "block", marginBottom: 6, fontSize: 11, fontWeight: 500, color: "#8b949e" }}>
-                    Köderverbrauch *
-                  </label>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    {["0", "25", "50", "75", "100"].map(v => (
-                      <button key={v} onClick={() => setConsumption(v)} style={{
-                        flex: 1, padding: "10px 0",
-                        background: consumption === v ? "#21262d" : "transparent",
-                        border: consumption === v ? "2px solid #58a6ff" : "1px solid #30363d",
-                        borderRadius: 6, color: consumption === v ? "#e6edf3" : "#8b949e",
-                        fontSize: 12, fontWeight: consumption === v ? 600 : 400, cursor: "pointer"
-                      }}>
-                        {v}%
-                      </button>
-                    ))}
+                {/* === BOXTYPE-SPEZIFISCHE FELDER === */}
+                
+                {/* SCHLAGFALLE: Zustand der Falle */}
+                {boxType === "schlagfalle" && (
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: "block", marginBottom: 6, fontSize: 11, fontWeight: 500, color: "#8b949e" }}>
+                      Zustand der Falle *
+                    </label>
+                    <select
+                      value={trapState}
+                      onChange={(e) => setTrapState(Number(e.target.value))}
+                      style={{
+                        width: "100%", padding: "12px", background: "#161b22",
+                        border: "1px solid #30363d", borderRadius: 6, color: "#e6edf3",
+                        fontSize: 13, cursor: "pointer"
+                      }}
+                    >
+                      <option value={0}>✓ Nicht ausgelöst</option>
+                      <option value={1}>⚠️ Ausgelöst (leer)</option>
+                      <option value={2}>🐀 Tier gefunden</option>
+                    </select>
                   </div>
-                </div>
+                )}
+
+                {/* INSEKTENMONITOR: Menge */}
+                {boxType === "monitoring_insect" && (
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: "block", marginBottom: 6, fontSize: 11, fontWeight: 500, color: "#8b949e" }}>
+                      Insektenmenge *
+                    </label>
+                    <select
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                      style={{
+                        width: "100%", padding: "12px", background: "#161b22",
+                        border: "1px solid #30363d", borderRadius: 6, color: "#e6edf3",
+                        fontSize: 13, cursor: "pointer"
+                      }}
+                    >
+                      <option value="none">✓ Keine</option>
+                      <option value="0-5">○ 0–5 Stück</option>
+                      <option value="5-10">● 5–10 Stück</option>
+                      <option value="10-20">●● 10–20 Stück</option>
+                      <option value="20+">●●● 20+ Stück</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* KÖDER/NAGER/DEFAULT: Verbrauch */}
+                {(boxType === "giftbox" || boxType === "monitoring_rodent" || boxType === "default") && (
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={{ display: "block", marginBottom: 6, fontSize: 11, fontWeight: 500, color: "#8b949e" }}>
+                      Köderverbrauch *
+                    </label>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {["0", "25", "50", "75", "100"].map(v => (
+                        <button key={v} onClick={() => setConsumption(v)} style={{
+                          flex: 1, padding: "10px 0",
+                          background: consumption === v ? "#21262d" : "transparent",
+                          border: consumption === v ? "2px solid #58a6ff" : "1px solid #30363d",
+                          borderRadius: 6, color: consumption === v ? "#e6edf3" : "#8b949e",
+                          fontSize: 12, fontWeight: consumption === v ? 600 : 400, cursor: "pointer"
+                        }}>
+                          {v}%
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Status */}
                 <div style={{
@@ -679,9 +788,26 @@ export default function BoxScanDialog({
                             day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
                           })}
                         </div>
+                        {/* Consumption Badge */}
                         {s.consumption !== undefined && s.consumption !== null && (
                           <div style={{ fontSize: 11, color: "#8b949e", background: "#21262d", padding: "2px 8px", borderRadius: 4 }}>
                             {s.consumption}%
+                          </div>
+                        )}
+                        {/* Trap State Badge */}
+                        {s.trap_state !== undefined && s.trap_state !== null && (
+                          <div style={{ 
+                            fontSize: 11, 
+                            color: s.trap_state === 0 ? "#3fb950" : s.trap_state === 1 ? "#d29922" : "#f85149", 
+                            background: "#21262d", padding: "2px 8px", borderRadius: 4 
+                          }}>
+                            {s.trap_state === 0 ? "✓ OK" : s.trap_state === 1 ? "⚠️ Ausgelöst" : "🐀 Tier"}
+                          </div>
+                        )}
+                        {/* Quantity Badge */}
+                        {s.quantity && s.quantity !== "none" && (
+                          <div style={{ fontSize: 11, color: "#8b949e", background: "#21262d", padding: "2px 8px", borderRadius: 4 }}>
+                            🪲 {s.quantity}
                           </div>
                         )}
                       </div>
