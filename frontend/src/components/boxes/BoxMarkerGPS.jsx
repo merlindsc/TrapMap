@@ -11,14 +11,14 @@
 import React from 'react';
 import { Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
-import { getShortQr, getStatusColor, getBoxIcon } from './boxHelpers';
+import { getShortQr, getStatusHex, getBoxIcon } from './BoxHelpers';
 
 /**
  * Erstellt das Marker-Icon mit allen Nummern
  */
 function createBoxIcon(box, displayNumber, isFloorplan = false) {
   const shortQr = getShortQr(box);
-  const statusColor = getStatusColor(box.current_status);
+  const statusColor = getStatusHex(box.current_status);
   
   // Grid-Position nur bei Lageplan
   const gridHtml = isFloorplan && box.grid_position 
@@ -106,7 +106,7 @@ export function FloorplanBoxMarker({
   isDragging = false
 }) {
   const shortQr = getShortQr(box);
-  const statusColor = getStatusColor(box.current_status);
+  const statusColor = getStatusHex(box.current_status);
 
   // Position in Pixel umrechnen
   const x = (box.pos_x / 100) * containerWidth;
