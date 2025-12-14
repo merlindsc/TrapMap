@@ -6,9 +6,9 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  QrCode, Shield, BarChart3, MapPin, Clock, FileCheck,
+  QrCode, Shield, MapPin, Clock, FileCheck,
   Check, Menu, X, Camera, Settings, Users, Sliders,
-  Phone, Mail, ArrowRight, Sparkles, Timer, HandshakeIcon
+  Phone, Mail, ArrowRight, Sparkles, Timer, Handshake
 } from "lucide-react";
 import "./LandingPage.css";
 
@@ -289,7 +289,7 @@ export default function LandingPage() {
         <div className="section-container">
           <div className="partner-card">
             <div className="partner-icon">
-              <HandshakeIcon size={32} />
+              <Handshake size={32} />
             </div>
             <div className="partner-content">
               <h3>Was ist ein Partner-Account?</h3>
