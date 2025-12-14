@@ -11,7 +11,7 @@ import { ThemeProvider } from "./components/layout/DashboardLayout";
 // Public Pages
 import LandingPage from "./pages/public/LandingPage";
 import Login from "./pages/Login";
-import './styles/dark-mode-fixes.css';
+
 // Legal Pages
 import Impressum from "./pages/legal/Impressum";
 import Datenschutz from "./pages/legal/Datenschutz";
