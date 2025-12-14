@@ -230,6 +230,19 @@ export default function Scanner() {
       setError("");
       console.log("✅ Scanner läuft!");
 
+      // Kurzer Delay und Debug: Prüfe aktive Video-Track IDs (hilfreich beim Debuggen von Kamerareuse)
+      setTimeout(() => {
+        try {
+          const v = document.querySelector('#qr-reader video');
+          if (v && v.srcObject && typeof v.srcObject.getTracks === 'function') {
+            const ids = v.srcObject.getTracks().map(t => `${t.kind}:${t.id}`);
+            console.log('🎞️ Active video tracks after start:', ids);
+          }
+        } catch (e) {
+          /* ignore */
+        }
+      }, 250);
+
       try {
         const capabilities = html5QrCodeRef.current.getRunningTrackCapabilities();
         setTorchSupported(capabilities?.torch === true);
@@ -804,7 +817,24 @@ export default function Scanner() {
       // neu erstellt wird — das ist robuster gegen stale detector states.
       await stopScanner(true);
       // Kleiner Delay damit die Kamera freigegeben wird
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 600));
+      // Zusätzlich: Falls noch Video-Elemente existieren, stoppe deren Tracks explizit.
+      try {
+        const vids = document.querySelectorAll('video');
+        vids.forEach(v => {
+          try {
+            const s = v.srcObject;
+            if (s && typeof s.getTracks === 'function') {
+              s.getTracks().forEach(t => {
+                try { console.log('🛑 Stopping lingering track', t.kind, t.id); t.stop(); } catch (e) { /* ignore */ }
+              });
+            }
+            try { v.srcObject = null; } catch (e) { /* ignore */ }
+          } catch (e) { /* ignore */ }
+        });
+      } catch (e) {
+        console.error('refreshScannerOnce: stop remaining tracks failed', e);
+      }
       // Replace the DOM element to ensure Html5Qrcode mounts into a fresh node.
       try {
         const oldEl = document.getElementById('qr-reader');
