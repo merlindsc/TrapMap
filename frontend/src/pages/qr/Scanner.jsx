@@ -101,6 +101,9 @@ export default function Scanner() {
 
   const navigate = useNavigate();
   const { token } = useAuth();
+  const tempBlockedCodeRef = useRef(null);
+  const tempBlockedTimerRef = useRef(null);
+  const SHORT_BLOCK_MS = 1500; // ignore immediate re-scan for 1.5s after refresh/save
 
   // ============================================
   // SCANNER INIT
@@ -314,6 +317,12 @@ export default function Scanner() {
     // Lock setzen SOFORT (prevents rapid duplicate processing)
     setProcessingCode(true);
     setScannedCode(decodedText);
+    // Wenn temporär derselbe Code geblockt ist, ignorieren
+    if (tempBlockedCodeRef.current && code === tempBlockedCodeRef.current) {
+      console.log(`⏱️ Ignoriere kurzfristigen Re-Scan von ${code}`);
+      return;
+    }
+
     console.log(`📱 Neuer Scan: ${code} (isMobile: ${isMobile})`);
     
     // Scanner SOFORT stoppen
@@ -683,8 +692,17 @@ export default function Scanner() {
     setShowScanDialog(false);
     setProcessingCode(false);
     showSuccessToast("✓ Kontrolle gespeichert");
-    
-    // Reset mit kleinem Delay für DOM-Update
+    // Temporär selben Code kurz blockieren (verhindert sofortiges Re-Open)
+    try {
+      const lastCode = currentBox?.code || scannedCode;
+      if (lastCode) {
+        tempBlockedCodeRef.current = lastCode;
+        if (tempBlockedTimerRef.current) clearTimeout(tempBlockedTimerRef.current);
+        tempBlockedTimerRef.current = setTimeout(() => { tempBlockedCodeRef.current = null; }, SHORT_BLOCK_MS);
+      }
+    } catch (e) { /* ignore */ }
+
+    // Refresh the scanner once after short delay so UI has time to update
     setTimeout(() => {
       refreshScannerOnce();
     }, 100);
@@ -708,10 +726,18 @@ export default function Scanner() {
     setShowFirstSetup(false);
     showSuccessToast("✓ Box eingerichtet");
     
-    // Jetzt Scan-Dialog für erste Kontrolle öffnen
-    // WICHTIG: processingCode bleibt true bis Kontrolle gespeichert
+    // Temporär selben Code kurz blockieren (verhindert sofortiges Re-Open)
+    try {
+      const lastCode = currentBox?.code || scannedCode;
+      if (lastCode) {
+        tempBlockedCodeRef.current = lastCode;
+        if (tempBlockedTimerRef.current) clearTimeout(tempBlockedTimerRef.current);
+        tempBlockedTimerRef.current = setTimeout(() => { tempBlockedCodeRef.current = null; }, SHORT_BLOCK_MS);
+      }
+    } catch (e) { /* ignore */ }
+
+    // Jetzt Scan-Dialog für erste Kontrolle öffnen — restart scanner first
     setTimeout(async () => {
-      // Scanner einmal neu starten, dann Scan-Dialog öffnen
       await refreshScannerOnce();
       setShowScanDialog(true);
     }, 100);
