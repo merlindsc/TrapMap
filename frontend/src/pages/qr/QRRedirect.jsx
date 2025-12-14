@@ -70,9 +70,10 @@ export default function QRRedirect() {
         return;
       }
 
-      // Fall 2: Box auf LAGEPLAN
+      // Fall 2: Box auf LAGEPLAN → Direkt zum Lageplan-Editor!
       if (hasFloorplan) {
-        navigate(`/objects/${objectId}?tab=floorplan&openBox=${boxId}`, { replace: true });
+        // GEÄNDERT: Direkt zu /layouts mit fp= Parameter
+        navigate(`/layouts/${objectId}?fp=${floorPlanId}&openBox=${boxId}`, { replace: true });
         return;
       }
 

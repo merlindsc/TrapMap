@@ -627,10 +627,11 @@ export default function Scanner() {
   const handleChooseFloorplan = () => {
     if (!pendingPlacement) return;
     
+    // GEÄNDERT: Direkt zum Lageplan-Editor navigieren
     if (objectFloorplans.length === 1) {
-      navigate(`/objects/${pendingPlacement.objectId}?tab=floorplan&fp=${objectFloorplans[0].id}&placeBox=${pendingPlacement.boxId}`);
+      navigate(`/layouts/${pendingPlacement.objectId}?fp=${objectFloorplans[0].id}&placeBox=${pendingPlacement.boxId}`);
     } else {
-      navigate(`/objects/${pendingPlacement.objectId}?tab=floorplan&placeBox=${pendingPlacement.boxId}`);
+      navigate(`/layouts/${pendingPlacement.objectId}?placeBox=${pendingPlacement.boxId}`);
     }
   };
 
@@ -745,7 +746,8 @@ export default function Scanner() {
             onShowDetails={() => {
               const isFloorplan = currentBox.position_type === 'floorplan' && currentBox.floor_plan_id;
               if (isFloorplan) {
-                navigate(`/objects/${currentBox.object_id}?tab=floorplan&openBox=${currentBox.id}`);
+                // GEÄNDERT: Direkt zum Lageplan-Editor
+                navigate(`/layouts/${currentBox.object_id}?fp=${currentBox.floor_plan_id}&openBox=${currentBox.id}`);
               } else {
                 navigate(`/maps?object_id=${currentBox.object_id}&openBox=${currentBox.id}&flyTo=true`);
               }

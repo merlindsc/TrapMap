@@ -1,13 +1,13 @@
 /* ============================================================
-   TRAPMAP - FLOOR PLAN EDITOR V8
+   TRAPMAP - FLOOR PLAN EDITOR V9
    
-   ÄNDERUNGEN:
-   - QR-Nummer über Marker anzeigen
-   - display_number statt Box-ID im Kreis
-   - Logik wie Maps: Platzieren → Ersteinrichtung → Scan
-   - BoxEditDialog ohne GPS
-   - URL-Parameter Support (openBox)
-   - calculateDisplayNumbers Integration
+   ÄNDERUNGEN V9:
+   - Sidebar EXAKT wie Maps (CollapsibleBoxSection, BoxListItem)
+   - Mobile Bottom Sheet wie Maps
+   - Pinch-Zoom korrigiert (funktioniert jetzt!)
+   - Box-Marker wie Maps
+   - URL-Parameter: fp=<id> für direkten Lageplan
+   - CSS-Klassen von Maps.css nutzen
    ============================================================ */
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -15,20 +15,34 @@ import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { 
   Upload, Plus, Trash2, Grid3X3, X, ZoomIn, ZoomOut, 
-  Package, Move, ChevronLeft, ChevronRight, Maximize2,
+  Package, ChevronLeft, ChevronRight, Maximize2,
   Circle, Square, ArrowRight, Pencil, Eraser, RotateCcw,
-  Hand, MousePointer, AlertTriangle, Save,
-  Settings, Ruler, LayoutGrid, Check, Clock
+  Hand, MousePointer, Save, Settings, LayoutGrid, Check, 
+  Clock, ChevronDown, Map, Building2, Navigation, Search
 } from "lucide-react";
 
 import BoxScanDialog from "./BoxScanDialog";
 import BoxEditDialog from "../pages/maps/BoxEditDialog";
 
 // Helpers importieren
-import { calculateDisplayNumbers, getShortQr } from "./boxes/BoxHelpers";
+import { calculateDisplayNumbers, getShortQr, isGpsBox } from "./boxes/BoxHelpers";
+
+// Maps CSS importieren für einheitliche Styles!
+import "../pages/maps/Maps.css";
 
 const API = import.meta.env.VITE_API_URL;
 
+/* ============================================================
+   MOBILE DETECTION
+   ============================================================ */
+const isMobileDevice = () => {
+  if (typeof window === 'undefined') return false;
+  return window.innerWidth <= 768 || 'ontouchstart' in window;
+};
+
+/* ============================================================
+   STATUS HELPERS
+   ============================================================ */
 const STATUS_COLORS = {
   green: { bg: "#10b981", label: "OK" },
   yellow: { bg: "#eab308", label: "Auffällig" },
@@ -37,113 +51,156 @@ const STATUS_COLORS = {
   gray: { bg: "#6b7280", label: "Nicht geprüft" }
 };
 
-// ============================================
-// BOX TYPE EMOJI ICONS
-// ============================================
-const BOX_TYPE_EMOJIS = {
-  rat: '🐀',
-  mouse: '🐁',
-  snapTrap: '⚠️',
-  tunnel: '🔶',
-  bait: '🟢',
-  liveTrap: '🔵',
-  monitoring: '👁️',
-  moth: '🦋',
-  cockroach: '🪳',
-  beetle: '🪲',
-  insect: '🪰',
-  uvLight: '☀️',
+const getStatusColor = (status) => {
+  const s = (status || "").toLowerCase();
+  if (s === "green" || s === "ok") return "green";
+  if (s === "yellow" || s.includes("gering")) return "yellow";
+  if (s === "orange" || s.includes("auffällig")) return "orange";
+  if (s === "red" || s.includes("befall")) return "red";
+  return "gray";
 };
 
-function getBoxTypeEmojis(boxTypeName) {
-  if (!boxTypeName) return '';
-  const name = boxTypeName.toLowerCase();
-  let icons = [];
-  
-  if ((name.includes('schlagfall') || name.includes('snap')) && name.includes('tunnel')) {
-    if (name.includes('ratte') || name.includes('rat')) icons = ['rat', 'tunnel'];
-    else if (name.includes('maus') || name.includes('mouse')) icons = ['mouse', 'tunnel'];
-    else icons = ['tunnel'];
-  }
-  else if (name.includes('schlagfall') || name.includes('snap')) {
-    if (name.includes('ratte') || name.includes('rat')) icons = ['rat', 'snapTrap'];
-    else if (name.includes('maus') || name.includes('mouse')) icons = ['mouse', 'snapTrap'];
-    else icons = ['snapTrap'];
-  }
-  else if (name.includes('köder') || name.includes('koeder') || name.includes('bait')) {
-    if (name.includes('ratte') || name.includes('rat')) icons = ['rat', 'bait'];
-    else if (name.includes('maus') || name.includes('mouse')) icons = ['mouse', 'bait'];
-    else icons = ['bait'];
-  }
-  else if (name.includes('lebend') || name.includes('live')) {
-    if (name.includes('ratte') || name.includes('rat')) icons = ['rat', 'liveTrap'];
-    else if (name.includes('maus') || name.includes('mouse')) icons = ['mouse', 'liveTrap'];
-    else icons = ['liveTrap'];
-  }
-  else if (name.includes('monitoring') || name.includes('monitor')) {
-    if (name.includes('käfer') || name.includes('kaefer') || name.includes('beetle')) icons = ['beetle', 'monitoring'];
-    else if (name.includes('motte') || name.includes('moth')) icons = ['moth', 'monitoring'];
-    else if (name.includes('schabe') || name.includes('cockroach')) icons = ['cockroach', 'monitoring'];
-    else if (name.includes('ratte') || name.includes('rat')) icons = ['rat', 'monitoring'];
-    else if (name.includes('maus') || name.includes('mouse')) icons = ['mouse', 'monitoring'];
-    else icons = ['monitoring'];
-  }
-  else if (name.includes('motte') || name.includes('moth')) icons = ['moth'];
-  else if (name.includes('schabe') || name.includes('cockroach')) icons = ['cockroach'];
-  else if (name.includes('käfer') || name.includes('kaefer') || name.includes('beetle')) icons = ['beetle'];
-  else if (name.includes('insekt') || name.includes('insect')) icons = ['insect'];
-  else if (name.includes('uv') || name.includes('licht') || name.includes('light')) icons = ['uvLight'];
-  else if (name.includes('ratte') || name.includes('rat')) icons = ['rat'];
-  else if (name.includes('maus') || name.includes('mouse')) icons = ['mouse'];
-  
-  return icons.map(key => BOX_TYPE_EMOJIS[key] || '').join('');
-}
-
-// ============================================
-// GRID PRESETS
-// ============================================
+/* ============================================================
+   GRID PRESETS
+   ============================================================ */
 const GRID_PRESETS = {
-  coarse: { 
-    cols: 10, 
-    rows: 10, 
-    name: "Grob (10×10)",
-    description: "Für große Hallen, Außenbereiche, Parkplätze",
-    icon: "🏭"
-  },
-  medium: { 
-    cols: 20, 
-    rows: 20, 
-    name: "Mittel (20×20)",
-    description: "Standard für die meisten Gebäude und Lager",
-    icon: "🏢"
-  },
-  fine: { 
-    cols: 26, 
-    rows: 30, 
-    name: "Fein (A-Z, 1-30)",
-    description: "Detaillierte Positionierung für Büros, Restaurants",
-    icon: "🏠"
-  },
-  very_fine: { 
-    cols: 52, 
-    rows: 50, 
-    name: "Sehr fein (AA-AZ, 1-50)",
-    description: "Maximale Präzision für kleine Räume, Küchen",
-    icon: "📍"
-  }
+  coarse: { cols: 10, rows: 10, name: "Grob (10×10)", icon: "🏭" },
+  medium: { cols: 20, rows: 20, name: "Mittel (20×20)", icon: "🏢" },
+  fine: { cols: 26, rows: 30, name: "Fein (A-Z, 1-30)", icon: "🏠" },
+  very_fine: { cols: 52, rows: 50, name: "Sehr fein (AA-AZ, 1-50)", icon: "📍" }
 };
 
-// Grid-Label generieren (A-Z, dann AA-AZ)
-const getColLabel = (index, totalCols) => {
+const getColLabel = (index) => {
   if (index < 26) return String.fromCharCode(65 + index);
   return 'A' + String.fromCharCode(65 + (index - 26));
 };
 
+/* ============================================================
+   COLLAPSIBLE BOX SECTION - Wie Maps!
+   ============================================================ */
+function CollapsibleBoxSection({ title, icon, count, variant = "default", defaultOpen = false, children }) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  const variantClasses = {
+    default: "",
+    warning: "variant-warning",
+    map: "variant-map",
+    floorplan: "variant-floorplan"
+  };
+
+  return (
+    <div className={`collapsible-section ${variantClasses[variant]} ${isOpen ? 'open' : 'closed'}`}>
+      <button className="collapsible-header" onClick={() => setIsOpen(!isOpen)}>
+        <div className="header-left">
+          {icon}
+          <span className="header-title">{title}</span>
+        </div>
+        <div className="header-right">
+          <span className="header-count">{count}</span>
+          <ChevronDown size={16} className={`chevron ${isOpen ? 'rotated' : ''}`} />
+        </div>
+      </button>
+      {isOpen && (
+        <div className="collapsible-content">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================================================
+   BOX LIST ITEM - Wie Maps!
+   ============================================================ */
+function BoxListItem({ box, onClick, isFloorplan = false, isUnplaced = false, isSelected = false, onDragStart }) {
+  const formatLastScan = (lastScan) => {
+    if (!lastScan) return "Nie";
+    const date = new Date(lastScan);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return "Heute";
+    if (diffDays === 1) return "Gestern";
+    if (diffDays < 7) return `${diffDays}d`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)}w`;
+    return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+  };
+
+  const displayNum = box.display_number || '?';
+  const shortQr = getShortQr(box);
+  const statusColor = getStatusColor(box.current_status || box.status);
+  const isMobile = isMobileDevice();
+
+  // Unplaced Style
+  if (isUnplaced) {
+    return (
+      <div 
+        className={`box-item unplaced ${isSelected ? 'selected' : ''}`}
+        draggable={!isMobile}
+        onDragStart={onDragStart}
+        onClick={onClick}
+        style={{
+          cursor: isMobile ? 'pointer' : 'grab',
+          background: isSelected ? 'rgba(16, 185, 129, 0.15)' : undefined,
+          borderColor: isSelected ? '#10b981' : undefined
+        }}
+      >
+        <span className={`box-icon ${statusColor}`}>{displayNum}</span>
+        <div className="box-info">
+          <h4>#{displayNum} <span className="qr-badge-small">{shortQr}</span></h4>
+          <p>{box.box_type_name || 'Kein Typ'}</p>
+        </div>
+        <span className="drag-hint" style={{ color: isSelected ? '#10b981' : undefined }}>
+          {isMobile 
+            ? (isSelected ? '✓ Plan tippen' : '→ Antippen') 
+            : '⇢ Ziehen'}
+        </span>
+      </div>
+    );
+  }
+
+  // Placed Box Style
+  return (
+    <div className={`box-item-detailed ${isFloorplan ? 'floorplan' : ''} group`} onClick={onClick}>
+      <div className="box-item-main">
+        <div className={`box-number-badge ${statusColor}`}>
+          {displayNum}
+        </div>
+        <div className="box-item-info">
+          <div className="box-item-name">
+            <span>Box #{displayNum}</span>
+            <span className="qr-badge">{shortQr}</span>
+            {box.grid_position && (
+              <span className="grid-badge">{box.grid_position}</span>
+            )}
+          </div>
+          <div className="box-item-meta">
+            <span className="box-type">{box.box_type_name || 'Kein Typ'}</span>
+            <span className="last-scan">
+              <Clock size={11} />
+              {formatLastScan(box.last_scan)}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="box-item-right">
+        <span className={`status-indicator ${statusColor}`} />
+        <ChevronRight size={14} className="item-chevron" />
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   MAIN COMPONENT
+   ============================================================ */
 export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp }) {
   // URL-Parameter
   const [searchParams] = useSearchParams();
   const openBoxId = openBoxIdProp || searchParams.get("openBox");
-  const shouldPlaceBox = searchParams.get("place") === "true";
+  const shouldPlaceBox = searchParams.get("place") === "true" || searchParams.get("placeBox");
+  const urlFloorPlanId = searchParams.get("fp"); // Direkt zu diesem Lageplan!
 
   // Data State
   const [floorPlans, setFloorPlans] = useState([]);
@@ -159,13 +216,18 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   
-  // Grid (aus selectedPlan geladen)
+  // Grid
   const [showGrid, setShowGrid] = useState(true);
   const [hoveredCell, setHoveredCell] = useState(null);
   
   // Mode
   const [mode, setMode] = useState("view");
   const [drawTool, setDrawTool] = useState(null);
+  
+  // Mobile
+  const [isMobile, setIsMobile] = useState(isMobileDevice());
+  const [sheetState, setSheetState] = useState('half'); // 'peek', 'half', 'full'
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   
   // Dialogs
   const [showUpload, setShowUpload] = useState(false);
@@ -177,14 +239,13 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
   const [scanDialogOpen, setScanDialogOpen] = useState(false);
   const [selectedBox, setSelectedBox] = useState(null);
   const [showGridSettings, setShowGridSettings] = useState(false);
-  
-  // NEU: Edit Dialog States
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [isFirstSetup, setIsFirstSetup] = useState(false);
   
   // Drag & Place
   const [draggedBox, setDraggedBox] = useState(null);
   const [relocatingBox, setRelocatingBox] = useState(null);
+  const [boxToPlace, setBoxToPlace] = useState(null); // Mobile: ausgewählte Box
   
   // Annotations
   const [annotations, setAnnotations] = useState([]);
@@ -192,24 +253,35 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
   const [annotationColor, setAnnotationColor] = useState("#ef4444");
   
   // UI
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   
+  // Refs
   const containerRef = useRef(null);
   const planRef = useRef(null);
+  const sheetRef = useRef(null);
+  const lastPinchDistance = useRef(0);
+  const lastPinchCenter = useRef({ x: 0, y: 0 });
+  const initialPinchPan = useRef({ x: 0, y: 0 });
   
   const token = localStorage.getItem("trapmap_token");
   const headers = { Authorization: `Bearer ${token}` };
 
-  // Grid-Konfiguration aus selectedPlan
+  // Grid-Konfiguration
   const gridConfig = selectedPlan ? {
     cols: selectedPlan.grid_cols || 20,
     rows: selectedPlan.grid_rows || 20
   } : { cols: 20, rows: 20 };
 
-  // ============================================
-  // ZOOM: MAUSRAD + TOUCH PINCH
-  // ============================================
+  // Resize Handler
+  useEffect(() => {
+    const handleResize = () => setIsMobile(isMobileDevice());
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  /* ============================================================
+     TOUCH/ZOOM HANDLERS - KORRIGIERT!
+     ============================================================ */
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -221,11 +293,7 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
       setZoom(prev => Math.max(0.3, Math.min(5, prev + delta)));
     };
 
-    // Touch Pinch Zoom
-    let lastTouchDistance = 0;
-    let lastTouchCenter = { x: 0, y: 0 };
-    let initialPan = { x: 0, y: 0 };
-
+    // Touch Distance
     const getTouchDistance = (touches) => {
       const dx = touches[0].clientX - touches[1].clientX;
       const dy = touches[0].clientY - touches[1].clientY;
@@ -238,13 +306,15 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
     });
 
     const handleTouchStart = (e) => {
+      // ZWEI Finger = Pinch Zoom
       if (e.touches.length === 2) {
         e.preventDefault();
-        lastTouchDistance = getTouchDistance(e.touches);
-        lastTouchCenter = getTouchCenter(e.touches);
-        initialPan = { ...pan };
-      } else if (e.touches.length === 1) {
-        // Single touch for panning
+        lastPinchDistance.current = getTouchDistance(e.touches);
+        lastPinchCenter.current = getTouchCenter(e.touches);
+        initialPinchPan.current = { x: pan.x, y: pan.y };
+      } 
+      // EIN Finger = Pan (nur wenn NICHT im Place-Modus)
+      else if (e.touches.length === 1 && mode !== "place" && mode !== "create") {
         setPanStart({ 
           x: e.touches[0].clientX - pan.x, 
           y: e.touches[0].clientY - pan.y 
@@ -254,23 +324,29 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
     };
 
     const handleTouchMove = (e) => {
+      // ZWEI Finger = Pinch Zoom
       if (e.touches.length === 2) {
         e.preventDefault();
         const newDistance = getTouchDistance(e.touches);
         const newCenter = getTouchCenter(e.touches);
         
-        // Zoom
-        const scale = newDistance / lastTouchDistance;
-        setZoom(prev => Math.max(0.3, Math.min(5, prev * scale)));
-        
-        // Pan while zooming
-        setPan({
-          x: initialPan.x + (newCenter.x - lastTouchCenter.x),
-          y: initialPan.y + (newCenter.y - lastTouchCenter.y)
+        // Zoom berechnen
+        const scale = newDistance / lastPinchDistance.current;
+        setZoom(prev => {
+          const newZoom = prev * scale;
+          return Math.max(0.3, Math.min(5, newZoom));
         });
         
-        lastTouchDistance = newDistance;
-      } else if (e.touches.length === 1 && isPanning) {
+        // Pan während Zoom
+        setPan({
+          x: initialPinchPan.current.x + (newCenter.x - lastPinchCenter.current.x),
+          y: initialPinchPan.current.y + (newCenter.y - lastPinchCenter.current.y)
+        });
+        
+        lastPinchDistance.current = newDistance;
+      } 
+      // EIN Finger = Pan
+      else if (e.touches.length === 1 && isPanning) {
         setPan({
           x: e.touches[0].clientX - panStart.x,
           y: e.touches[0].clientY - panStart.y
@@ -279,7 +355,7 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
     };
 
     const handleTouchEnd = () => {
-      lastTouchDistance = 0;
+      lastPinchDistance.current = 0;
       setIsPanning(false);
     };
 
@@ -294,11 +370,11 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
       container.removeEventListener('touchmove', handleTouchMove);
       container.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [pan, panStart, isPanning]);
+  }, [pan, panStart, isPanning, mode]);
 
-  // ============================================
-  // LOAD DATA
-  // ============================================
+  /* ============================================================
+     LOAD DATA
+     ============================================================ */
   useEffect(() => {
     if (objectId) {
       loadFloorPlans();
@@ -306,6 +382,16 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
       loadBoxTypes();
     }
   }, [objectId]);
+
+  // URL-Parameter: Direkt zu Lageplan via fp=
+  useEffect(() => {
+    if (urlFloorPlanId && floorPlans.length > 0 && !selectedPlan) {
+      const targetPlan = floorPlans.find(p => p.id === parseInt(urlFloorPlanId));
+      if (targetPlan) {
+        setSelectedPlan(targetPlan);
+      }
+    }
+  }, [urlFloorPlanId, floorPlans]);
 
   useEffect(() => {
     if (selectedPlan) {
@@ -316,17 +402,13 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
     }
   }, [selectedPlan]);
 
-  // ============================================
-  // URL-PARAMETER: Box per openBox öffnen
-  // ============================================
+  // URL-Parameter: Box per openBox öffnen
   useEffect(() => {
     if (openBoxId && boxesOnPlan.length > 0) {
       const boxToOpen = boxesOnPlan.find(b => b.id === parseInt(openBoxId));
       
       if (boxToOpen) {
-        // Box ist bereits auf diesem Plan platziert
         const needsSetup = !boxToOpen.box_type_id;
-        
         setSelectedBox(boxToOpen);
         
         if (needsSetup) {
@@ -337,48 +419,48 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
         }
         
         // URL-Parameter entfernen
-        const newParams = new URLSearchParams(searchParams);
-        newParams.delete("openBox");
-        newParams.delete("place");
-        const newUrl = newParams.toString() 
-          ? `${window.location.pathname}?${newParams}` 
-          : window.location.pathname;
-        window.history.replaceState({}, "", newUrl);
+        clearUrlParams();
       }
     }
   }, [openBoxId, boxesOnPlan]);
 
-  // ============================================
-  // URL-PARAMETER: Box platzieren (place=true)
-  // Box ist zugewiesen aber noch nicht auf Plan
-  // ============================================
+  // URL-Parameter: Box platzieren
   useEffect(() => {
-    if (shouldPlaceBox && openBoxId && unplacedBoxes.length > 0) {
-      const boxToPlace = unplacedBoxes.find(b => b.id === parseInt(openBoxId));
+    if (shouldPlaceBox && unplacedBoxes.length > 0) {
+      const boxId = searchParams.get("placeBox") || openBoxId;
+      const boxToPlaceFound = unplacedBoxes.find(b => b.id === parseInt(boxId));
       
-      if (boxToPlace) {
-        // Box zum Platzieren auswählen
-        setDraggedBox(boxToPlace);
+      if (boxToPlaceFound) {
+        if (isMobile) {
+          setBoxToPlace(boxToPlaceFound);
+          setSheetState('peek');
+        } else {
+          setDraggedBox(boxToPlaceFound);
+        }
         setMode("place");
-        
-        // URL-Parameter entfernen
-        const newParams = new URLSearchParams(searchParams);
-        newParams.delete("openBox");
-        newParams.delete("place");
-        const newUrl = newParams.toString() 
-          ? `${window.location.pathname}?${newParams}` 
-          : window.location.pathname;
-        window.history.replaceState({}, "", newUrl);
+        clearUrlParams();
       }
     }
-  }, [shouldPlaceBox, openBoxId, unplacedBoxes]);
+  }, [shouldPlaceBox, unplacedBoxes]);
+
+  const clearUrlParams = () => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete("openBox");
+    newParams.delete("place");
+    newParams.delete("placeBox");
+    newParams.delete("fp");
+    const newUrl = newParams.toString() 
+      ? `${window.location.pathname}?${newParams}` 
+      : window.location.pathname;
+    window.history.replaceState({}, "", newUrl);
+  };
 
   const loadFloorPlans = async () => {
     try {
       const res = await axios.get(`${API}/floorplans/object/${objectId}`, { headers });
       const plans = res.data || [];
       setFloorPlans(plans);
-      if (plans.length > 0 && !selectedPlan) {
+      if (plans.length > 0 && !selectedPlan && !urlFloorPlanId) {
         setSelectedPlan(plans[0]);
       }
     } catch (err) {
@@ -388,30 +470,20 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
     }
   };
 
-  // GEÄNDERT: Mit calculateDisplayNumbers
   const loadBoxesOnPlan = async (planId) => {
     try {
       const res = await axios.get(`${API}/floorplans/${planId}/boxes`, { headers });
-      let boxesData = res.data || [];
-      
-      // NEU: display_number berechnen!
-      boxesData = calculateDisplayNumbers(boxesData);
-      
+      let boxesData = calculateDisplayNumbers(res.data || []);
       setBoxesOnPlan(boxesData);
     } catch (err) {
       console.error("Load boxes error:", err);
     }
   };
 
-  // GEÄNDERT: Mit calculateDisplayNumbers
   const loadUnplacedBoxes = async () => {
     try {
       const res = await axios.get(`${API}/floorplans/object/${objectId}/unplaced`, { headers });
-      let boxesData = res.data || [];
-      
-      // NEU: display_number berechnen!
-      boxesData = calculateDisplayNumbers(boxesData);
-      
+      let boxesData = calculateDisplayNumbers(res.data || []);
       setUnplacedBoxes(boxesData);
     } catch (err) {
       console.error("Load unplaced boxes error:", err);
@@ -427,112 +499,36 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
     }
   };
 
-  // ============================================
-  // UPLOAD FLOW
-  // ============================================
-  const handleFileSelect = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("image", file);
-      formData.append("object_id", objectId);
-
-      const uploadRes = await axios.post(`${API}/floorplans/upload`, formData, {
-        headers: { ...headers, "Content-Type": "multipart/form-data" }
-      });
-
-      // Speichere Upload-Info und zeige Grid-Setup
-      setPendingUpload({
-        url: uploadRes.data.url,
-        name: `LP${floorPlans.length + 1}`
-      });
-      setShowUpload(false);
-      setShowGridSetup(true);
-    } catch (err) {
-      console.error("Upload error:", err);
-      alert("Fehler beim Hochladen");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleGridSetupComplete = async (gridConfig) => {
-    if (!pendingUpload) return;
-
-    try {
-      const createRes = await axios.post(`${API}/floorplans`, {
-        object_id: objectId,
-        name: pendingUpload.name,
-        image_url: pendingUpload.url,
-        ...gridConfig
-      }, { headers });
-
-      await loadFloorPlans();
-      setSelectedPlan(createRes.data);
-      setShowGridSetup(false);
-      setPendingUpload(null);
-    } catch (err) {
-      console.error("Create floor plan error:", err);
-      alert("Fehler beim Erstellen");
-    }
-  };
-
-  // ============================================
-  // UPDATE GRID SETTINGS
-  // ============================================
-  const handleUpdateGridSettings = async (gridConfig) => {
-    if (!selectedPlan) return;
-
-    await axios.put(`${API}/floorplans/${selectedPlan.id}`, gridConfig, { headers });
-    await loadFloorPlans();
-    
-    setSelectedPlan(prev => ({ ...prev, ...gridConfig }));
-  };
-
-  // ============================================
-  // GRID POSITION BERECHNEN
-  // ============================================
+  /* ============================================================
+     GRID POSITION
+     ============================================================ */
   const getGridPosition = useCallback((percentX, percentY) => {
     const { cols, rows } = gridConfig;
-    
     const colIndex = Math.floor((percentX / 100) * cols);
     const rowIndex = Math.floor((percentY / 100) * rows);
-    
     const clampedCol = Math.max(0, Math.min(cols - 1, colIndex));
     const clampedRow = Math.max(0, Math.min(rows - 1, rowIndex));
-    
-    const colLabel = getColLabel(clampedCol, cols);
-    const rowLabel = clampedRow + 1;
-    
+    const colLabel = getColLabel(clampedCol);
     return { 
       col: colLabel, 
-      row: rowLabel, 
+      row: clampedRow + 1, 
       colIndex: clampedCol,
       rowIndex: clampedRow,
-      gridPosition: `${colLabel}${rowLabel}` 
+      gridPosition: `${colLabel}${clampedRow + 1}` 
     };
   }, [gridConfig]);
 
   const getGridCenterPosition = useCallback((colIndex, rowIndex) => {
     const { cols, rows } = gridConfig;
-    
-    const cellWidth = 100 / cols;
-    const cellHeight = 100 / rows;
-    
-    const x = (colIndex + 0.5) * cellWidth;
-    const y = (rowIndex + 0.5) * cellHeight;
-    
+    const x = (colIndex + 0.5) * (100 / cols);
+    const y = (rowIndex + 0.5) * (100 / rows);
     return { x, y };
   }, [gridConfig]);
 
-  // ============================================
-  // MOUSE HANDLERS
-  // ============================================
+  /* ============================================================
+     MOUSE HANDLERS
+     ============================================================ */
   const handleMouseDown = useCallback((e) => {
-    // Mittlere Maustaste, Rechtsklick oder Pan-Modus = Bild bewegen
     if (e.button === 1 || e.button === 2 || mode === "pan") {
       e.preventDefault();
       setIsPanning(true);
@@ -544,53 +540,37 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
       const rect = planRef.current.getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width) * 100;
       const y = ((e.clientY - rect.top) / rect.height) * 100;
-      
-      setCurrentAnnotation({
-        type: drawTool,
-        startX: x, startY: y,
-        endX: x, endY: y,
-        color: annotationColor
-      });
+      setCurrentAnnotation({ type: drawTool, startX: x, startY: y, endX: x, endY: y, color: annotationColor });
     }
   }, [mode, drawTool, pan, annotationColor]);
 
   const handleMouseMove = useCallback((e) => {
-    // Bild bewegen
     if (isPanning) {
-      setPan({
-        x: e.clientX - panStart.x,
-        y: e.clientY - panStart.y
-      });
+      setPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
       return;
     }
 
-    // Grid-Zelle hovern
     if (planRef.current && showGrid) {
       const rect = planRef.current.getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width) * 100;
       const y = ((e.clientY - rect.top) / rect.height) * 100;
-      
       if (x >= 0 && x <= 100 && y >= 0 && y <= 100) {
-        const grid = getGridPosition(x, y);
-        setHoveredCell(grid);
+        setHoveredCell(getGridPosition(x, y));
       } else {
         setHoveredCell(null);
       }
     }
 
-    // Annotation zeichnen
     if (currentAnnotation && planRef.current) {
       const rect = planRef.current.getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width) * 100;
       const y = ((e.clientY - rect.top) / rect.height) * 100;
-      
       setCurrentAnnotation(prev => ({ ...prev, endX: x, endY: y }));
     }
   }, [isPanning, panStart, currentAnnotation, showGrid, getGridPosition]);
 
   const handleMouseUp = useCallback(() => {
     setIsPanning(false);
-    
     if (currentAnnotation) {
       const dx = Math.abs(currentAnnotation.endX - currentAnnotation.startX);
       const dy = Math.abs(currentAnnotation.endY - currentAnnotation.startY);
@@ -601,9 +581,9 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
     }
   }, [currentAnnotation]);
 
-  // ============================================
-  // PLAN CLICK - Create Box
-  // ============================================
+  /* ============================================================
+     PLAN CLICK - Place Box
+     ============================================================ */
   const handlePlanClick = useCallback((e) => {
     if (isPanning || mode === "pan" || mode === "draw") return;
     if (!planRef.current || !selectedPlan) return;
@@ -619,17 +599,15 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
     const centered = getGridCenterPosition(grid.colIndex, grid.rowIndex);
 
     if (mode === "create") {
-      setCreatePosition({ 
-        x: centered.x, 
-        y: centered.y, 
-        gridPosition: grid.gridPosition 
-      });
+      setCreatePosition({ x: centered.x, y: centered.y, gridPosition: grid.gridPosition });
       setCreateDialogOpen(true);
       return;
     }
 
-    if (mode === "place" && draggedBox) {
-      placeBox(draggedBox.id, centered.x, centered.y, grid.gridPosition);
+    // Mobile: boxToPlace, Desktop: draggedBox
+    const boxToPlaceNow = isMobile ? boxToPlace : draggedBox;
+    if (mode === "place" && boxToPlaceNow) {
+      placeBox(boxToPlaceNow.id, centered.x, centered.y, grid.gridPosition);
       return;
     }
 
@@ -637,43 +615,37 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
       relocateBox(relocatingBox.id, centered.x, centered.y, grid.gridPosition);
       return;
     }
-  }, [mode, selectedPlan, draggedBox, relocatingBox, isPanning, getGridPosition, getGridCenterPosition]);
+  }, [mode, selectedPlan, draggedBox, boxToPlace, relocatingBox, isPanning, getGridPosition, getGridCenterPosition, isMobile]);
 
   const placeBox = async (boxId, x, y, gridPosition) => {
     try {
-      // Box platzieren und Response bekommen
       const response = await axios.put(`${API}/floorplans/${selectedPlan.id}/boxes/${boxId}`, {
         pos_x: x, pos_y: y, grid_position: gridPosition
       }, { headers });
       
-      const placedBox = response.data || draggedBox;
+      const placedBox = response.data || (isMobile ? boxToPlace : draggedBox);
       
-      // Daten neu laden
       await loadBoxesOnPlan(selectedPlan.id);
       await loadUnplacedBoxes();
       
       setDraggedBox(null);
+      setBoxToPlace(null);
       setMode("view");
       
-      // WICHTIG: Nach dem Platzieren Ersteinrichtung öffnen!
+      // Nach Platzieren: Ersteinrichtung öffnen
       if (placedBox) {
-        // placedBox mit allen nötigen Daten
         const boxForDialog = {
-          ...draggedBox,
+          ...(isMobile ? boxToPlace : draggedBox),
           ...placedBox,
-          pos_x: x,
-          pos_y: y,
-          grid_position: gridPosition
+          pos_x: x, pos_y: y, grid_position: gridPosition
         };
         
         setSelectedBox(boxForDialog);
-        
         const needsSetup = !boxForDialog.box_type_id;
         if (needsSetup) {
           setIsFirstSetup(true);
           setEditDialogOpen(true);
         } else {
-          // Box hat schon Typ → Scan-Dialog
           setScanDialogOpen(true);
         }
       }
@@ -687,7 +659,6 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
       await axios.put(`${API}/floorplans/${selectedPlan.id}/boxes/${boxId}`, {
         pos_x: x, pos_y: y, grid_position: gridPosition
       }, { headers });
-      
       loadBoxesOnPlan(selectedPlan.id);
       setRelocatingBox(null);
       setMode("view");
@@ -696,34 +667,23 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
     }
   };
 
-  // ============================================
-  // BOX INTERACTIONS - GEÄNDERT: Logik wie Maps!
-  // ============================================
+  /* ============================================================
+     BOX CLICK
+     ============================================================ */
   const handleBoxClick = (box, e) => {
-    e.stopPropagation();
+    if (e) e.stopPropagation();
     if (mode !== "view") return;
     
     setSelectedBox(box);
-    
-    // NEU: Prüfen ob Ersteinrichtung nötig (wie Maps!)
     const needsSetup = !box.box_type_id;
     
     if (needsSetup) {
-      // Ersteinrichtung: BoxEditDialog öffnen
       setIsFirstSetup(true);
       setEditDialogOpen(true);
     } else {
-      // Normal: Scan-Dialog öffnen
       setIsFirstSetup(false);
       setScanDialogOpen(true);
     }
-  };
-
-  const handleBoxCreated = () => {
-    loadBoxesOnPlan(selectedPlan.id);
-    loadUnplacedBoxes();
-    setCreateDialogOpen(false);
-    setMode("view");
   };
 
   const handleScanCompleted = () => {
@@ -740,29 +700,82 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
     setIsFirstSetup(false);
   };
 
-  const zoomIn = () => setZoom(prev => Math.min(5, prev + 0.25));
-  const zoomOut = () => setZoom(prev => Math.max(0.3, prev - 0.25));
-  const resetView = () => { 
-    setZoom(1); 
-    setPan({ x: 0, y: 0 }); 
+  /* ============================================================
+     UPLOAD & GRID
+     ============================================================ */
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      formData.append("object_id", objectId);
+      const uploadRes = await axios.post(`${API}/floorplans/upload`, formData, {
+        headers: { ...headers, "Content-Type": "multipart/form-data" }
+      });
+      setPendingUpload({ url: uploadRes.data.url, name: `LP${floorPlans.length + 1}` });
+      setShowUpload(false);
+      setShowGridSetup(true);
+    } catch (err) {
+      console.error("Upload error:", err);
+      alert("Fehler beim Hochladen");
+    } finally {
+      setUploading(false);
+    }
   };
 
-  // ============================================
-  // RENDER
-  // ============================================
+  const handleGridSetupComplete = async (gridConfigData) => {
+    if (!pendingUpload) return;
+    try {
+      const createRes = await axios.post(`${API}/floorplans`, {
+        object_id: objectId,
+        name: pendingUpload.name,
+        image_url: pendingUpload.url,
+        ...gridConfigData
+      }, { headers });
+      await loadFloorPlans();
+      setSelectedPlan(createRes.data);
+      setShowGridSetup(false);
+      setPendingUpload(null);
+    } catch (err) {
+      console.error("Create floor plan error:", err);
+      alert("Fehler beim Erstellen");
+    }
+  };
+
+  /* ============================================================
+     SIDEBAR CLASSES (wie Maps)
+     ============================================================ */
+  const getSidebarClasses = () => {
+    if (isMobile) {
+      const stateClasses = {
+        'peek': 'sheet-peek',
+        'half': 'sheet-half',
+        'full': 'sheet-full'
+      };
+      return `maps-sidebar mobile-sheet ${stateClasses[sheetState]}`;
+    }
+    return `maps-sidebar desktop ${sidebarOpen ? 'open' : 'closed'}`;
+  };
+
+  /* ============================================================
+     RENDER
+     ============================================================ */
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="animate-spin w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+        <div className="animate-spin w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full" />
       </div>
     );
   }
 
   const containerHeight = isFullscreen ? "100vh" : "calc(100vh - 180px)";
+  const activeBoxToPlace = isMobile ? boxToPlace : draggedBox;
 
   return (
     <div 
-      className={`bg-gray-900 flex flex-col ${isFullscreen ? "fixed inset-0 z-50" : "rounded-xl border border-gray-700"}`}
+      className={`maps-wrapper bg-gray-900 flex flex-col ${isFullscreen ? "fixed inset-0 z-50" : "rounded-xl border border-gray-700"}`}
       style={{ height: containerHeight, minHeight: "600px" }}
     >
       {/* TOOLBAR */}
@@ -774,7 +787,7 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
               const plan = floorPlans.find(p => p.id === parseInt(e.target.value));
               setSelectedPlan(plan);
             }}
-            className="px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm"
+            className="px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm max-w-[140px]"
           >
             {floorPlans.length === 0 && <option value="">Kein Lageplan</option>}
             {floorPlans.map(plan => (
@@ -787,99 +800,39 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
           </button>
           
           {selectedPlan && (
-            <>
-              <button 
-                onClick={() => setShowGridSettings(true)}
-                className="p-1.5 bg-gray-700 hover:bg-blue-600 rounded text-white" 
-                title="Grid-Einstellungen"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
-              <button 
-                onClick={async () => {
-                  if (confirm("Lageplan löschen?")) {
-                    await axios.delete(`${API}/floorplans/${selectedPlan.id}`, { headers });
-                    setSelectedPlan(null);
-                    loadFloorPlans();
-                  }
-                }}
-                className="p-1.5 bg-gray-700 hover:bg-red-600 rounded text-white" 
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </>
-          )}
-          
-          <div className="w-px h-5 bg-gray-600"></div>
-          
-          <button 
-            onClick={() => setShowGrid(!showGrid)} 
-            className={`p-1.5 rounded ${showGrid ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-400"}`}
-            title="Grid anzeigen"
-          >
-            <Grid3X3 className="w-4 h-4" />
-          </button>
-          
-          {selectedPlan && (
-            <span className="text-xs text-gray-400 hidden md:inline">
-              Grid: {gridConfig.cols}×{gridConfig.rows}
-            </span>
+            <button onClick={() => setShowGrid(!showGrid)} className={`p-1.5 rounded ${showGrid ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-400"}`}>
+              <Grid3X3 className="w-4 h-4" />
+            </button>
           )}
         </div>
 
         <div className="flex items-center gap-1 bg-gray-700 p-1 rounded-lg">
-          <ModeButton icon={MousePointer} label="Ansehen" active={mode === "view"} onClick={() => { setMode("view"); setDrawTool(null); }} />
+          <ModeButton icon={MousePointer} label="Ansehen" active={mode === "view"} onClick={() => { setMode("view"); setDrawTool(null); setBoxToPlace(null); setDraggedBox(null); }} />
           <ModeButton icon={Hand} label="Bewegen" active={mode === "pan"} onClick={() => { setMode("pan"); setDrawTool(null); }} />
-          <ModeButton icon={Plus} label="Box erstellen" active={mode === "create"} onClick={() => { setMode("create"); setDrawTool(null); }} color="green" />
-          <ModeButton icon={Pencil} label="Zeichnen" active={mode === "draw"} onClick={() => setMode("draw")} color="orange" />
+          {!isMobile && (
+            <ModeButton icon={Plus} label="Box" active={mode === "create"} onClick={() => { setMode("create"); setDrawTool(null); }} color="green" />
+          )}
         </div>
 
         <div className="flex items-center gap-2">
-          <button onClick={zoomOut} className="p-1.5 bg-gray-700 hover:bg-gray-600 rounded text-white"><ZoomOut className="w-4 h-4" /></button>
-          <span className="text-gray-400 text-sm w-14 text-center">{Math.round(zoom * 100)}%</span>
-          <button onClick={zoomIn} className="p-1.5 bg-gray-700 hover:bg-gray-600 rounded text-white"><ZoomIn className="w-4 h-4" /></button>
-          <button onClick={resetView} className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-300">Reset</button>
+          <button onClick={() => setZoom(prev => Math.max(0.3, prev - 0.25))} className="p-1.5 bg-gray-700 hover:bg-gray-600 rounded text-white">
+            <ZoomOut className="w-4 h-4" />
+          </button>
+          <span className="text-gray-400 text-sm w-12 text-center">{Math.round(zoom * 100)}%</span>
+          <button onClick={() => setZoom(prev => Math.min(5, prev + 0.25))} className="p-1.5 bg-gray-700 hover:bg-gray-600 rounded text-white">
+            <ZoomIn className="w-4 h-4" />
+          </button>
           <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-1.5 bg-gray-700 hover:bg-gray-600 rounded text-white">
             <Maximize2 className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* DRAWING TOOLBAR */}
-      {mode === "draw" && (
-        <div className="flex items-center gap-2 p-2 bg-gray-850 border-b border-gray-700 flex-wrap shrink-0">
-          <span className="text-gray-400 text-sm">Werkzeug:</span>
-          <DrawToolButton icon={Circle} active={drawTool === "circle"} onClick={() => setDrawTool("circle")} />
-          <DrawToolButton icon={Square} active={drawTool === "rect"} onClick={() => setDrawTool("rect")} />
-          <DrawToolButton icon={ArrowRight} active={drawTool === "arrow"} onClick={() => setDrawTool("arrow")} />
-          
-          <div className="w-px h-5 bg-gray-600 mx-2"></div>
-          
-          {["#ef4444", "#eab308", "#10b981", "#3b82f6", "#8b5cf6"].map(c => (
-            <button
-              key={c}
-              onClick={() => setAnnotationColor(c)}
-              className={`w-6 h-6 rounded ${annotationColor === c ? "ring-2 ring-white" : ""}`}
-              style={{ backgroundColor: c }}
-            />
-          ))}
-          
-          <div className="w-px h-5 bg-gray-600 mx-2"></div>
-          
-          <button onClick={() => setAnnotations(prev => prev.slice(0, -1))} className="p-1.5 bg-gray-700 hover:bg-gray-600 rounded text-gray-300">
-            <RotateCcw className="w-4 h-4" />
-          </button>
-          <button onClick={() => setAnnotations([])} className="p-1.5 bg-gray-700 hover:bg-red-600 rounded text-gray-300">
-            <Eraser className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
       {/* PLACEMENT INFO BAR */}
-      {(mode === "create" || mode === "place" || mode === "relocate") && (
+      {(mode === "place" || mode === "create" || mode === "relocate") && (
         <div className="flex items-center justify-between p-2 bg-green-900/30 border-b border-green-700 shrink-0">
           <span className="text-green-300 text-sm">
-            📍 Klicken um Box zu platzieren
+            📍 {isMobile ? 'Auf Plan tippen' : 'Klicken'} um Box zu platzieren
           </span>
           {hoveredCell && (
             <span className="px-3 py-1 bg-green-600 text-white rounded font-mono text-lg font-bold">
@@ -887,7 +840,7 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
             </span>
           )}
           <button 
-            onClick={() => { setMode("view"); setDraggedBox(null); setRelocatingBox(null); }}
+            onClick={() => { setMode("view"); setDraggedBox(null); setBoxToPlace(null); setRelocatingBox(null); }}
             className="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white rounded text-sm"
           >
             Abbrechen
@@ -896,14 +849,13 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
       )}
 
       {/* MAIN CONTENT */}
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="maps-main flex flex-1 overflow-hidden relative">
         {/* PLAN AREA */}
         <div 
           ref={containerRef}
           className={`flex-1 overflow-hidden relative ${
             mode === "pan" ? "cursor-grab" : 
-            mode === "create" || mode === "place" || mode === "relocate" ? "cursor-crosshair" : 
-            mode === "draw" && drawTool ? "cursor-crosshair" : "cursor-default"
+            mode === "place" || mode === "create" ? "cursor-crosshair" : "cursor-default"
           } ${isPanning ? "cursor-grabbing" : ""}`}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
@@ -933,46 +885,17 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
                 width: "80%"
               }}
             >
-              <div 
-                ref={planRef}
-                className="relative"
-                onClick={handlePlanClick}
-              >
-                <img
-                  src={selectedPlan.image_url}
-                  alt={selectedPlan.name}
-                  className="w-full h-auto select-none block"
-                  draggable={false}
-                />
+              <div ref={planRef} className="relative" onClick={handlePlanClick}>
+                <img src={selectedPlan.image_url} alt={selectedPlan.name} className="w-full h-auto select-none block" draggable={false} />
 
                 {/* GRID OVERLAY */}
                 {showGrid && (
-                  <svg 
-                    className="absolute inset-0 w-full h-full pointer-events-none"
-                    viewBox="0 0 100 100"
-                    preserveAspectRatio="none"
-                  >
+                  <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
                     {Array.from({ length: gridConfig.cols + 1 }).map((_, i) => (
-                      <line
-                        key={`v${i}`}
-                        x1={(i / gridConfig.cols) * 100}
-                        y1="0"
-                        x2={(i / gridConfig.cols) * 100}
-                        y2="100"
-                        stroke="rgba(59, 130, 246, 0.5)"
-                        strokeWidth={0.08}
-                      />
+                      <line key={`v${i}`} x1={(i / gridConfig.cols) * 100} y1="0" x2={(i / gridConfig.cols) * 100} y2="100" stroke="rgba(59, 130, 246, 0.4)" strokeWidth={0.08} />
                     ))}
                     {Array.from({ length: gridConfig.rows + 1 }).map((_, i) => (
-                      <line
-                        key={`h${i}`}
-                        x1="0"
-                        y1={(i / gridConfig.rows) * 100}
-                        x2="100"
-                        y2={(i / gridConfig.rows) * 100}
-                        stroke="rgba(59, 130, 246, 0.5)"
-                        strokeWidth={0.08}
-                      />
+                      <line key={`h${i}`} x1="0" y1={(i / gridConfig.rows) * 100} x2="100" y2={(i / gridConfig.rows) * 100} stroke="rgba(59, 130, 246, 0.4)" strokeWidth={0.08} />
                     ))}
                     
                     {hoveredCell && (mode === "create" || mode === "place" || mode === "relocate") && (
@@ -989,14 +912,9 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
                   </svg>
                 )}
 
-                {/* Grid Labels - intelligent spacing */}
-                {showGrid && zoom >= 0.8 && (
-                  <GridLabels gridConfig={gridConfig} zoom={zoom} />
-                )}
-
-                {/* Boxes - MIT QR-LABEL UND DISPLAY_NUMBER */}
+                {/* Boxes */}
                 {boxesOnPlan.map(box => (
-                  <BoxMarker
+                  <BoxMarkerFloorplan
                     key={box.id}
                     box={box}
                     onClick={(e) => handleBoxClick(box, e)}
@@ -1006,11 +924,7 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
                 ))}
 
                 {/* Annotations */}
-                <svg 
-                  className="absolute inset-0 w-full h-full pointer-events-none"
-                  viewBox="0 0 100 100"
-                  preserveAspectRatio="none"
-                >
+                <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
                   {annotations.map(ann => <Annotation key={ann.id} data={ann} />)}
                   {currentAnnotation && <Annotation data={currentAnnotation} />}
                 </svg>
@@ -1018,48 +932,138 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
             </div>
           )}
 
-          {/* Info */}
+          {/* Mobile: Place-Info */}
+          {isMobile && activeBoxToPlace && mode === "place" && (
+            <div className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded-full shadow-lg text-sm font-medium">
+              Box #{activeBoxToPlace.display_number} platzieren - Tippe auf Plan
+            </div>
+          )}
+
+          {/* Zoom Info */}
           <div className="absolute bottom-3 left-3 bg-black/70 text-white text-xs px-2 py-1 rounded flex items-center gap-3">
             <span>Zoom: {Math.round(zoom * 100)}%</span>
-            <span className="text-blue-400">Grid: {gridConfig.cols}×{gridConfig.rows}</span>
-            <span className="text-gray-500 hidden sm:inline">🖱️ Mausrad | 📱 Pinch</span>
+            <span className="text-blue-400">{gridConfig.cols}×{gridConfig.rows}</span>
+            {isMobile && <span className="text-gray-500">📱 Pinch</span>}
           </div>
         </div>
 
-        {/* SIDEBAR - MIT QR UND DISPLAY_NUMBER */}
-        <Sidebar
-          open={sidebarOpen}
-          boxesOnPlan={boxesOnPlan}
-          unplacedBoxes={unplacedBoxes}
-          draggedBox={draggedBox}
-          setDraggedBox={setDraggedBox}
-          setMode={setMode}
-          setSelectedBox={setSelectedBox}
-          setScanDialogOpen={setScanDialogOpen}
-          setEditDialogOpen={setEditDialogOpen}
-          setIsFirstSetup={setIsFirstSetup}
-          onToggle={() => setSidebarOpen(!sidebarOpen)}
-        />
+        {/* SIDEBAR - WIE MAPS! */}
+        <aside ref={sheetRef} className={getSidebarClasses()}>
+          {isMobile && (
+            <div 
+              className="sheet-drag-handle"
+              onClick={() => setSheetState(sheetState === 'peek' ? 'half' : sheetState === 'half' ? 'full' : 'peek')}
+            />
+          )}
+
+          <div className="sidebar-header">
+            <div className="sidebar-title row">
+              <LayoutGrid size={20} />
+              <h2>{selectedPlan?.name || 'Lageplan'}</h2>
+              <span className="count">{boxesOnPlan.length}</span>
+            </div>
+          </div>
+
+          {(sheetState !== 'peek' || !isMobile) && (
+            <div className="sidebar-content">
+              {/* Nicht platzierte Boxen */}
+              <CollapsibleBoxSection
+                title="Nicht platziert"
+                icon={<Package size={16} />}
+                count={unplacedBoxes.length}
+                variant="warning"
+                defaultOpen={unplacedBoxes.length > 0}
+              >
+                {unplacedBoxes.length === 0 ? (
+                  <div className="section-empty">Alle Boxen platziert 🎉</div>
+                ) : (
+                  unplacedBoxes.map((box) => (
+                    <BoxListItem 
+                      key={box.id}
+                      box={box}
+                      isUnplaced={true}
+                      isSelected={activeBoxToPlace?.id === box.id}
+                      onClick={() => {
+                        if (isMobile) {
+                          setBoxToPlace(activeBoxToPlace?.id === box.id ? null : box);
+                          if (activeBoxToPlace?.id !== box.id) {
+                            setMode("place");
+                            setSheetState('peek');
+                          } else {
+                            setMode("view");
+                          }
+                        } else {
+                          setDraggedBox(box);
+                          setMode("place");
+                        }
+                      }}
+                      onDragStart={(e) => {
+                        if (!isMobile) {
+                          e.dataTransfer.setData('box', JSON.stringify(box));
+                          setDraggedBox(box);
+                          setMode("place");
+                        }
+                      }}
+                    />
+                  ))
+                )}
+              </CollapsibleBoxSection>
+
+              {/* Platzierte Boxen */}
+              <CollapsibleBoxSection
+                title="Auf Plan"
+                icon={<LayoutGrid size={16} />}
+                count={boxesOnPlan.length}
+                variant="floorplan"
+                defaultOpen={true}
+              >
+                {boxesOnPlan.length === 0 ? (
+                  <div className="section-empty">Keine Boxen platziert</div>
+                ) : (
+                  boxesOnPlan.map((box) => (
+                    <BoxListItem 
+                      key={box.id} 
+                      box={box} 
+                      onClick={() => handleBoxClick(box)}
+                      isFloorplan={true}
+                    />
+                  ))
+                )}
+              </CollapsibleBoxSection>
+
+              {/* Legende */}
+              <div className="status-legend">
+                <h5>Status</h5>
+                <div className="legend-items">
+                  {Object.entries(STATUS_COLORS).map(([key, { bg, label }]) => (
+                    <div key={key} className="legend-item">
+                      <span className="legend-dot" style={{ backgroundColor: bg }} />
+                      <span>{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </aside>
+
+        {/* Desktop Sidebar Toggle */}
+        {!isMobile && (
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="absolute top-1/2 bg-gray-700 hover:bg-gray-600 p-1 rounded-l text-white z-10"
+            style={{ right: sidebarOpen ? "280px" : "0", transform: "translateY(-50%)" }}
+          >
+            {sidebarOpen ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          </button>
+        )}
       </div>
 
       {/* DIALOGS */}
       {showUpload && <UploadModal uploading={uploading} onUpload={handleFileSelect} onClose={() => setShowUpload(false)} />}
-
+      
       {showGridSetup && pendingUpload && (
-        <GridSetupDialog
-          imageUrl={pendingUpload.url}
-          onComplete={handleGridSetupComplete}
-          onCancel={() => { setShowGridSetup(false); setPendingUpload(null); }}
-        />
-      )}
-
-      {showGridSettings && selectedPlan && (
-        <GridSettingsDialog
-          plan={selectedPlan}
-          hasBoxes={boxesOnPlan.length > 0}
-          onSave={handleUpdateGridSettings}
-          onClose={() => setShowGridSettings(false)}
-        />
+        <GridSetupDialog imageUrl={pendingUpload.url} onComplete={handleGridSetupComplete} onCancel={() => { setShowGridSetup(false); setPendingUpload(null); }} />
       )}
 
       {createDialogOpen && selectedPlan && (
@@ -1069,671 +1073,105 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
           position={createPosition}
           boxTypes={boxTypes}
           onClose={() => { setCreateDialogOpen(false); setMode("view"); }}
-          onSave={handleBoxCreated}
+          onSave={() => { loadBoxesOnPlan(selectedPlan.id); loadUnplacedBoxes(); setCreateDialogOpen(false); setMode("view"); }}
         />
       )}
 
-      {/* Scan-Dialog mit onEdit */}
       {scanDialogOpen && selectedBox && (
         <BoxScanDialog
           box={selectedBox}
           onClose={() => { setScanDialogOpen(false); setSelectedBox(null); }}
           onSave={handleScanCompleted}
           onScanCreated={handleScanCompleted}
-          // NEU: onEdit Handler
-          onEdit={() => {
-            setScanDialogOpen(false);
-            setIsFirstSetup(false);
-            setEditDialogOpen(true);
-          }}
-          // Position ändern = Box zum Verschieben auswählen
-          onAdjustPosition={(box) => {
-            setScanDialogOpen(false);
-            setRelocatingBox(box);
-            setMode("relocate");
-          }}
-          // KEIN onSetGPS! Box ist auf Lageplan
+          onEdit={() => { setScanDialogOpen(false); setIsFirstSetup(false); setEditDialogOpen(true); }}
+          onAdjustPosition={(box) => { setScanDialogOpen(false); setRelocatingBox(box); setMode("relocate"); }}
         />
       )}
 
-      {/* NEU: BoxEditDialog (wie Maps, ohne GPS) */}
       {editDialogOpen && selectedBox && (
         <BoxEditDialog
           box={selectedBox}
           boxTypes={boxTypes}
           isFirstSetup={isFirstSetup}
-          onClose={() => { 
-            setEditDialogOpen(false); 
-            setSelectedBox(null); 
-            setIsFirstSetup(false);
-          }}
+          onClose={() => { setEditDialogOpen(false); setSelectedBox(null); setIsFirstSetup(false); }}
           onSave={handleEditCompleted}
-          // WICHTIG: Keine GPS-Funktionen!
-          // onAdjustPosition und onSetGPS werden NICHT übergeben
         />
       )}
     </div>
   );
 }
 
-// ============================================
-// GRID SETUP DIALOG (beim Erstellen)
-// ============================================
-function GridSetupDialog({ imageUrl, onComplete, onCancel }) {
-  const [mode, setMode] = useState("preset");
-  const [selectedPreset, setSelectedPreset] = useState("medium");
-  
-  const [realWidth, setRealWidth] = useState(50);
-  const [realHeight, setRealHeight] = useState(30);
-  const [cellSize, setCellSize] = useState(2);
+/* ============================================================
+   BOX MARKER - WIE MAPS!
+   ============================================================ */
+function BoxMarkerFloorplan({ box, onClick, disabled, zoom }) {
+  const statusColor = getStatusColor(box.current_status);
+  const displayNum = box.display_number || '?';
+  const shortQr = getShortQr(box);
+  const size = Math.max(20, Math.min(32, 26 / zoom));
+  const fontSize = Math.max(8, Math.min(12, 10 / zoom));
 
-  const calculatedCols = mode === "custom" ? Math.ceil(realWidth / cellSize) : GRID_PRESETS[selectedPreset].cols;
-  const calculatedRows = mode === "custom" ? Math.ceil(realHeight / cellSize) : GRID_PRESETS[selectedPreset].rows;
-
-  const handleSave = () => {
-    const config = {
-      grid_mode: mode,
-      grid_preset: mode === "preset" ? selectedPreset : null,
-      real_width_m: mode === "custom" ? realWidth : null,
-      real_height_m: mode === "custom" ? realHeight : null,
-      cell_size_m: mode === "custom" ? cellSize : null,
-      grid_cols: calculatedCols,
-      grid_rows: calculatedRows
-    };
-    onComplete(config);
+  const colorMap = {
+    green: "#10b981",
+    yellow: "#eab308",
+    orange: "#fb923c",
+    red: "#dc2626",
+    gray: "#6b7280"
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-xl max-w-3xl w-full border border-gray-700 max-h-[90vh] overflow-y-auto">
-        <div className="p-4 border-b border-gray-700">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <LayoutGrid className="w-5 h-5 text-blue-400" />
-            Grid-Auflösung wählen
-          </h2>
-          <p className="text-gray-400 text-sm mt-1">
-            Diese Einstellung legt fest, wie präzise Boxen positioniert werden können. <strong>Kann später nicht einfach geändert werden!</strong>
-          </p>
-        </div>
-
-        <div className="p-4 space-y-4">
-          {/* Vorschau */}
-          <div className="relative bg-gray-900 rounded-lg overflow-hidden h-48">
-            <img src={imageUrl} alt="Preview" className="w-full h-full object-contain opacity-50" />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="bg-blue-600/20 border border-blue-500 rounded p-4 text-center">
-                <div className="text-2xl font-bold text-white">{calculatedCols} × {calculatedRows}</div>
-                <div className="text-blue-300 text-sm">Zellen insgesamt: {calculatedCols * calculatedRows}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Mode Tabs */}
-          <div className="flex bg-gray-900 rounded-lg p-1">
-            <button
-              onClick={() => setMode("preset")}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
-                mode === "preset" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
-              }`}
-            >
-              <LayoutGrid className="w-4 h-4 inline mr-2" />
-              Vordefiniert
-            </button>
-            <button
-              onClick={() => setMode("custom")}
-              className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
-                mode === "custom" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
-              }`}
-            >
-              <Ruler className="w-4 h-4 inline mr-2" />
-              Echte Maße eingeben
-            </button>
-          </div>
-
-          {/* PRESET MODE */}
-          {mode === "preset" && (
-            <div className="grid grid-cols-2 gap-3">
-              {Object.entries(GRID_PRESETS).map(([key, preset]) => (
-                <button
-                  key={key}
-                  onClick={() => setSelectedPreset(key)}
-                  className={`p-4 rounded-lg border-2 text-left transition ${
-                    selectedPreset === key
-                      ? "border-blue-500 bg-blue-600/20"
-                      : "border-gray-700 bg-gray-900 hover:border-gray-600"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xl">{preset.icon}</span>
-                    <span className="font-bold text-white">{preset.name}</span>
-                    {selectedPreset === key && <Check className="w-4 h-4 text-blue-400 ml-auto" />}
-                  </div>
-                  <p className="text-gray-400 text-sm">{preset.description}</p>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* CUSTOM MODE */}
-          {mode === "custom" && (
-            <div className="bg-gray-900 rounded-lg p-4 space-y-4">
-              <p className="text-gray-300 text-sm">
-                Geben Sie die echten Maße des Bereichs ein. Das Grid wird automatisch berechnet.
-              </p>
-              
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-gray-400 text-sm mb-1">Breite (Meter)</label>
-                  <input
-                    type="number"
-                    min="5"
-                    max="500"
-                    value={realWidth}
-                    onChange={(e) => setRealWidth(parseInt(e.target.value) || 50)}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white text-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-400 text-sm mb-1">Höhe (Meter)</label>
-                  <input
-                    type="number"
-                    min="5"
-                    max="500"
-                    value={realHeight}
-                    onChange={(e) => setRealHeight(parseInt(e.target.value) || 30)}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white text-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block text-gray-400 text-sm mb-1">Zellengröße (Meter)</label>
-                  <select
-                    value={cellSize}
-                    onChange={(e) => setCellSize(parseFloat(e.target.value))}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white text-lg"
-                  >
-                    <option value={0.5}>0.5 m (sehr fein)</option>
-                    <option value={1}>1 m (fein)</option>
-                    <option value={2}>2 m (standard)</option>
-                    <option value={5}>5 m (grob)</option>
-                    <option value={10}>10 m (sehr grob)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="bg-blue-900/30 border border-blue-700 rounded p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-blue-300">Berechnetes Grid:</span>
-                  <span className="text-white font-bold text-lg">{calculatedCols} × {calculatedRows} = {calculatedCols * calculatedRows} Zellen</span>
-                </div>
-                <p className="text-blue-400 text-xs mt-1">
-                  Jede Zelle entspricht {cellSize}m × {cellSize}m = {cellSize * cellSize}m²
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="p-4 border-t border-gray-700 flex gap-3">
-          <button
-            onClick={onCancel}
-            className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
-          >
-            Abbrechen
-          </button>
-          <button
-            onClick={handleSave}
-            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2"
-          >
-            <Check className="w-4 h-4" />
-            Lageplan erstellen
-          </button>
-        </div>
+    <div
+      onClick={disabled ? undefined : onClick}
+      className={`absolute ${disabled ? "" : "cursor-pointer"} transition-transform z-10 group`}
+      style={{ 
+        left: `${box.pos_x}%`, 
+        top: `${box.pos_y}%`,
+        transform: 'translate(-50%, -50%)'
+      }}
+    >
+      {/* QR Badge */}
+      <div 
+        className="absolute -top-5 left-1/2 -translate-x-1/2 bg-black/90 rounded px-1.5 py-0.5 text-white font-mono shadow-lg border border-white/20 opacity-0 group-hover:opacity-100 transition-opacity"
+        style={{ fontSize: Math.max(8, 10 / zoom) }}
+      >
+        {shortQr}
       </div>
+
+      {/* Main Circle */}
+      <div
+        className={`rounded-full flex items-center justify-center text-white font-bold shadow-lg border-2 border-white ${!disabled ? 'hover:scale-110' : ''} transition-transform`}
+        style={{ 
+          backgroundColor: colorMap[statusColor] || colorMap.gray,
+          width: size, 
+          height: size, 
+          fontSize
+        }}
+      >
+        {displayNum}
+      </div>
+
+      {/* Grid Position */}
+      {box.grid_position && (
+        <div 
+          className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-blue-600/80 text-white px-1 rounded text-center font-mono"
+          style={{ fontSize: Math.max(6, 8 / zoom) }}
+        >
+          {box.grid_position}
+        </div>
+      )}
     </div>
   );
 }
 
-// ============================================
-// GRID SETTINGS DIALOG (für bestehende Pläne)
-// ============================================
-function GridSettingsDialog({ plan, hasBoxes, onSave, onClose }) {
-  const [mode, setMode] = useState(plan.grid_mode || "preset");
-  const [selectedPreset, setSelectedPreset] = useState(plan.grid_preset || "medium");
-  const [realWidth, setRealWidth] = useState(plan.real_width_m || 50);
-  const [realHeight, setRealHeight] = useState(plan.real_height_m || 30);
-  const [cellSize, setCellSize] = useState(plan.cell_size_m || 2);
-  const [saving, setSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState(null);
-
-  const calculatedCols = mode === "custom" ? Math.ceil(realWidth / cellSize) : GRID_PRESETS[selectedPreset]?.cols || 20;
-  const calculatedRows = mode === "custom" ? Math.ceil(realHeight / cellSize) : GRID_PRESETS[selectedPreset]?.rows || 20;
-
-  const handleSave = async () => {
-    if (hasBoxes) {
-      if (!confirm("⚠️ WARNUNG: Grid-Änderung bei platzierten Boxen kann zu falschen Positionen führen! Fortfahren?")) {
-        return;
-      }
-    }
-
-    setSaving(true);
-    setSaveStatus(null);
-
-    const config = {
-      grid_mode: mode,
-      grid_preset: mode === "preset" ? selectedPreset : null,
-      real_width_m: mode === "custom" ? realWidth : null,
-      real_height_m: mode === "custom" ? realHeight : null,
-      cell_size_m: mode === "custom" ? cellSize : null,
-      grid_cols: calculatedCols,
-      grid_rows: calculatedRows
-    };
-
-    try {
-      await onSave(config);
-      setSaveStatus('success');
-      setTimeout(() => {
-        onClose();
-      }, 1500);
-    } catch (err) {
-      console.error("Save error:", err);
-      setSaveStatus('error');
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-xl max-w-2xl w-full border border-gray-700">
-        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <Settings className="w-5 h-5 text-blue-400" />
-            Grid-Einstellungen: {plan.name}
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white" disabled={saving}>
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {saveStatus === 'success' && (
-          <div className="mx-4 mt-4 p-3 bg-green-900/50 border border-green-600 rounded-lg flex items-center gap-3">
-            <Check className="w-6 h-6 text-green-400" />
-            <div>
-              <p className="text-green-300 font-medium">Erfolgreich gespeichert!</p>
-              <p className="text-green-400 text-sm">Grid: {calculatedCols} × {calculatedRows} Zellen</p>
-            </div>
-          </div>
-        )}
-
-        {saveStatus === 'error' && (
-          <div className="mx-4 mt-4 p-3 bg-red-900/50 border border-red-600 rounded-lg flex items-center gap-3">
-            <AlertTriangle className="w-6 h-6 text-red-400" />
-            <div>
-              <p className="text-red-300 font-medium">Fehler beim Speichern</p>
-              <p className="text-red-400 text-sm">Bitte versuche es erneut.</p>
-            </div>
-          </div>
-        )}
-
-        {hasBoxes && !saveStatus && (
-          <div className="mx-4 mt-4 p-3 bg-yellow-900/30 border border-yellow-700 rounded-lg flex items-start gap-2">
-            <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-yellow-300 font-medium">Achtung: Boxen bereits platziert</p>
-              <p className="text-yellow-400 text-sm">Grid-Änderungen können die Positionen der Boxen verfälschen!</p>
-            </div>
-          </div>
-        )}
-
-        {saveStatus !== 'success' && (
-          <>
-            <div className="p-4 space-y-4">
-              <div className="flex bg-gray-900 rounded-lg p-1">
-                <button
-                  onClick={() => setMode("preset")}
-                  disabled={saving}
-                  className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
-                    mode === "preset" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
-                  } ${saving ? "opacity-50 cursor-not-allowed" : ""}`}
-                >
-                  Vordefiniert
-                </button>
-                <button
-                  onClick={() => setMode("custom")}
-                  disabled={saving}
-                  className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition ${
-                    mode === "custom" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white"
-                  } ${saving ? "opacity-50 cursor-not-allowed" : ""}`}
-                >
-                  Echte Maße
-                </button>
-              </div>
-
-              {mode === "preset" && (
-                <div className="grid grid-cols-2 gap-2">
-                  {Object.entries(GRID_PRESETS).map(([key, preset]) => (
-                    <button
-                      key={key}
-                      onClick={() => setSelectedPreset(key)}
-                      disabled={saving}
-                      className={`p-3 rounded-lg border text-left ${
-                        selectedPreset === key
-                          ? "border-blue-500 bg-blue-600/20"
-                          : "border-gray-700 bg-gray-900 hover:border-gray-600"
-                      } ${saving ? "opacity-50 cursor-not-allowed" : ""}`}
-                    >
-                      <span className="text-lg mr-2">{preset.icon}</span>
-                      <span className="text-white text-sm">{preset.name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {mode === "custom" && (
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-gray-400 text-xs mb-1">Breite (m)</label>
-                    <input
-                      type="number"
-                      value={realWidth}
-                      onChange={(e) => setRealWidth(parseInt(e.target.value) || 50)}
-                      disabled={saving}
-                      className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded text-white text-sm disabled:opacity-50"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-400 text-xs mb-1">Höhe (m)</label>
-                    <input
-                      type="number"
-                      value={realHeight}
-                      onChange={(e) => setRealHeight(parseInt(e.target.value) || 30)}
-                      disabled={saving}
-                      className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded text-white text-sm disabled:opacity-50"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-gray-400 text-xs mb-1">Zellengröße (m)</label>
-                    <select
-                      value={cellSize}
-                      onChange={(e) => setCellSize(parseFloat(e.target.value))}
-                      disabled={saving}
-                      className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded text-white text-sm disabled:opacity-50"
-                    >
-                      <option value={0.5}>0.5 m</option>
-                      <option value={1}>1 m</option>
-                      <option value={2}>2 m</option>
-                      <option value={5}>5 m</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              <div className="bg-gray-900 rounded p-3 text-center">
-                <span className="text-gray-400">Ergebnis: </span>
-                <span className="text-white font-bold">{calculatedCols} × {calculatedRows}</span>
-                <span className="text-gray-400"> Zellen</span>
-              </div>
-            </div>
-
-            <div className="p-4 border-t border-gray-700 flex gap-3">
-              <button 
-                onClick={onClose} 
-                disabled={saving}
-                className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Abbrechen
-              </button>
-              <button 
-                onClick={handleSave} 
-                disabled={saving}
-                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-wait"
-              >
-                {saving ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Speichern...
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    Speichern
-                  </>
-                )}
-              </button>
-            </div>
-          </>
-        )}
-
-        {saveStatus === 'success' && (
-          <div className="p-4 border-t border-gray-700">
-            <button 
-              onClick={onClose} 
-              className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center justify-center gap-2"
-            >
-              <Check className="w-4 h-4" />
-              Schließen
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ============================================
-// BOX CREATE DIALOG
-// ============================================
-function BoxCreateDialogFloorPlan({ objectId, floorPlanId, position, boxTypes, onClose, onSave }) {
-  const token = localStorage.getItem("trapmap_token");
-
-  const [boxTypeId, setBoxTypeId] = useState("");
-  const [notes, setNotes] = useState("");
-  const [intervalType, setIntervalType] = useState("fixed");
-  const [intervalFixed, setIntervalFixed] = useState(30);
-  const [intervalRangeStart, setIntervalRangeStart] = useState(20);
-  const [intervalRangeEnd, setIntervalRangeEnd] = useState(30);
-  const [saving, setSaving] = useState(false);
-
-  const handleSaveBox = async () => {
-    if (!boxTypeId) {
-      alert("Bitte Box-Typ auswählen!");
-      return;
-    }
-
-    setSaving(true);
-
-    const interval = intervalType === "fixed"
-      ? intervalFixed
-      : Math.floor((intervalRangeStart + intervalRangeEnd) / 2);
-
-    try {
-      const res = await fetch(`${API}/boxes`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          object_id: objectId,
-          box_type_id: parseInt(boxTypeId),
-          notes,
-          control_interval_days: interval,
-          floor_plan_id: floorPlanId,
-          pos_x: position.x,
-          pos_y: position.y,
-          grid_position: position.gridPosition,
-          position_type: "floorplan",
-          current_status: "green"
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        alert("Fehler: " + (err.error || "Unbekannt"));
-        setSaving(false);
-        return;
-      }
-
-      const newBox = await res.json();
-      if (newBox?.id) {
-        await fetch(`${API}/scans`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            box_id: newBox.id,
-            status: "green",
-            notes: "Erstinstallation"
-          }),
-        });
-      }
-
-      onSave();
-    } catch (e) {
-      console.error("Error creating box:", e);
-      alert("Fehler beim Erstellen");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="dialog-overlay-v6" onClick={(e) => { if (e.target.className === "dialog-overlay-v6") onClose(); }}>
-      <div className="dialog-v6" onClick={(e) => e.stopPropagation()}>
-        <div className="dialog-header-v6">
-          <h2>📦 Neue Box erstellen</h2>
-          <button className="dialog-close-v6" onClick={onClose}>
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="dialog-body-v6">
-          <div style={{ padding: "12px", background: "#1e3a5f", borderRadius: "8px", color: "#93c5fd", fontSize: "13px", marginBottom: "16px" }}>
-            ℹ️ Die Box-Nummer wird automatisch vergeben
-          </div>
-
-          <label>
-            Box-Typ *
-            <select value={boxTypeId} onChange={(e) => setBoxTypeId(e.target.value)} required>
-              <option value="">Bitte auswählen...</option>
-              {boxTypes.map((type) => (
-                <option key={type.id} value={type.id}>{type.name}</option>
-              ))}
-            </select>
-          </label>
-
-          <label>Kontrollintervall *</label>
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-              <button
-                type="button"
-                onClick={() => setIntervalType("fixed")}
-                style={{
-                  padding: "8px 16px",
-                  background: intervalType === "fixed" ? "#6366f1" : "#1a1a1a",
-                  border: `1px solid ${intervalType === "fixed" ? "#6366f1" : "#404040"}`,
-                  borderRadius: "6px",
-                  color: "#fff",
-                  cursor: "pointer",
-                }}
-              >
-                Fix
-              </button>
-              <button
-                type="button"
-                onClick={() => setIntervalType("range")}
-                style={{
-                  padding: "8px 16px",
-                  background: intervalType === "range" ? "#6366f1" : "#1a1a1a",
-                  border: `1px solid ${intervalType === "range" ? "#6366f1" : "#404040"}`,
-                  borderRadius: "6px",
-                  color: "#fff",
-                  cursor: "pointer",
-                }}
-              >
-                Range
-              </button>
-            </div>
-
-            {intervalType === "fixed" && (
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <input
-                  type="number"
-                  min="1"
-                  max="365"
-                  value={intervalFixed}
-                  onChange={(e) => setIntervalFixed(parseInt(e.target.value) || 30)}
-                  style={{ flex: 1, padding: "8px 12px", background: "#1a1a1a", border: "1px solid #404040", borderRadius: "6px", color: "#fff", textAlign: "center" }}
-                />
-                <span style={{ color: "#9ca3af" }}>Tage</span>
-              </div>
-            )}
-
-            {intervalType === "range" && (
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <input
-                  type="number"
-                  min="1"
-                  max="365"
-                  value={intervalRangeStart}
-                  onChange={(e) => setIntervalRangeStart(parseInt(e.target.value) || 20)}
-                  style={{ flex: 1, padding: "8px 12px", background: "#1a1a1a", border: "1px solid #404040", borderRadius: "6px", color: "#fff", textAlign: "center" }}
-                />
-                <span style={{ color: "#9ca3af" }}>bis</span>
-                <input
-                  type="number"
-                  min={intervalRangeStart}
-                  max="365"
-                  value={intervalRangeEnd}
-                  onChange={(e) => setIntervalRangeEnd(parseInt(e.target.value) || 30)}
-                  style={{ flex: 1, padding: "8px 12px", background: "#1a1a1a", border: "1px solid #404040", borderRadius: "6px", color: "#fff", textAlign: "center" }}
-                />
-                <span style={{ color: "#9ca3af" }}>Tage</span>
-              </div>
-            )}
-          </div>
-
-          <label>
-            Notizen
-            <textarea rows="3" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Zusätzliche Informationen..." />
-          </label>
-
-          <div style={{ padding: "12px", background: "#1a1a1a", borderRadius: "6px", color: "#9ca3af", fontSize: "13px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span>📍 Position: {position.x.toFixed(1)}%, {position.y.toFixed(1)}%</span>
-            {position.gridPosition && (
-              <span style={{ background: "#22c55e", color: "#fff", padding: "4px 12px", borderRadius: "6px", fontWeight: "bold", fontFamily: "monospace" }}>
-                {position.gridPosition}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="dialog-footer-v6">
-          <button className="btn-secondary-v6" onClick={onClose}>Abbrechen</button>
-          <button className="btn-primary-v6" onClick={handleSaveBox} disabled={saving}>
-            <Save size={16} />
-            {saving ? "Erstellen..." : "Erstellen"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================
-// SUB COMPONENTS
-// ============================================
-
-function ModeButton({ icon: Icon, label, active, onClick, color, disabled }) {
-  const colors = { green: "bg-green-600", yellow: "bg-yellow-600", orange: "bg-orange-600", default: "bg-blue-600" };
-  
+/* ============================================================
+   SUB COMPONENTS
+   ============================================================ */
+function ModeButton({ icon: Icon, label, active, onClick, color }) {
+  const colors = { green: "bg-green-600", default: "bg-blue-600" };
   return (
     <button
       onClick={onClick}
-      disabled={disabled}
       className={`px-2 py-1 rounded text-xs flex items-center gap-1 transition ${
-        disabled ? "opacity-50 cursor-not-allowed" :
         active ? `${colors[color] || colors.default} text-white` : "text-gray-400 hover:text-white hover:bg-gray-600"
       }`}
       title={label}
@@ -1744,187 +1182,14 @@ function ModeButton({ icon: Icon, label, active, onClick, color, disabled }) {
   );
 }
 
-function DrawToolButton({ icon: Icon, active, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`p-1.5 rounded transition ${active ? "bg-orange-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"}`}
-    >
-      <Icon className="w-4 h-4" />
-    </button>
-  );
-}
-
-function StatusDot({ status }) {
-  const colors = { green: "#10b981", yellow: "#eab308", orange: "#f97316", red: "#ef4444", gray: "#6b7280" };
-  return <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colors[status] || colors.gray }}></div>;
-}
-
-// ============================================
-// GRID LABELS - Intelligent Spacing
-// ============================================
-function GridLabels({ gridConfig, zoom }) {
-  const { cols, rows } = gridConfig;
-  
-  const getSkipInterval = (count, isVertical = false) => {
-    const effectiveSize = isVertical ? 12 : 20;
-    const availableSpace = isVertical ? 500 : 800;
-    const spacePerItem = (availableSpace * zoom) / count;
-    
-    if (spacePerItem >= effectiveSize) return 1;
-    if (spacePerItem >= effectiveSize / 2) return 2;
-    if (spacePerItem >= effectiveSize / 5) return 5;
-    if (spacePerItem >= effectiveSize / 10) return 10;
-    return Math.ceil(effectiveSize / spacePerItem);
-  };
-
-  const colSkip = getSkipInterval(cols, false);
-  const rowSkip = getSkipInterval(rows, true);
-  const rotateColLabels = cols > 30;
-  
-  return (
-    <>
-      <div 
-        className="absolute left-0 right-0 flex" 
-        style={{ top: rotateColLabels ? -24 : -14 }}
-      >
-        {Array.from({ length: cols }).map((_, i) => {
-          if (i % colSkip !== 0) return null;
-          const label = getColLabel(i, cols);
-          
-          return (
-            <div
-              key={i}
-              className="text-blue-400 font-mono font-bold"
-              style={{ 
-                position: 'absolute',
-                left: `${(i / cols) * 100}%`,
-                width: `${(colSkip / cols) * 100}%`,
-                fontSize: Math.max(7, Math.min(11, 10 / zoom)),
-                textAlign: 'center',
-                transform: rotateColLabels ? 'rotate(-45deg)' : 'none',
-                transformOrigin: 'center bottom',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {label}
-            </div>
-          );
-        })}
-      </div>
-      
-      <div 
-        className="absolute top-0 bottom-0 flex flex-col" 
-        style={{ left: -22, width: 20 }}
-      >
-        {Array.from({ length: rows }).map((_, i) => {
-          if (i % rowSkip !== 0) return null;
-          
-          return (
-            <div
-              key={i}
-              className="text-blue-400 font-mono font-bold text-right pr-1"
-              style={{ 
-                position: 'absolute',
-                top: `${(i / rows) * 100}%`,
-                height: `${(rowSkip / rows) * 100}%`,
-                width: '100%',
-                fontSize: Math.max(6, Math.min(10, 9 / zoom)),
-                display: 'flex',
-                alignItems: 'flex-start',
-                justifyContent: 'flex-end'
-              }}
-            >
-              {i + 1}
-            </div>
-          );
-        })}
-      </div>
-    </>
-  );
-}
-
-// ============================================
-// BOX MARKER - MIT QR-LABEL UND DISPLAY_NUMBER
-// ============================================
-function BoxMarker({ box, onClick, disabled, zoom }) {
-  const colors = { green: "#10b981", yellow: "#eab308", orange: "#f97316", red: "#ef4444", gray: "#6b7280" };
-  const color = colors[box.current_status] || colors.gray;
-  const size = Math.max(16, Math.min(26, 22 / zoom));
-  const fontSize = Math.max(6, Math.min(9, 8 / zoom));
-
-  // Emoji Icons
-  const emojis = getBoxTypeEmojis(box.box_type_name);
-  const hasEmojis = emojis && emojis.length > 0;
-
-  // NEU: QR-Nummer und display_number
-  const shortQr = getShortQr(box);
-  const displayNumber = box.display_number || '?';
-
-  return (
-    <div
-      onClick={disabled ? undefined : onClick}
-      className={`absolute ${disabled ? "" : "cursor-pointer hover:scale-110"} transition-transform z-10`}
-      style={{ 
-        left: `${box.pos_x}%`, 
-        top: `${box.pos_y}%`,
-        transform: 'translate(-50%, -100%)'
-      }}
-    >
-      {/* QR-Nummer Badge - ganz oben */}
-      <div className="flex justify-center mb-0.5">
-        <div 
-          className="bg-black/90 rounded px-1.5 py-0.5 border border-white/30 shadow-lg text-white font-mono font-bold"
-          style={{ fontSize: Math.max(7, Math.min(10, 9 / zoom)) }}
-        >
-          {shortQr}
-        </div>
-      </div>
-
-      {/* Emoji Badge - über dem Kreis (wenn vorhanden) */}
-      {hasEmojis && (
-        <div className="flex justify-center mb-0.5">
-          <div 
-            className="bg-black/90 rounded px-1.5 py-0.5 border border-white/30 shadow-lg"
-            style={{ fontSize: Math.max(8, Math.min(12, 10 / zoom)) }}
-          >
-            {emojis}
-          </div>
-        </div>
-      )}
-
-      {/* Status Kreis mit display_number */}
-      <div
-        className="rounded-full flex items-center justify-center text-white font-bold shadow-lg border-2 border-white mx-auto"
-        style={{ backgroundColor: color, width: size, height: size, fontSize }}
-      >
-        {displayNumber}
-      </div>
-
-      {/* Grid Position Label */}
-      {box.grid_position && (
-        <div 
-          className="absolute left-1/2 -translate-x-1/2 bg-black/80 text-white px-1 rounded whitespace-nowrap font-mono"
-          style={{ top: '100%', marginTop: 2, fontSize: Math.max(5, fontSize - 1) }}
-        >
-          {box.grid_position}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function Annotation({ data }) {
   const { type, startX, startY, endX, endY, color } = data;
-
   if (type === "rect") {
     return <rect x={Math.min(startX, endX)} y={Math.min(startY, endY)} width={Math.abs(endX - startX)} height={Math.abs(endY - startY)} fill="none" stroke={color} strokeWidth="0.25" strokeDasharray="0.5,0.5" />;
   }
-
   if (type === "circle") {
     return <ellipse cx={(startX + endX) / 2} cy={(startY + endY) / 2} rx={Math.abs(endX - startX) / 2} ry={Math.abs(endY - startY) / 2} fill="none" stroke={color} strokeWidth="0.25" />;
   }
-
   if (type === "arrow") {
     const id = `arr-${data.id || Date.now()}`;
     return (
@@ -1938,140 +1203,7 @@ function Annotation({ data }) {
       </g>
     );
   }
-
   return null;
-}
-
-// ============================================
-// SIDEBAR - MIT QR UND DISPLAY_NUMBER
-// ============================================
-function Sidebar({ 
-  open, 
-  boxesOnPlan, 
-  unplacedBoxes, 
-  draggedBox, 
-  setDraggedBox, 
-  setMode, 
-  setSelectedBox, 
-  setScanDialogOpen,
-  setEditDialogOpen,
-  setIsFirstSetup,
-  onToggle 
-}) {
-  
-  // Box in Sidebar anklicken
-  const handleBoxClick = (box) => {
-    setSelectedBox(box);
-    
-    // Prüfen ob Ersteinrichtung nötig
-    const needsSetup = !box.box_type_id;
-    
-    if (needsSetup) {
-      setIsFirstSetup(true);
-      setEditDialogOpen(true);
-    } else {
-      setScanDialogOpen(true);
-    }
-  };
-  
-  return (
-    <>
-      <div className={`${open ? "w-56" : "w-0"} bg-gray-800 border-l border-gray-700 overflow-hidden transition-all flex flex-col shrink-0`}>
-        <div className="flex-1 overflow-y-auto p-2 space-y-3">
-          <div className="text-center p-2 bg-gray-900 rounded-lg">
-            <div className="text-xl font-bold text-white">{boxesOnPlan.length}</div>
-            <div className="text-xs text-gray-400">Boxen platziert</div>
-          </div>
-
-          {unplacedBoxes.length > 0 && (
-            <div>
-              <h4 className="text-xs font-semibold text-gray-400 mb-1">Nicht platziert ({unplacedBoxes.length})</h4>
-              <div className="space-y-1 max-h-28 overflow-y-auto">
-                {unplacedBoxes.map(box => {
-                  const emojis = getBoxTypeEmojis(box.box_type_name);
-                  const shortQr = getShortQr(box);
-                  return (
-                    <div
-                      key={box.id}
-                      className={`p-1.5 rounded text-xs cursor-pointer transition ${
-                        draggedBox?.id === box.id ? "bg-yellow-600 text-white" : "bg-gray-900 text-gray-300 hover:bg-gray-700"
-                      }`}
-                      onClick={() => { setDraggedBox(box); setMode("place"); }}
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <StatusDot status={box.current_status} />
-                        <span>#{box.display_number || '?'}</span>
-                        <span className="text-[9px] text-gray-500">{shortQr}</span>
-                        {emojis && <span className="text-xs">{emojis}</span>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <div>
-            <h4 className="text-xs font-semibold text-gray-400 mb-1">Auf Plan ({boxesOnPlan.length})</h4>
-            <div className="space-y-1 max-h-40 overflow-y-auto">
-              {boxesOnPlan.map(box => {
-                const emojis = getBoxTypeEmojis(box.box_type_name);
-                const shortQr = getShortQr(box);
-                return (
-                  <div
-                    key={box.id}
-                    className="p-1.5 rounded text-xs bg-gray-900 text-gray-300 hover:bg-gray-700 cursor-pointer flex items-center justify-between"
-                    onClick={() => handleBoxClick(box)}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <StatusDot status={box.current_status} />
-                      <span>#{box.display_number || '?'}</span>
-                      <span className="text-[9px] text-gray-500">{shortQr}</span>
-                      {emojis && <span className="text-xs">{emojis}</span>}
-                    </div>
-                    {box.grid_position && (
-                      <span className="text-[9px] bg-blue-600/30 text-blue-300 px-1 rounded font-mono">
-                        {box.grid_position}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="p-2 bg-gray-900 rounded-lg">
-            <h5 className="text-[10px] font-semibold text-gray-400 mb-1">Legende</h5>
-            <div className="grid grid-cols-2 gap-0.5">
-              {Object.entries(STATUS_COLORS).map(([key, { bg, label }]) => (
-                <div key={key} className="flex items-center gap-1 text-[9px] text-gray-400">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: bg }}></div>
-                  <span>{label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="p-2 border-t border-gray-700">
-          <button
-            onClick={() => setMode("create")}
-            className="w-full px-2 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center justify-center gap-1 text-xs"
-          >
-            <Plus className="w-3 h-3" /> Neue Box
-          </button>
-        </div>
-      </div>
-
-      <button
-        onClick={onToggle}
-        className="absolute top-1/2 bg-gray-700 hover:bg-gray-600 p-1 rounded-l text-white z-10"
-        style={{ right: open ? "224px" : "0", transform: "translateY(-50%)" }}
-      >
-        {open ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-      </button>
-    </>
-  );
 }
 
 function UploadModal({ uploading, onUpload, onClose }) {
@@ -2079,23 +1211,124 @@ function UploadModal({ uploading, onUpload, onClose }) {
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full border border-gray-700">
         <h3 className="text-xl font-bold text-white mb-4">Lageplan hochladen</h3>
-        <label className={`block w-full p-8 border-2 border-dashed rounded-lg text-center cursor-pointer ${
-          uploading ? "border-gray-600" : "border-gray-600 hover:border-blue-500"
-        }`}>
+        <label className={`block w-full p-8 border-2 border-dashed rounded-lg text-center cursor-pointer ${uploading ? "border-gray-600" : "border-gray-600 hover:border-blue-500"}`}>
           {uploading ? (
-            <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
+            <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto" />
           ) : (
             <>
               <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
               <p className="text-gray-400">Bild auswählen</p>
-              <p className="text-gray-500 text-sm mt-1">Nach dem Upload: Grid-Auflösung wählen</p>
             </>
           )}
           <input type="file" accept="image/*" onChange={onUpload} className="hidden" disabled={uploading} />
         </label>
-        <button onClick={onClose} disabled={uploading} className="mt-4 w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">
-          Abbrechen
-        </button>
+        <button onClick={onClose} disabled={uploading} className="mt-4 w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">Abbrechen</button>
+      </div>
+    </div>
+  );
+}
+
+function GridSetupDialog({ imageUrl, onComplete, onCancel }) {
+  const [selectedPreset, setSelectedPreset] = useState("medium");
+
+  const handleSave = () => {
+    const preset = GRID_PRESETS[selectedPreset];
+    onComplete({
+      grid_mode: "preset",
+      grid_preset: selectedPreset,
+      grid_cols: preset.cols,
+      grid_rows: preset.rows
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-800 rounded-xl max-w-lg w-full border border-gray-700">
+        <div className="p-4 border-b border-gray-700">
+          <h2 className="text-xl font-bold text-white">Grid wählen</h2>
+        </div>
+        <div className="p-4 space-y-3">
+          {Object.entries(GRID_PRESETS).map(([key, preset]) => (
+            <button
+              key={key}
+              onClick={() => setSelectedPreset(key)}
+              className={`w-full p-3 rounded-lg border-2 text-left ${selectedPreset === key ? "border-blue-500 bg-blue-600/20" : "border-gray-700 bg-gray-900"}`}
+            >
+              <span className="text-lg mr-2">{preset.icon}</span>
+              <span className="text-white font-medium">{preset.name}</span>
+              {selectedPreset === key && <Check className="w-4 h-4 text-blue-400 float-right mt-1" />}
+            </button>
+          ))}
+        </div>
+        <div className="p-4 border-t border-gray-700 flex gap-3">
+          <button onClick={onCancel} className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg">Abbrechen</button>
+          <button onClick={handleSave} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg">Erstellen</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BoxCreateDialogFloorPlan({ objectId, floorPlanId, position, boxTypes, onClose, onSave }) {
+  const token = localStorage.getItem("trapmap_token");
+  const [boxTypeId, setBoxTypeId] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleSaveBox = async () => {
+    if (!boxTypeId) { alert("Bitte Box-Typ auswählen!"); return; }
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/boxes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          object_id: objectId,
+          box_type_id: parseInt(boxTypeId),
+          floor_plan_id: floorPlanId,
+          pos_x: position.x,
+          pos_y: position.y,
+          grid_position: position.gridPosition,
+          position_type: "floorplan",
+          current_status: "green",
+          control_interval_days: 30
+        }),
+      });
+      if (!res.ok) throw new Error("Fehler");
+      onSave();
+    } catch (e) {
+      console.error("Create box error:", e);
+      alert("Fehler beim Erstellen");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-800 rounded-xl max-w-md w-full border border-gray-700">
+        <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+          <h2 className="text-lg font-bold text-white">📦 Neue Box</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={20} /></button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="block text-gray-400 text-sm mb-1">Box-Typ *</label>
+            <select value={boxTypeId} onChange={(e) => setBoxTypeId(e.target.value)} className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded text-white">
+              <option value="">Auswählen...</option>
+              {boxTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
+            </select>
+          </div>
+          <div className="bg-gray-900 rounded p-3 flex justify-between text-sm">
+            <span className="text-gray-400">Position:</span>
+            <span className="text-green-400 font-mono font-bold">{position.gridPosition}</span>
+          </div>
+        </div>
+        <div className="p-4 border-t border-gray-700 flex gap-3">
+          <button onClick={onClose} className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg">Abbrechen</button>
+          <button onClick={handleSaveBox} disabled={saving} className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg flex items-center justify-center gap-2">
+            <Save size={16} />{saving ? "..." : "Erstellen"}
+          </button>
+        </div>
       </div>
     </div>
   );

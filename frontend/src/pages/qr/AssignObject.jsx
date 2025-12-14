@@ -112,7 +112,8 @@ export default function AssignObject() {
   // Platzierungsauswahl: Lageplan
   const handleChooseFloorplan = () => {
     if (!selectedObject) return;
-    navigate(`/objects/${selectedObject.id}?tab=floorplan&openBox=${boxId}&place=true`);
+    // GEÄNDERT: Direkt zum Lageplan-Editor navigieren
+    navigate(`/layouts/${selectedObject.id}?placeBox=${boxId}`);
   };
 
   // Objekte filtern
