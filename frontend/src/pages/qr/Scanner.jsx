@@ -800,13 +800,16 @@ export default function Scanner() {
   const refreshScannerOnce = async () => {
     try {
       console.log("🔁 refreshScannerOnce - restart video stream");
-      // Stoppe nur den Stream, aber behalte UI‑Zustände
-      await stopScanner(false);
+      // Vollständig stoppen und clear() aufrufen, damit die Instanz
+      // neu erstellt wird — das ist robuster gegen stale detector states.
+      await stopScanner(true);
       // Kleiner Delay damit die Kamera freigegeben wird
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 300));
       if (currentCamera) {
+        // recreate instance via startScanner
         await startScanner(currentCamera.id);
       } else {
+        // fallback: re-init (may request cameras)
         await initScanner();
       }
       // Aufräumen lokaler Scan-Zustände damit neuer Scan möglich ist
