@@ -251,3 +251,5 @@ body,
 
 /* Small helper to invert text on dark backgrounds if needed */
 .text-on-dark { color: var(--text-primary); }
+/* Am Ende von src/index.css einfügen */
+@import "./styles/dark-mode-fixes.css";

@@ -555,7 +555,90 @@ export default function BoxEditDialog({
             </div>
           )}
 
-          {/* ========== NEU: BOX-NAME ========== */}
+          {/* ========== BOX-TYP - WICHTIG: Als erstes! ========== */}
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-2">
+              📦 Box-Typ *
+            </label>
+            {boxTypesLoading ? (
+              <div className="w-full px-3 py-2.5 bg-[#0d1117] border border-white/10 rounded-lg text-gray-500 text-sm">
+                Lade Box-Typen...
+              </div>
+            ) : boxTypes.length === 0 ? (
+              <div className="w-full px-3 py-2.5 bg-red-900/20 border border-red-500/30 rounded-lg text-red-400 text-sm">
+                ⚠️ Keine Box-Typen gefunden
+              </div>
+            ) : (
+              <select
+                value={boxTypeId}
+                onChange={(e) => setBoxTypeId(e.target.value)}
+                className="w-full px-3 py-2.5 bg-[#0d1117] border border-white/10 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors"
+              >
+                <option value="">Bitte auswählen...</option>
+                
+                {/* Prüfen ob categories vorhanden sind */}
+                {boxTypes.some(t => t.category) ? (
+                  <>
+                    {/* Mit Categories - gruppiert */}
+                    {boxTypes.filter(t => t.category === 'bait_box').length > 0 && (
+                      <optgroup label="🐀 Nager - Köder">
+                        {boxTypes
+                          .filter(t => t.category === 'bait_box')
+                          .sort((a, b) => a.name.localeCompare(b.name, 'de'))
+                          .map(type => (
+                            <option key={type.id} value={type.id}>{type.name}</option>
+                          ))}
+                      </optgroup>
+                    )}
+                    
+                    {boxTypes.filter(t => t.category === 'snap_trap').length > 0 && (
+                      <optgroup label="🐀 Nager - Schlagfallen">
+                        {boxTypes
+                          .filter(t => t.category === 'snap_trap')
+                          .sort((a, b) => a.name.localeCompare(b.name, 'de'))
+                          .map(type => (
+                            <option key={type.id} value={type.id}>{type.name}</option>
+                          ))}
+                      </optgroup>
+                    )}
+                    
+                    {boxTypes.filter(t => t.category === 'insect_monitor' || t.category === 'uv_trap').length > 0 && (
+                      <optgroup label="🪲 Insekten">
+                        {boxTypes
+                          .filter(t => t.category === 'insect_monitor' || t.category === 'uv_trap')
+                          .sort((a, b) => a.name.localeCompare(b.name, 'de'))
+                          .map(type => (
+                            <option key={type.id} value={type.id}>{type.name}</option>
+                          ))}
+                      </optgroup>
+                    )}
+                    
+                    {boxTypes.filter(t => 
+                      !['bait_box', 'snap_trap', 'insect_monitor', 'uv_trap'].includes(t.category)
+                    ).length > 0 && (
+                      <optgroup label="📦 Sonstige">
+                        {boxTypes
+                          .filter(t => !['bait_box', 'snap_trap', 'insect_monitor', 'uv_trap'].includes(t.category))
+                          .sort((a, b) => a.name.localeCompare(b.name, 'de'))
+                          .map(type => (
+                            <option key={type.id} value={type.id}>{type.name}</option>
+                          ))}
+                      </optgroup>
+                    )}
+                  </>
+                ) : (
+                  /* Ohne Categories - einfache Liste */
+                  boxTypes
+                    .sort((a, b) => a.name.localeCompare(b.name, 'de'))
+                    .map(type => (
+                      <option key={type.id} value={type.id}>{type.name}</option>
+                    ))
+                )}
+              </select>
+            )}
+          </div>
+
+          {/* ========== BOX-NAME ========== */}
           <div>
             <label className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2">
               <Tag size={12} />
@@ -571,7 +654,7 @@ export default function BoxEditDialog({
             <p className="text-xs text-gray-600 mt-1">Eigener Name zur leichteren Identifikation</p>
           </div>
 
-          {/* ========== NEU: DISPLAY-NUMMER ========== */}
+          {/* ========== DISPLAY-NUMMER ========== */}
           <div>
             <label className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2">
               <Hash size={12} />
@@ -601,60 +684,6 @@ export default function BoxEditDialog({
                 <span className="text-yellow-500 ml-2">→ Eigene Nummer: {displayNumber}</span>
               )}
             </p>
-          </div>
-
-          {/* Box-Typ */}
-          <div>
-            <label className="block text-xs font-medium text-gray-400 mb-2">
-              Box-Typ *
-            </label>
-            <select
-              value={boxTypeId}
-              onChange={(e) => setBoxTypeId(e.target.value)}
-              className="w-full px-3 py-2.5 bg-[#0d1117] border border-white/10 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors"
-            >
-              <option value="">Bitte auswählen...</option>
-              
-              <optgroup label="🐀 Nager - Köder">
-                {boxTypes
-                  .filter(t => t.category === 'bait_box')
-                  .sort((a, b) => a.name.localeCompare(b.name, 'de'))
-                  .map(type => (
-                    <option key={type.id} value={type.id}>{type.name}</option>
-                  ))}
-              </optgroup>
-              
-              <optgroup label="🐀 Nager - Schlagfallen">
-                {boxTypes
-                  .filter(t => t.category === 'snap_trap')
-                  .sort((a, b) => a.name.localeCompare(b.name, 'de'))
-                  .map(type => (
-                    <option key={type.id} value={type.id}>{type.name}</option>
-                  ))}
-              </optgroup>
-              
-              <optgroup label="🪲 Insekten">
-                {boxTypes
-                  .filter(t => t.category === 'insect_monitor' || t.category === 'uv_trap')
-                  .sort((a, b) => a.name.localeCompare(b.name, 'de'))
-                  .map(type => (
-                    <option key={type.id} value={type.id}>{type.name}</option>
-                  ))}
-              </optgroup>
-              
-              {boxTypes.filter(t => 
-                !['bait_box', 'snap_trap', 'insect_monitor', 'uv_trap'].includes(t.category)
-              ).length > 0 && (
-                <optgroup label="📦 Sonstige">
-                  {boxTypes
-                    .filter(t => !['bait_box', 'snap_trap', 'insect_monitor', 'uv_trap'].includes(t.category))
-                    .sort((a, b) => a.name.localeCompare(b.name, 'de'))
-                    .map(type => (
-                      <option key={type.id} value={type.id}>{type.name}</option>
-                    ))}
-                </optgroup>
-              )}
-            </select>
           </div>
 
           {/* Köder */}
