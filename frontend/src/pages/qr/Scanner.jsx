@@ -60,7 +60,6 @@ export default function Scanner() {
   const [error, setError] = useState("");
   const [cameras, setCameras] = useState([]);
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
-  const [blockedCode, setBlockedCode] = useState(null);
 
   // Box State
   const [currentBox, setCurrentBox] = useState(null);
@@ -200,7 +199,6 @@ export default function Scanner() {
     // Scanner pausieren (nicht stoppen!)
     isPausedRef.current = true;
     lastScannedCodeRef.current = code;
-    setBlockedCode(code);
     
     // Vibration
     if (navigator.vibrate) {
@@ -378,13 +376,13 @@ export default function Scanner() {
     setError("");
     setBoxLoading(false);
     
-    // Scanner fortsetzen!
-    isPausedRef.current = false;
-  };
-
-  const unlockLastCode = () => {
-    lastScannedCodeRef.current = null;
-    setBlockedCode(null);
+    // Kurzer Cooldown damit nicht sofort der gleiche Code wieder erkannt wird
+    // (falls er noch im Bild ist)
+    setTimeout(() => {
+      lastScannedCodeRef.current = null;
+      isPausedRef.current = false;
+      console.log("✅ Scanner bereit für neuen Scan");
+    }, 800);
   };
 
   // ============================================
@@ -723,26 +721,6 @@ export default function Scanner() {
             className="w-full"
             style={{ display: isScanning && !boxLoading ? 'block' : 'none' }}
           />
-          
-          {/* Blocked Code Hinweis */}
-          {isScanning && blockedCode && !hasActiveDialog && !boxLoading && (
-            <div className="absolute bottom-4 left-4 right-4 bg-yellow-900/90 border border-yellow-600/50 rounded-xl p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <AlertTriangle size={18} className="text-yellow-400 flex-shrink-0" />
-                  <p className="text-yellow-200 text-sm truncate">
-                    <strong>{blockedCode}</strong> wird ignoriert
-                  </p>
-                </div>
-                <button
-                  onClick={unlockLastCode}
-                  className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-500 text-white text-xs font-medium rounded-lg"
-                >
-                  Entsperren
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* Scan Overlay */}
           {isScanning && !boxLoading && !hasActiveDialog && (
