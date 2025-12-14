@@ -111,8 +111,6 @@ exports.checkCode = async (code) => {
         grid_position,
         notes,
         control_interval_days,
-        last_check,
-        next_check,
         objects:object_id (id, name),
         box_types:box_type_id (id, name)
       )
