@@ -23,7 +23,6 @@ try {
 }
 
 // Import Routes
-const boxtypesRoutes = require("./routes/boxtypes.routes");
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/users.routes');
 const objectRoutes = require('./routes/objects.routes');
@@ -149,7 +148,6 @@ if (security && security.loginLimiter && security.blockCheckMiddleware) {
 app.use('/api/auth', authRoutes);
 
 // Standard Routes
-app.use("/api/boxtypes", boxtypesRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/objects', objectRoutes);
 app.use('/api/layouts', layoutRoutes);
