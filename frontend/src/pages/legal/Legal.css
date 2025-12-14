@@ -1,0 +1,196 @@
+/* ============================================================
+   TRAPMAP - LEGAL PAGES CSS
+   Impressum, Datenschutz, AGB
+   ============================================================ */
+
+/* ============================================================
+   BASE STYLES
+   ============================================================ */
+.legal-page {
+  min-height: 100vh;
+  background: #0b1120;
+  color: #e2e8f0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.7;
+}
+
+.legal-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 100px 24px 60px;
+}
+
+/* ============================================================
+   BACK LINK
+   ============================================================ */
+.legal-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #6366f1;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 32px;
+  transition: color 0.2s;
+}
+
+.legal-back:hover {
+  color: #818cf8;
+}
+
+/* ============================================================
+   HEADINGS
+   ============================================================ */
+.legal-page h1 {
+  font-size: 36px;
+  font-weight: 700;
+  margin: 0 0 40px;
+  color: #fff;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.legal-page h2 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 16px;
+  color: #fff;
+}
+
+.legal-page h3 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 24px 0 12px;
+  color: #e2e8f0;
+}
+
+/* ============================================================
+   SECTIONS
+   ============================================================ */
+.legal-section {
+  margin-bottom: 48px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.legal-section:last-of-type {
+  border-bottom: none;
+}
+
+.legal-section p {
+  margin: 0 0 16px;
+  color: #94a3b8;
+}
+
+.legal-section p:last-child {
+  margin-bottom: 0;
+}
+
+/* ============================================================
+   LISTS
+   ============================================================ */
+.legal-section ul {
+  margin: 16px 0;
+  padding-left: 24px;
+}
+
+.legal-section li {
+  margin-bottom: 10px;
+  color: #94a3b8;
+}
+
+.legal-section li strong {
+  color: #e2e8f0;
+}
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+.legal-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 20px;
+  margin: 16px 0;
+}
+
+.legal-card p {
+  margin: 0 0 12px;
+}
+
+.legal-card p:last-child {
+  margin: 0;
+}
+
+.legal-address {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #94a3b8 !important;
+}
+
+.legal-address svg {
+  color: #6366f1;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   LINKS
+   ============================================================ */
+.legal-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #6366f1;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.legal-link:hover {
+  color: #818cf8;
+}
+
+.legal-link-inline {
+  color: #6366f1;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.legal-link-inline:hover {
+  text-decoration: underline;
+}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+.legal-footer {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+}
+
+.legal-footer p {
+  color: #64748b;
+  font-size: 14px;
+  margin: 0;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 600px) {
+  .legal-container {
+    padding: 80px 16px 40px;
+  }
+
+  .legal-page h1 {
+    font-size: 28px;
+  }
+
+  .legal-page h2 {
+    font-size: 20px;
+  }
+}

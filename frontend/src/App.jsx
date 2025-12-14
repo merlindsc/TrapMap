@@ -1,6 +1,6 @@
 /* ============================================================
    TRAPMAP - APP.JSX
-   Mit ThemeProvider und Landing Page
+   Mit ThemeProvider, Landing Page, Legal Pages & Cookie Consent
    ============================================================ */
 
 import React, { lazy, Suspense } from "react";
@@ -11,6 +11,14 @@ import { ThemeProvider } from "./components/layout/DashboardLayout";
 // Public Pages
 import LandingPage from "./pages/public/LandingPage";
 import Login from "./pages/Login";
+
+// Legal Pages
+import Impressum from "./pages/legal/Impressum";
+import Datenschutz from "./pages/legal/Datenschutz";
+import AGB from "./pages/legal/AGB";
+
+// Cookie Consent
+import CookieConsent from "./components/CookieConsent";
 
 // Partner Components (lazy loaded)
 const PartnerLogin = lazy(() => import("./pages/PartnerLogin").catch(() => ({ default: () => <div className="min-h-screen flex items-center justify-center bg-gray-900 text-red-400">PartnerLogin.jsx nicht gefunden</div> })));
@@ -93,101 +101,6 @@ const LoadingFallback = () => (
 );
 
 // ============================================
-// STATISCHE SEITEN (Impressum, etc.)
-// ============================================
-const Impressum = () => (
-  <div style={{ 
-    minHeight: '100vh', 
-    background: '#0b1120', 
-    color: '#fff', 
-    padding: '120px 24px 60px' 
-  }}>
-    <div style={{ maxWidth: 800, margin: '0 auto' }}>
-      <a href="/" style={{ color: '#6366f1', textDecoration: 'none', marginBottom: 24, display: 'inline-block' }}>
-        ← Zurück zur Startseite
-      </a>
-      <h1>Impressum</h1>
-      <h2>Angaben gemäß § 5 TMG</h2>
-      <p>
-        TrapMap<br />
-        [Deine Firma]<br />
-        [Straße Nr.]<br />
-        [PLZ Stadt]
-      </p>
-      <h2>Kontakt</h2>
-      <p>
-        Telefon: [Telefonnummer]<br />
-        E-Mail: info@trap-map.de
-      </p>
-      <h2>Verantwortlich für den Inhalt nach § 55 Abs. 2 RStV</h2>
-      <p>
-        [Name]<br />
-        [Adresse]
-      </p>
-    </div>
-  </div>
-);
-
-const Datenschutz = () => (
-  <div style={{ 
-    minHeight: '100vh', 
-    background: '#0b1120', 
-    color: '#fff', 
-    padding: '120px 24px 60px' 
-  }}>
-    <div style={{ maxWidth: 800, margin: '0 auto' }}>
-      <a href="/" style={{ color: '#6366f1', textDecoration: 'none', marginBottom: 24, display: 'inline-block' }}>
-        ← Zurück zur Startseite
-      </a>
-      <h1>Datenschutzerklärung</h1>
-      <h2>1. Datenschutz auf einen Blick</h2>
-      <h3>Allgemeine Hinweise</h3>
-      <p>
-        Die folgenden Hinweise geben einen einfachen Überblick darüber, was mit Ihren 
-        personenbezogenen Daten passiert, wenn Sie diese Website besuchen.
-      </p>
-      <h2>2. Hosting</h2>
-      <p>
-        Wir hosten die Inhalte unserer Website bei Render (render.com).
-      </p>
-      <h2>3. Allgemeine Hinweise und Pflichtinformationen</h2>
-      <h3>Datenschutz</h3>
-      <p>
-        Die Betreiber dieser Seiten nehmen den Schutz Ihrer persönlichen Daten sehr ernst.
-      </p>
-      {/* Hier vollständige Datenschutzerklärung einfügen */}
-    </div>
-  </div>
-);
-
-const AGB = () => (
-  <div style={{ 
-    minHeight: '100vh', 
-    background: '#0b1120', 
-    color: '#fff', 
-    padding: '120px 24px 60px' 
-  }}>
-    <div style={{ maxWidth: 800, margin: '0 auto' }}>
-      <a href="/" style={{ color: '#6366f1', textDecoration: 'none', marginBottom: 24, display: 'inline-block' }}>
-        ← Zurück zur Startseite
-      </a>
-      <h1>Allgemeine Geschäftsbedingungen</h1>
-      <h2>§ 1 Geltungsbereich</h2>
-      <p>
-        Diese Allgemeinen Geschäftsbedingungen gelten für alle Verträge zwischen 
-        TrapMap und dem Kunden.
-      </p>
-      <h2>§ 2 Vertragsgegenstand</h2>
-      <p>
-        Gegenstand des Vertrages ist die Bereitstellung der TrapMap Software zur 
-        digitalen Dokumentation von Schädlingsmonitoring.
-      </p>
-      {/* Hier vollständige AGB einfügen */}
-    </div>
-  </div>
-);
-
-// ============================================
 // PARTNER CHECK - VOR useAuth!
 // ============================================
 function isPartnerLoggedIn() {
@@ -210,6 +123,7 @@ function PartnerApp() {
           <Route path="*" element={<Navigate to="/partner/dashboard" replace />} />
         </Routes>
       </Suspense>
+      <CookieConsent />
     </ThemeProvider>
   );
 }
@@ -227,6 +141,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <MainApp />
+      <CookieConsent />
     </ThemeProvider>
   );
 }
@@ -255,7 +170,7 @@ function MainApp() {
           <Route path="/login" element={<Login />} />
           <Route path="/partner/login" element={<PartnerLogin />} />
           
-          {/* Statische Seiten */}
+          {/* Legal Pages */}
           <Route path="/impressum" element={<Impressum />} />
           <Route path="/datenschutz" element={<Datenschutz />} />
           <Route path="/agb" element={<AGB />} />

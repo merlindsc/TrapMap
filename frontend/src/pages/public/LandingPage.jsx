@@ -1,5 +1,5 @@
 /* ============================================================
-   TRAPMAP - LANDING PAGE
+   TRAPMAP - LANDING PAGE (ECHTE INHALTE)
    Marketing Website für trap-map.de
    ============================================================ */
 
@@ -7,15 +7,13 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   QrCode, Shield, BarChart3, MapPin, Clock, FileCheck,
-  ChevronRight, Check, Menu, X, Play, Star,
-  Building2, Utensils, Factory, Warehouse, ShoppingCart,
-  Hotel, Stethoscope, Leaf, Phone, Mail, ArrowRight
+  Check, Menu, X, Camera, Settings, Users, Sliders,
+  Phone, Mail, ArrowRight, Sparkles, Timer, HandshakeIcon
 } from "lucide-react";
 import "./LandingPage.css";
 
 export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [showDemo, setShowDemo] = useState(false);
 
   return (
     <div className="landing-page">
@@ -29,20 +27,18 @@ export default function LandingPage() {
             <span className="brand-map">Map</span>
           </div>
 
-          {/* Desktop Menu */}
           <div className="nav-links">
             <a href="#features">Features</a>
-            <a href="#branchen">Branchen</a>
+            <a href="#individuell">Für Profis</a>
             <a href="#preise">Preise</a>
             <a href="#kontakt">Kontakt</a>
           </div>
 
           <div className="nav-actions">
             <Link to="/login" className="nav-login">Anmelden</Link>
-            <a href="#demo" className="nav-cta">Demo anfragen</a>
+            <a href="#testen" className="nav-cta">Kostenlos testen</a>
           </div>
 
-          {/* Mobile Menu Button */}
           <button 
             className="mobile-menu-btn"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -51,16 +47,15 @@ export default function LandingPage() {
           </button>
         </div>
 
-        {/* Mobile Menu */}
         {mobileMenuOpen && (
           <div className="mobile-menu">
             <a href="#features" onClick={() => setMobileMenuOpen(false)}>Features</a>
-            <a href="#branchen" onClick={() => setMobileMenuOpen(false)}>Branchen</a>
+            <a href="#individuell" onClick={() => setMobileMenuOpen(false)}>Für Profis</a>
             <a href="#preise" onClick={() => setMobileMenuOpen(false)}>Preise</a>
             <a href="#kontakt" onClick={() => setMobileMenuOpen(false)}>Kontakt</a>
             <Link to="/login" onClick={() => setMobileMenuOpen(false)}>Anmelden</Link>
-            <a href="#demo" className="mobile-cta" onClick={() => setMobileMenuOpen(false)}>
-              Demo anfragen
+            <a href="#testen" className="mobile-cta" onClick={() => setMobileMenuOpen(false)}>
+              Kostenlos testen
             </a>
           </div>
         )}
@@ -72,47 +67,34 @@ export default function LandingPage() {
       <section className="hero">
         <div className="hero-content">
           <div className="hero-badge">
-            <Shield size={16} />
-            HACCP & IFS konform
+            <Sparkles size={16} />
+            Bis 01.02.2026 kostenlos testen
           </div>
           
           <h1>
-            Schädlingsmonitoring.
-            <span className="gradient-text"> Digital.</span>
+            Nie wieder Zettelwirtschaft
+            <span className="gradient-text"> bei der Schädlingskontrolle.</span>
           </h1>
           
           <p className="hero-subtitle">
-            TrapMap digitalisiert Ihr Schädlingsmonitoring. QR-Codes scannen, 
-            Befunde dokumentieren, Berichte generieren – alles in einer App.
-            Audit-sicher und zeitsparend.
+            TrapMap digitalisiert dein Schädlingsmonitoring. QR-Code scannen, 
+            Status dokumentieren, Report generieren – fertig. 
+            Audit-sicher in 2 Minuten.
           </p>
 
           <div className="hero-actions">
-            <a href="#demo" className="btn-primary">
-              Kostenlose Demo
+            <a href="#testen" className="btn-primary">
+              Jetzt kostenlos starten
               <ArrowRight size={18} />
             </a>
-            <button className="btn-secondary" onClick={() => setShowDemo(true)}>
-              <Play size={18} />
-              Video ansehen
-            </button>
+            <a href="#features" className="btn-secondary">
+              Features entdecken
+            </a>
           </div>
 
-          <div className="hero-stats">
-            <div className="stat">
-              <strong>50.000+</strong>
-              <span>Boxen überwacht</span>
-            </div>
-            <div className="stat-divider" />
-            <div className="stat">
-              <strong>200+</strong>
-              <span>Unternehmen</span>
-            </div>
-            <div className="stat-divider" />
-            <div className="stat">
-              <strong>99,9%</strong>
-              <span>Audit-Erfolg</span>
-            </div>
+          <div className="hero-highlight">
+            <Timer size={20} />
+            <span><strong>2 Minuten</strong> vom Scan bis zum fertigen Audit-Report</span>
           </div>
         </div>
 
@@ -140,94 +122,185 @@ export default function LandingPage() {
       </section>
 
       {/* ============================================
+          PROBLEM / SOLUTION
+          ============================================ */}
+      <section className="problem-section">
+        <div className="section-container">
+          <div className="problem-grid">
+            <div className="problem-card">
+              <h3>😤 Ohne TrapMap</h3>
+              <ul>
+                <li>Papierformulare ausfüllen</li>
+                <li>Handschrift entziffern</li>
+                <li>Daten abtippen</li>
+                <li>Excel-Listen pflegen</li>
+                <li>Audit-Ordner zusammensuchen</li>
+                <li>Stundenlange Vorbereitung</li>
+              </ul>
+            </div>
+            <div className="solution-card">
+              <h3>🚀 Mit TrapMap</h3>
+              <ul>
+                <li><Check size={16} /> QR-Code scannen</li>
+                <li><Check size={16} /> Status antippen</li>
+                <li><Check size={16} /> Foto machen</li>
+                <li><Check size={16} /> Fertig.</li>
+                <li><Check size={16} /> Report per Knopfdruck</li>
+                <li><Check size={16} /> Audit in 2 Minuten</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============================================
           FEATURES
           ============================================ */}
       <section id="features" className="features">
         <div className="section-container">
           <div className="section-header">
             <span className="section-badge">Features</span>
-            <h2>Alles was Sie brauchen</h2>
-            <p>Von der Erfassung bis zum Audit-Bericht – TrapMap deckt den gesamten Prozess ab.</p>
+            <h2>Alles drin, was Profis brauchen</h2>
+            <p>Und wenn dir was fehlt – wir bauen es für dich.</p>
           </div>
 
           <div className="features-grid">
             <FeatureCard
               icon={QrCode}
               title="QR-Code Scanning"
-              description="Jede Box bekommt einen QR-Code. Scannen, Status erfassen, fertig. Keine Zettelwirtschaft mehr."
+              description="Jede Box bekommt einen QR-Code. Scannen, Status erfassen, fertig. Funktioniert mit jedem Smartphone."
             />
             <FeatureCard
               icon={MapPin}
               title="Digitale Lagepläne"
-              description="Boxen auf Grundrissen oder GPS-Karten positionieren. Immer wissen wo was steht."
-            />
-            <FeatureCard
-              icon={BarChart3}
-              title="Echtzeit-Dashboard"
-              description="Alle Standorte auf einen Blick. Überfällige Kontrollen sofort erkennen."
+              description="Boxen auf Grundrissen oder GPS-Karten platzieren. Immer wissen wo was steht – auch bei 500 Boxen."
             />
             <FeatureCard
               icon={FileCheck}
-              title="Audit-Berichte"
-              description="PDF-Reports per Knopfdruck. Mit allen Nachweisen die HACCP und IFS fordern."
+              title="Automatische Reports"
+              description="PDF-Reports per Knopfdruck. Mit allen Nachweisen die HACCP und IFS fordern. In 2 Minuten fertig."
+            />
+            <FeatureCard
+              icon={Camera}
+              title="Foto-Dokumentation"
+              description="Vorher-Nachher Fotos, Köderstatus, Befunde – alles mit Zeitstempel und GPS-Position dokumentiert."
             />
             <FeatureCard
               icon={Clock}
               title="Kontrollintervalle"
-              description="Flexible Intervalle pro Box. Automatische Erinnerungen bei überfälligen Kontrollen."
+              description="Flexible Intervalle pro Box und Objekt. Automatische Erinnerungen bei überfälligen Kontrollen."
             />
             <FeatureCard
               icon={Shield}
               title="Lückenlose Historie"
-              description="Jede Kontrolle wird dokumentiert. 5 Jahre Aufbewahrung inklusive."
+              description="Jede Kontrolle wird dokumentiert und ist nachvollziehbar. Für Audits und Nachweise."
             />
           </div>
         </div>
       </section>
 
       {/* ============================================
-          BRANCHEN
+          INDIVIDUELL / FÜR PROFIS
           ============================================ */}
-      <section id="branchen" className="branchen">
+      <section id="individuell" className="individuell">
         <div className="section-container">
           <div className="section-header">
-            <span className="section-badge">Branchen</span>
-            <h2>Für alle die nachweisen müssen</h2>
-            <p>Überall wo Hygiene-Audits gefordert sind, ist TrapMap die Lösung.</p>
+            <span className="section-badge">Für Profis</span>
+            <h2>Wahnsinnig individuell</h2>
+            <p>Jeder Kunde ist anders. TrapMap passt sich an.</p>
           </div>
 
-          <div className="branchen-grid">
-            <BranchenCard icon={Utensils} name="Gastronomie & Hotels" />
-            <BranchenCard icon={Factory} name="Lebensmittelindustrie" />
-            <BranchenCard icon={ShoppingCart} name="Supermärkte" />
-            <BranchenCard icon={Warehouse} name="Logistik & Lager" />
-            <BranchenCard icon={Stethoscope} name="Krankenhäuser" />
-            <BranchenCard icon={Building2} name="Pharmaindustrie" />
-            <BranchenCard icon={Hotel} name="Pflegeheime" />
-            <BranchenCard icon={Leaf} name="Landwirtschaft" />
+          <div className="individuell-content">
+            <div className="individuell-text">
+              <h3>Du entscheidest, was deine Kunden sehen</h3>
+              <p>
+                Als Admin steuerst du alles: Welche Felder sollen ausgefüllt werden? 
+                Sind Fotos Pflicht? Welche Status-Optionen gibt es? Pro Objekt konfigurierbar.
+              </p>
+              
+              <ul className="individuell-list">
+                <li>
+                  <Sliders size={20} />
+                  <div>
+                    <strong>Pro Objekt konfigurierbar</strong>
+                    <span>Unterschiedliche Einstellungen für Hotel, Küche, Lager</span>
+                  </div>
+                </li>
+                <li>
+                  <Camera size={20} />
+                  <div>
+                    <strong>Foto-Pflicht steuerbar</strong>
+                    <span>Vorher-Foto? Nachher-Foto? Köder-Foto? Du bestimmst.</span>
+                  </div>
+                </li>
+                <li>
+                  <Users size={20} />
+                  <div>
+                    <strong>Partner-Accounts</strong>
+                    <span>Gib deinen Kunden Lesezugriff auf ihre Objekte</span>
+                  </div>
+                </li>
+                <li>
+                  <Settings size={20} />
+                  <div>
+                    <strong>Immer mehr Features</strong>
+                    <span>Wir entwickeln ständig weiter – nach deinem Feedback</span>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <div className="individuell-visual">
+              <div className="config-card">
+                <div className="config-header">
+                  <Settings size={18} />
+                  Objekt-Einstellungen
+                </div>
+                <div className="config-item">
+                  <span>Foto vor Kontrolle</span>
+                  <div className="toggle active"></div>
+                </div>
+                <div className="config-item">
+                  <span>Foto nach Kontrolle</span>
+                  <div className="toggle active"></div>
+                </div>
+                <div className="config-item">
+                  <span>Köder-Status erfassen</span>
+                  <div className="toggle active"></div>
+                </div>
+                <div className="config-item">
+                  <span>GPS-Position speichern</span>
+                  <div className="toggle"></div>
+                </div>
+                <div className="config-item">
+                  <span>Kommentar-Pflicht</span>
+                  <div className="toggle"></div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {/* ============================================
-          SOCIAL PROOF
+          PARTNER ACCOUNT ERKLÄRUNG
           ============================================ */}
-      <section className="testimonials">
+      <section className="partner-section">
         <div className="section-container">
-          <div className="testimonial-card">
-            <div className="stars">
-              {[...Array(5)].map((_, i) => <Star key={i} size={20} fill="#eab308" color="#eab308" />)}
+          <div className="partner-card">
+            <div className="partner-icon">
+              <HandshakeIcon size={32} />
             </div>
-            <blockquote>
-              "Seit wir TrapMap nutzen, sparen wir pro Standort 2 Stunden pro Woche. 
-              Die Audits laufen jetzt problemlos durch."
-            </blockquote>
-            <div className="testimonial-author">
-              <div className="author-avatar">MK</div>
-              <div>
-                <strong>Michael Krause</strong>
-                <span>Betriebsleiter, FoodCorp GmbH</span>
-              </div>
+            <div className="partner-content">
+              <h3>Was ist ein Partner-Account?</h3>
+              <p>
+                Mit Partner-Accounts gibst du deinen <strong>Kunden direkten Lesezugriff</strong> auf ihre Objekte. 
+                Sie können Status, Reports und Historie einsehen – ohne dass du PDFs verschicken musst.
+              </p>
+              <p>
+                Perfekt für Kunden die regelmäßig Nachweise brauchen (Hotels, Lebensmittelindustrie, etc.). 
+                Du sparst Zeit, der Kunde hat immer Zugriff.
+              </p>
             </div>
           </div>
         </div>
@@ -240,37 +313,62 @@ export default function LandingPage() {
         <div className="section-container">
           <div className="section-header">
             <span className="section-badge">Preise</span>
-            <h2>Einfache, faire Preise</h2>
+            <h2>Faire Preise für jede Größe</h2>
             <p>Keine versteckten Kosten. Monatlich kündbar.</p>
+          </div>
+
+          <div className="beta-banner">
+            <Sparkles size={20} />
+            <div>
+              <strong>Bis 01.02.2026 kostenlos testen!</strong>
+              <span>Melde dich an, probier es aus, gib uns Feedback. Wir passen TrapMap an deine Bedürfnisse an.</span>
+            </div>
           </div>
 
           <div className="pricing-grid">
             <PricingCard
-              name="Starter"
-              price="49"
-              description="Für kleine Betriebe"
+              name="Einzelkämpfer"
+              price="25"
+              description="Für Solo-Schädlingsbekämpfer"
               features={[
-                "Bis 100 Boxen",
-                "1 Standort",
-                "2 Benutzer",
+                "1 Admin-Account",
+                "3 Objekte",
+                "50 Boxen",
                 "QR-Code Scanning",
-                "Basis-Berichte",
+                "Digitale Lagepläne",
+                "Automatische Reports",
                 "E-Mail Support"
               ]}
+              note="Kein Partner-Account"
             />
             <PricingCard
-              name="Professional"
-              price="149"
-              description="Für wachsende Unternehmen"
+              name="3er Flat"
+              price="65"
+              description="Für kleine Teams"
               popular
               features={[
-                "Bis 500 Boxen",
-                "5 Standorte",
-                "10 Benutzer",
-                "Digitale Lagepläne",
-                "Erweiterte Berichte",
-                "Priority Support",
-                "API-Zugang"
+                "1 Admin + 2 Techniker",
+                "5 Objekte",
+                "150 Boxen",
+                "Alle Features",
+                "Foto-Dokumentation",
+                "Intervall-Überwachung",
+                "Priority Support"
+              ]}
+              note="Kein Partner-Account"
+            />
+            <PricingCard
+              name="10er Runde"
+              price="190"
+              description="Für wachsende Betriebe"
+              features={[
+                "10 User (Admin/Techniker)",
+                "20 Objekte",
+                "650 Boxen",
+                "Alle Features",
+                "2 Partner-Accounts",
+                "Individuelle Anpassungen",
+                "Telefon-Support"
               ]}
             />
             <PricingCard
@@ -278,44 +376,53 @@ export default function LandingPage() {
               price="Individuell"
               description="Für große Organisationen"
               features={[
+                "Unbegrenzte User",
+                "Unbegrenzte Objekte",
                 "Unbegrenzte Boxen",
-                "Unbegrenzte Standorte",
-                "Unbegrenzte Benutzer",
-                "White-Label Option",
-                "Dedicated Support",
-                "SLA-Garantie",
-                "On-Premise möglich"
+                "Unbegrenzte Partner",
+                "Eigenes Branding möglich",
+                "Dedizierter Ansprechpartner",
+                "SLA-Garantie"
               ]}
               enterprise
             />
+          </div>
+
+          <div className="pricing-cta">
+            <Phone size={18} />
+            <span>
+              Fragen zu den Paketen? Ruf einfach an: <a href="tel:+4915202637089">0152 / 026 370 89</a>
+            </span>
           </div>
         </div>
       </section>
 
       {/* ============================================
-          CTA / DEMO
+          CTA / TESTEN
           ============================================ */}
-      <section id="demo" className="cta-section">
+      <section id="testen" className="cta-section">
         <div className="section-container">
           <div className="cta-card">
-            <h2>Bereit für digitales Monitoring?</h2>
+            <h2>Bereit für papierloses Monitoring?</h2>
             <p>
-              Starten Sie jetzt mit einer kostenlosen Demo. 
-              Wir zeigen Ihnen TrapMap in 15 Minuten.
+              Teste TrapMap kostenlos bis Februar 2026. Kein Risiko, keine Kreditkarte. 
+              Einfach anmelden und loslegen.
             </p>
 
             <form className="demo-form" onSubmit={(e) => e.preventDefault()}>
+              <input type="text" placeholder="Dein Name" required />
               <input type="text" placeholder="Firma" required />
               <input type="email" placeholder="E-Mail" required />
               <input type="tel" placeholder="Telefon (optional)" />
+              <textarea placeholder="Was erwartest du von TrapMap? (optional)" rows={3}></textarea>
               <button type="submit" className="btn-primary">
-                Demo anfragen
+                Kostenlosen Zugang anfragen
                 <ArrowRight size={18} />
               </button>
             </form>
 
             <p className="cta-note">
-              Keine Kreditkarte erforderlich. Antwort innerhalb von 24 Stunden.
+              Wir melden uns innerhalb von 24 Stunden bei dir.
             </p>
           </div>
         </div>
@@ -332,6 +439,7 @@ export default function LandingPage() {
               <span className="brand-map">Map</span>
             </div>
             <p>Digitales Schädlingsmonitoring für Profis.</p>
+            <p className="footer-tagline">Nie wieder Zettelwirtschaft.</p>
           </div>
 
           <div className="footer-links">
@@ -339,21 +447,31 @@ export default function LandingPage() {
               <h4>Produkt</h4>
               <a href="#features">Features</a>
               <a href="#preise">Preise</a>
-              <a href="#demo">Demo</a>
+              <a href="#testen">Kostenlos testen</a>
             </div>
             <div className="footer-col">
               <h4>Rechtliches</h4>
-              <a href="/impressum">Impressum</a>
-              <a href="/datenschutz">Datenschutz</a>
-              <a href="/agb">AGB</a>
+              <Link to="/impressum">Impressum</Link>
+              <Link to="/datenschutz">Datenschutz</Link>
+              <Link to="/agb">AGB</Link>
+              <button 
+                onClick={() => {
+                  localStorage.removeItem("trapmap_cookie_consent");
+                  localStorage.removeItem("trapmap_cookie_settings");
+                  window.location.reload();
+                }}
+                className="footer-cookie-btn"
+              >
+                Cookie-Einstellungen
+              </button>
             </div>
             <div className="footer-col">
               <h4>Kontakt</h4>
               <a href="mailto:info@trap-map.de">
                 <Mail size={16} /> info@trap-map.de
               </a>
-              <a href="tel:+4940123456">
-                <Phone size={16} /> +49 40 123 456
+              <a href="tel:+4915202637089">
+                <Phone size={16} /> 0152 / 026 370 89
               </a>
             </div>
           </div>
@@ -363,21 +481,6 @@ export default function LandingPage() {
           <p>© 2025 TrapMap. Alle Rechte vorbehalten.</p>
         </div>
       </footer>
-
-      {/* Video Modal */}
-      {showDemo && (
-        <div className="video-modal" onClick={() => setShowDemo(false)}>
-          <div className="video-content" onClick={e => e.stopPropagation()}>
-            <button className="video-close" onClick={() => setShowDemo(false)}>
-              <X size={24} />
-            </button>
-            <div className="video-placeholder">
-              <Play size={64} />
-              <p>Demo Video kommt bald!</p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -398,16 +501,7 @@ function FeatureCard({ icon: Icon, title, description }) {
   );
 }
 
-function BranchenCard({ icon: Icon, name }) {
-  return (
-    <div className="branchen-card">
-      <Icon size={32} />
-      <span>{name}</span>
-    </div>
-  );
-}
-
-function PricingCard({ name, price, description, features, popular, enterprise }) {
+function PricingCard({ name, price, description, features, popular, enterprise, note }) {
   return (
     <div className={`pricing-card ${popular ? 'popular' : ''}`}>
       {popular && <div className="popular-badge">Beliebt</div>}
@@ -431,8 +525,9 @@ function PricingCard({ name, price, description, features, popular, enterprise }
           </li>
         ))}
       </ul>
-      <a href="#demo" className={`pricing-btn ${popular ? 'primary' : ''}`}>
-        {enterprise ? 'Kontakt aufnehmen' : 'Jetzt starten'}
+      {note && <p className="pricing-note-small">{note}</p>}
+      <a href="#testen" className={`pricing-btn ${popular ? 'primary' : ''}`}>
+        {enterprise ? 'Kontakt aufnehmen' : 'Kostenlos testen'}
       </a>
     </div>
   );
