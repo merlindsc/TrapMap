@@ -1,62 +1,57 @@
-// ============================================
-// BOXTYPES CONTROLLER
-// ============================================
+/* ============================================================
+   TRAPMAP - BOXTYPES CONTROLLER
+   API-Endpunkte für Box-Typen
+   
+   Pfad: backend/src/controllers/boxtypes.controller.js
+   ============================================================ */
 
-const supabase = require('../config/supabase');
+const supabase = require("../config/supabase");
 
-exports.getAllBoxtypes = async (req, res, next) => {
+// GET /api/boxtypes - Alle Box-Typen der Organisation
+exports.getAll = async (req, res) => {
   try {
-    const { data, error } = await supabase.from('box_types').select('*').order('name', { ascending: true });
-    if (error) throw error;
-    res.json({ boxtypes: data || [], count: data?.length || 0 });
-  } catch (error) {
-    next(error);
+    const orgId = req.user.organisation_id;
+    
+    // Box-Typen aus der Datenbank laden
+    const { data, error } = await supabase
+      .from("box_types")
+      .select("id, name, category, description, border_color, requires_symbol, control_interval_days")
+      .or(`organisation_id.eq.${orgId},organisation_id.is.null`) // Org-spezifische + globale Typen
+      .order("name");
+    
+    if (error) {
+      console.error("BoxTypes laden fehlgeschlagen:", error);
+      return res.status(500).json({ error: error.message });
+    }
+    
+    console.log(`✅ ${data?.length || 0} BoxTypes geladen für Org ${orgId}`);
+    res.json(data || []);
+    
+  } catch (err) {
+    console.error("BoxTypes Controller Error:", err);
+    res.status(500).json({ error: err.message });
   }
 };
 
-exports.getBoxtypeById = async (req, res, next) => {
+// GET /api/boxtypes/:id - Einzelner Box-Typ
+exports.getById = async (req, res) => {
   try {
-    const { data, error } = await supabase.from('box_types').select('*').eq('id', req.params.id).single();
-    if (error) throw error;
-    if (!data) return res.status(404).json({ error: 'Boxtype not found' });
-    res.json({ boxtype: data });
-  } catch (error) {
-    next(error);
-  }
-};
-
-exports.createBoxtype = async (req, res, next) => {
-  try {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
-    const { name, description, icon, default_settings } = req.body;
-    if (!name) return res.status(400).json({ error: 'name required' });
-    const { data, error } = await supabase.from('box_types').insert({ name, description, icon, default_settings, created_by: req.user.id }).select().single();
-    if (error) throw error;
-    res.status(201).json({ message: 'Boxtype created', boxtype: data });
-  } catch (error) {
-    next(error);
-  }
-};
-
-exports.updateBoxtype = async (req, res, next) => {
-  try {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
-    const { name, description, icon, default_settings } = req.body;
-    const { data, error } = await supabase.from('box_types').update({ name, description, icon, default_settings }).eq('id', req.params.id).select().single();
-    if (error) throw error;
-    res.json({ message: 'Boxtype updated', boxtype: data });
-  } catch (error) {
-    next(error);
-  }
-};
-
-exports.deleteBoxtype = async (req, res, next) => {
-  try {
-    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
-    const { error } = await supabase.from('box_types').delete().eq('id', req.params.id);
-    if (error) throw error;
-    res.json({ message: 'Boxtype deleted' });
-  } catch (error) {
-    next(error);
+    const { id } = req.params;
+    
+    const { data, error } = await supabase
+      .from("box_types")
+      .select("*")
+      .eq("id", id)
+      .single();
+    
+    if (error) {
+      return res.status(404).json({ error: "Box-Typ nicht gefunden" });
+    }
+    
+    res.json(data);
+    
+  } catch (err) {
+    console.error("BoxType getById Error:", err);
+    res.status(500).json({ error: err.message });
   }
 };
