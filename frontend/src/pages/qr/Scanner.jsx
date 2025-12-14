@@ -805,6 +805,22 @@ export default function Scanner() {
       await stopScanner(true);
       // Kleiner Delay damit die Kamera freigegeben wird
       await new Promise(r => setTimeout(r, 300));
+      // Replace the DOM element to ensure Html5Qrcode mounts into a fresh node.
+      try {
+        const oldEl = document.getElementById('qr-reader');
+        if (oldEl && oldEl.parentNode) {
+          const parent = oldEl.parentNode;
+          const newEl = document.createElement('div');
+          newEl.id = 'qr-reader';
+          newEl.className = oldEl.className || 'w-full';
+          parent.replaceChild(newEl, oldEl);
+          // update ref used by React (best-effort)
+          try { scannerRef.current = newEl; } catch (e) { /* ignore */ }
+        }
+      } catch (domErr) {
+        console.error('refreshScannerOnce: DOM replace failed', domErr);
+      }
+
       if (currentCamera) {
         // recreate instance via startScanner
         await startScanner(currentCamera.id);
