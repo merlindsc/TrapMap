@@ -1,6 +1,6 @@
 // ============================================
-// QR CONTROLLER - KOMPLETT
-// Aktualisiert: generateCodes erstellt automatisch Boxen
+// QR CONTROLLER - KOMPLETT FIXED
+// checkCode gibt FLACHE Datenstruktur zurück!
 // ============================================
 
 const qrService = require("../services/qr.service");
@@ -29,7 +29,10 @@ exports.generate = async (req, res) => {
   }
 };
 
+// ============================================
 // GET /api/qr/check/:code - Code prüfen
+// WICHTIG: Gibt FLACHE Struktur zurück für Scanner!
+// ============================================
 exports.check = async (req, res) => {
   try {
     const code = req.params.code;
@@ -37,13 +40,81 @@ exports.check = async (req, res) => {
       return res.status(400).json({ error: "Code fehlt" });
     }
 
+    console.log(`🔍 checkCode: ${code}`);
+
     const result = await qrService.checkCode(code);
 
+    // Code nicht in DB
     if (!result) {
-      return res.status(404).json({ message: "QR does not exist" });
+      console.log(`❌ Code nicht gefunden: ${code}`);
+      return res.json({ 
+        found: false,
+        box_id: null,
+        object_id: null
+      });
     }
 
-    res.json(result);
+    // Box-Daten extrahieren
+    const box = result.boxes;
+
+    // Code existiert aber keine Box verknüpft
+    if (!box) {
+      console.log(`⚠️ Code ohne Box: ${code}`);
+      return res.json({
+        found: true,
+        qr_code: result.id,
+        box_id: null,
+        object_id: null
+      });
+    }
+
+    // FLACHE Response für Scanner!
+    const response = {
+      found: true,
+      
+      // QR-Code Info
+      qr_code: result.id,
+      sequence_number: result.sequence_number,
+      
+      // Box ID
+      box_id: box.id,
+      
+      // Box Nummer/Name
+      number: box.number,
+      display_number: box.number,
+      name: box.name || null,
+      
+      // Box Status
+      status: box.status,
+      position_type: box.position_type,
+      current_status: box.current_status,
+      
+      // WICHTIG: Object flach!
+      object_id: box.object_id || null,
+      object_name: box.objects?.name || null,
+      
+      // Box Type flach
+      box_type_id: box.box_type_id || null,
+      box_type_name: box.box_types?.name || null,
+      
+      // GPS Position
+      lat: box.lat || null,
+      lng: box.lng || null,
+      
+      // Floorplan Position
+      floor_plan_id: box.floor_plan_id || null,
+      pos_x: box.pos_x || null,
+      pos_y: box.pos_y || null,
+      grid_position: box.grid_position || null,
+      
+      // Sonstiges
+      notes: box.notes || null,
+      control_interval_days: box.control_interval_days || 30
+    };
+
+    console.log(`✅ Code gefunden: box_id=${response.box_id}, object_id=${response.object_id}, object_name=${response.object_name}`);
+    
+    res.json(response);
   } catch (err) {
     console.error("QR check error:", err);
     res.status(500).json({ error: err.message });
@@ -101,7 +172,11 @@ exports.assignToObject = async (req, res) => {
       return res.status(400).json({ error: "box_id und object_id erforderlich" });
     }
 
+    console.log(`📦 assignToObject: box=${box_id}, object=${object_id}, org=${org}`);
+
     const result = await qrService.assignToObject(box_id, object_id, org);
+    
+    console.log(`✅ Box ${box_id} zu Objekt ${object_id} zugewiesen`);
     res.json(result);
   } catch (err) {
     console.error("QR assignToObject error:", err);

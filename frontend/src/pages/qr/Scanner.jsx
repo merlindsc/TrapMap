@@ -284,13 +284,15 @@ export default function Scanner() {
 
       // Code nicht in DB
       if (!res.data || !res.data.box_id) {
+        debug("→ Code nicht in DB, weiter zu assign-code");
         navigate(`/qr/assign-code?code=${code}`);
         return;
       }
 
-      // Box im Pool
+      // Box im Pool (kein Objekt)
       if (!res.data.object_id) {
-        navigate(`/qr/assign-object?code=${code}&boxId=${res.data.box_id}`);
+        debug(`→ Box ${res.data.box_id} ohne Objekt, weiter zu assign-object`);
+        navigate(`/qr/assign-object?code=${code}&box_id=${res.data.box_id}`);
         return;
       }
 

@@ -12,7 +12,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useAuth } from "../../context/AuthContext";
-import { useParams, useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { 
   Building2, MapPin, ChevronRight, Package, ArrowLeft,
   Navigation, Layers, CheckCircle
@@ -21,8 +21,9 @@ import {
 const API = import.meta.env.VITE_API_URL;
 
 export default function AssignObject() {
-  const { code } = useParams();
+  // Parameter aus Query-String (nicht URL-Parameter!)
   const [searchParams] = useSearchParams();
+  const code = searchParams.get("code");
   const boxId = searchParams.get("box_id");
   
   const { token } = useAuth();
