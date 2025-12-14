@@ -120,10 +120,19 @@ export default function Scanner() {
 
   const loadBoxTypes = async () => {
     try {
-      const res = await axios.get(`${API}/box-types`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // Versuche beide Endpunkte
+      let res;
+      try {
+        res = await axios.get(`${API}/boxtypes`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (e) {
+        res = await axios.get(`${API}/box-types`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
       setBoxTypes(Array.isArray(res.data) ? res.data : res.data?.data || []);
+      console.log("✅ BoxTypes geladen:", res.data?.length);
     } catch (err) {
       console.error("Load box types error:", err);
     }

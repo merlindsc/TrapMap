@@ -54,7 +54,7 @@ const getShortQr = (box) => {
 
 export default function BoxEditDialog({
   box,
-  boxTypes = [],
+  boxTypes: propBoxTypes = [],
   onClose,
   onSave,
   onAdjustPosition,
@@ -62,6 +62,50 @@ export default function BoxEditDialog({
   isFirstSetup = false
 }) {
   const token = localStorage.getItem("trapmap_token");
+  
+  // BoxTypes State - selbst laden wenn keine übergeben
+  const [boxTypes, setBoxTypes] = useState(propBoxTypes);
+  const [boxTypesLoading, setBoxTypesLoading] = useState(false);
+
+  // BoxTypes laden wenn leer
+  useEffect(() => {
+    if (boxTypes.length === 0 && !boxTypesLoading) {
+      loadBoxTypes();
+    }
+  }, []);
+
+  // Prop-Update übernehmen
+  useEffect(() => {
+    if (propBoxTypes.length > 0) {
+      setBoxTypes(propBoxTypes);
+    }
+  }, [propBoxTypes]);
+
+  const loadBoxTypes = async () => {
+    setBoxTypesLoading(true);
+    try {
+      // Beide Endpunkte versuchen
+      let res;
+      try {
+        res = await fetch(`${API}/boxtypes`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (e) {
+        res = await fetch(`${API}/box-types`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+      
+      if (res.ok) {
+        const data = await res.json();
+        setBoxTypes(Array.isArray(data) ? data : data?.data || []);
+        console.log("✅ BoxTypes geladen:", data.length || data?.data?.length);
+      }
+    } catch (err) {
+      console.error("BoxTypes laden fehlgeschlagen:", err);
+    }
+    setBoxTypesLoading(false);
+  };
 
   // Required Fields
   const [requiredFields, setRequiredFields] = useState({
