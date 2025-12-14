@@ -71,7 +71,12 @@ export default function Scanner() {
   // Box State
   const [currentBox, setCurrentBox] = useState(null);
   const [boxLoading, setBoxLoading] = useState(false);
-  const [processingCode, setProcessingCode] = useState(false); // NEU: Lock gegen Flackern
+  const [processingCode, setProcessingCode] = useState(false); // Lock gegen Flackern
+  
+  // COOLDOWN: Verhindert dass gleicher Code sofort wieder erkannt wird
+  const lastScannedCodeRef = useRef(null);
+  const lastScanTimeRef = useRef(0);
+  const SCAN_COOLDOWN_MS = 3000; // 3 Sekunden Cooldown für gleichen Code
 
   // View States
   const [showScanDialog, setShowScanDialog] = useState(false);
@@ -258,9 +263,30 @@ export default function Scanner() {
     // WICHTIG: Lock prüfen - verhindert Flackern!
     if (!decodedText || processingCode) return;
     
+    // URL-Format prüfen und Code extrahieren
+    let code = decodedText;
+    if (decodedText.includes("trap-map.de/s/")) {
+      code = decodedText.split("/s/")[1];
+    }
+    
+    // COOLDOWN CHECK: Gleicher Code innerhalb von 3 Sekunden?
+    const now = Date.now();
+    const timeSinceLastScan = now - lastScanTimeRef.current;
+    
+    if (code === lastScannedCodeRef.current && timeSinceLastScan < SCAN_COOLDOWN_MS) {
+      console.log(`⏳ Cooldown aktiv: ${code} (noch ${Math.round((SCAN_COOLDOWN_MS - timeSinceLastScan) / 1000)}s)`);
+      return; // Gleicher Code zu schnell - ignorieren!
+    }
+    
     // Lock setzen SOFORT
     setProcessingCode(true);
     setScannedCode(decodedText);
+    
+    // Letzten Code und Zeit speichern
+    lastScannedCodeRef.current = code;
+    lastScanTimeRef.current = now;
+    
+    console.log(`📱 Neuer Scan: ${code}`);
     
     // Scanner SOFORT stoppen
     await stopScanner();
@@ -268,12 +294,6 @@ export default function Scanner() {
     // Vibration Feedback
     if (navigator.vibrate) {
       navigator.vibrate([100, 50, 100]);
-    }
-
-    // URL-Format prüfen
-    let code = decodedText;
-    if (decodedText.includes("trap-map.de/s/")) {
-      code = decodedText.split("/s/")[1];
     }
 
     await handleCodeCheck(code);
@@ -654,6 +674,7 @@ export default function Scanner() {
   // Scanner zurücksetzen und neu starten
   const resetScanner = async () => {
     console.log("🔄 resetScanner called");
+    console.log(`🔒 Cooldown aktiv für: ${lastScannedCodeRef.current} (${SCAN_COOLDOWN_MS}ms)`);
     
     // Erst alle States zurücksetzen
     setScannedCode(null);
@@ -667,6 +688,9 @@ export default function Scanner() {
     setPendingPlacement(null);
     setError("");
     setProcessingCode(false); // Lock zurücksetzen!
+    
+    // WICHTIG: lastScannedCodeRef und lastScanTimeRef NICHT zurücksetzen!
+    // Der Cooldown verhindert dass gleicher Code sofort wieder erkannt wird
     
     // WICHTIG: Kurzer Timeout damit DOM sich aktualisieren kann
     // bevor wir den Scanner wieder starten
