@@ -56,6 +56,7 @@ export default function Scanner() {
   const [error, setError] = useState("");
   const [cameras, setCameras] = useState([]);
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
+  const [scannedCode, setScannedCode] = useState(null); // DEBUG: Zeigt gescannten Code
   
   // Torch State
   const [torchOn, setTorchOn] = useState(false);
@@ -157,23 +158,25 @@ export default function Scanner() {
     if (!codeReaderRef.current || !videoRef.current) return;
     
     try {
-      console.log("🎥 Starte Scanner");
+      console.log("🎥 Starte Scanner mit Device:", deviceId);
       isPausedRef.current = false;
       processingRef.current = false;
       
-      await codeReaderRef.current.decodeFromVideoDevice(
+      // ZXing macht alles selbst - einfacher und zuverlässiger
+      const controls = await codeReaderRef.current.decodeFromVideoDevice(
         deviceId,
         videoRef.current,
         (result, error) => {
           if (isPausedRef.current) return;
           if (processingRef.current) return;
           if (result) {
+            console.log("📸 QR erkannt:", result.getText());
             handleScan(result.getText());
           }
         }
       );
       
-      // Stream für Torch
+      // Stream für Torch speichern
       if (videoRef.current.srcObject) {
         streamRef.current = videoRef.current.srcObject;
         checkTorchSupport();
@@ -185,7 +188,7 @@ export default function Scanner() {
       
     } catch (err) {
       console.error("Start error:", err);
-      setError("Scanner konnte nicht gestartet werden");
+      setError("Scanner konnte nicht gestartet werden: " + err.message);
     }
   };
 
@@ -249,6 +252,7 @@ export default function Scanner() {
     isPausedRef.current = true;
     processingRef.current = true;
     lastScannedCodeRef.current = code;
+    setScannedCode(code); // Für Debug-Anzeige
     
     // Vibration
     if (navigator.vibrate) {
@@ -357,10 +361,27 @@ export default function Scanner() {
       setShowScanDialog(true);
 
     } catch (err) {
-      console.error("Check error:", err);
-      setError("Fehler: " + (err.response?.data?.message || err.message));
+      console.error("❌ Check error:", err);
+      console.error("Response:", err.response?.data);
+      
       setBoxLoading(false);
-      resetScanner();
+      
+      // Bei 401 → Token ungültig
+      if (err.response?.status === 401) {
+        setError("Session abgelaufen - bitte neu einloggen");
+        return;
+      }
+      
+      // Sonstiger Fehler → Anzeigen, NICHT zurücksetzen!
+      setError("Fehler: " + (err.response?.data?.message || err.message));
+      
+      // Scanner nach 3 Sekunden wieder freigeben
+      setTimeout(() => {
+        lastScannedCodeRef.current = null;
+        processingRef.current = false;
+        isPausedRef.current = false;
+        setError("");
+      }, 3000);
     }
   };
 
@@ -380,6 +401,7 @@ export default function Scanner() {
     setCurrentGPS(null);
     setError("");
     setBoxLoading(false);
+    setScannedCode(null);
     
     // Cooldown dann entsperren
     setTimeout(() => {
@@ -505,10 +527,17 @@ export default function Scanner() {
     setCurrentCameraIndex(nextIndex);
     setTorchOn(false);
     
-    if (codeReaderRef.current) {
-      codeReaderRef.current.reset();
-      await startScanning(cameras[nextIndex].deviceId);
+    // Aktuellen Stream stoppen
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
     }
+    
+    if (codeReaderRef.current) {
+      try { codeReaderRef.current.reset(); } catch (e) {}
+    }
+    
+    // Neuen Stream starten
+    await startScanning(cameras[nextIndex].deviceId);
   };
 
   // ============================================
@@ -730,6 +759,20 @@ export default function Scanner() {
           <div className="flex flex-col items-center justify-center py-20">
             <div className="animate-spin w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full mb-4" />
             <p className="text-gray-400">Box wird geladen...</p>
+            {scannedCode && (
+              <p className="text-xs text-gray-500 mt-2 font-mono">Code: {scannedCode}</p>
+            )}
+          </div>
+        )}
+
+        {/* DEBUG INFO */}
+        {!boxLoading && scannedCode && !hasActiveDialog && (
+          <div className="m-4 p-3 bg-yellow-900/30 border border-yellow-500/50 rounded-lg text-xs">
+            <p className="text-yellow-400 font-semibold mb-1">🔍 Debug Info:</p>
+            <p className="text-yellow-300 font-mono">Gescannt: {scannedCode}</p>
+            <p className="text-yellow-300">currentBox: {currentBox ? `ID ${currentBox.id}` : 'null'}</p>
+            <p className="text-yellow-300">showScanDialog: {showScanDialog ? 'true' : 'false'}</p>
+            <p className="text-yellow-300">error: {error || 'none'}</p>
           </div>
         )}
 
