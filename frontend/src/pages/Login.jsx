@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Eye, EyeOff, Loader, Mail, Lock, AlertCircle, Check, ArrowLeft } from "lucide-react";
+import trapMapLogo from "../assets/trapmap-logo-150.png";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -210,7 +211,7 @@ export default function Login() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0d0d1a] via-[#1a1a2e] to-[#0d0d1a] px-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <img src="/logo.png" alt="TrapMap" className="h-20 mx-auto mb-4" />
+            <img src={trapMapLogo} alt="TrapMap" className="h-24 mx-auto mb-4" />
             <p className="text-gray-400">Schädlingsüberwachung</p>
           </div>
 
@@ -294,7 +295,7 @@ export default function Login() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0d0d1a] via-[#1a1a2e] to-[#0d0d1a] px-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <img src="/logo.png" alt="TrapMap" className="h-20 mx-auto mb-4" />
+            <img src={trapMapLogo} alt="TrapMap" className="h-24 mx-auto mb-4" />
           </div>
 
           <div className="bg-[#1a1a2e]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
@@ -362,7 +363,7 @@ export default function Login() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0d0d1a] via-[#1a1a2e] to-[#0d0d1a] px-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <img src="/logo.png" alt="TrapMap" className="h-20 mx-auto mb-4" />
+            <img src={trapMapLogo} alt="TrapMap" className="h-24 mx-auto mb-4" />
           </div>
 
           <div className="bg-[#1a1a2e]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
@@ -455,7 +456,7 @@ export default function Login() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0d0d1a] via-[#1a1a2e] to-[#0d0d1a] px-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <img src="/logo.png" alt="TrapMap" className="h-20 mx-auto mb-4" />
+            <img src={trapMapLogo} alt="TrapMap" className="h-24 mx-auto mb-4" />
           </div>
 
           <div className="bg-[#1a1a2e]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">

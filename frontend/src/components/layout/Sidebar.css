@@ -1,6 +1,6 @@
 /* ============================================================
    TRAPMAP - SIDEBAR CSS (FINAL)
-   Mit Theme-Toggle und responsive Design
+   Mit Theme-Toggle, Logo-Bild und responsive Design
    ============================================================ */
 
 /* ============================================================
@@ -43,6 +43,13 @@
   text-decoration: none;
 }
 
+/* Logo Bild */
+.sidebar-logo-img {
+  height: 110px;
+  width: auto;
+  object-fit: contain;
+}
+
 .sidebar-logo-text {
   display: flex;
   font-size: 22px;
@@ -67,7 +74,7 @@
   align-items: center;
   justify-content: center;
   width: 44px;
-  height: 44px;
+  height: 94px;
   background: var(--sidebar-item-hover, rgba(255, 255, 255, 0.05));
   border: none;
   border-radius: 10px;
@@ -156,7 +163,7 @@
   font-size: 15px;
   font-weight: 500;
   white-space: nowrap;
-  min-height: 44px;
+  min-height: 94px;
   border-left: 3px solid transparent;
 }
 
@@ -276,8 +283,12 @@
     width: 280px;
   }
   
+  .sidebar-logo-img {
+    height: 94px;
+  }
+  
   .sidebar-nav-item {
     padding: 14px 16px;
-    min-height: 48px;
+    min-height: 110px;
   }
 }

@@ -1,6 +1,6 @@
 /* ============================================================
    TRAPMAP - SIDEBAR (FINAL VERSION)
-   Mit funktionierendem Theme-Toggle
+   Mit funktionierendem Theme-Toggle und Logo
    ============================================================ */
 
 import React from 'react';
@@ -8,6 +8,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from './DashboardLayout';
 import './Sidebar.css';
+import trapMapLogo from '../../assets/trapmap-logo-150.png';
 
 import {
   HomeIcon,
@@ -138,14 +139,11 @@ export default function Sidebar({ isMobile, onClose }) {
 
   return (
     <div className="sidebar">
-      {/* Header */}
+      {/* Header mit Logo */}
       <div className="sidebar-header">
         <div className="sidebar-header-row">
           <Link to="/dashboard" className="sidebar-brand">
-            <div className="sidebar-logo-text">
-              <span className="logo-trap">Trap</span>
-              <span className="logo-map">Map</span>
-            </div>
+            <img src={trapMapLogo} alt="TrapMap" className="sidebar-logo-img" />
           </Link>
 
           {isMobile && (

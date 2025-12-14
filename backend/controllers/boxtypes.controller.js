@@ -5,7 +5,7 @@
    Pfad: backend/src/controllers/boxtypes.controller.js
    ============================================================ */
 
-const supabase = require("../config/supabase");
+const { supabase } = require("../config/supabase");
 
 // GET /api/boxtypes - Alle Box-Typen der Organisation
 exports.getAll = async (req, res) => {
@@ -15,7 +15,7 @@ exports.getAll = async (req, res) => {
     // Box-Typen aus der Datenbank laden
     const { data, error } = await supabase
       .from("box_types")
-      .select("id, name, category, description, border_color, requires_symbol, control_interval_days")
+      .select("*")
       .or(`organisation_id.eq.${orgId},organisation_id.is.null`) // Org-spezifische + globale Typen
       .order("name");
     

@@ -1,7 +1,7 @@
 /* ============================================================
    TRAPMAP - DASHBOARD LAYOUT (FIXED VERSION)
    - Dark/Light Mode mit CSS-Variablen (KEIN hardcoded!)
-   - Moderne Sidebar
+   - Moderne Sidebar mit Logo
    - Mobile-optimiert
    ============================================================ */
 
@@ -12,6 +12,7 @@ import { Bars3Icon } from "@heroicons/react/24/outline";
 import { LogOut } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import "./DashboardLayout.css";
+import trapMapLogo from "../../assets/trapmap-logo-150.png";
 
 // ============================================================
 // THEME CONTEXT
@@ -131,7 +132,7 @@ export default function DashboardLayout({ children }) {
 
       {/* Main Content */}
       <div className="main-container">
-        {/* Mobile Header */}
+        {/* Mobile Header mit Logo */}
         {isMobile && (
           <header className="mobile-header">
             <button 
@@ -140,22 +141,18 @@ export default function DashboardLayout({ children }) {
             >
               <Bars3Icon className="hamburger-icon" />
             </button>
-            <div className="mobile-logo">
-              <span className="logo-trap">Trap</span>
-              <span className="logo-map">Map</span>
-            </div>
+            <img src={trapMapLogo} alt="TrapMap" className="mobile-header-logo" />
             <div className="spacer" />
           </header>
         )}
 
-        {/* Desktop Navbar */}
+        {/* Desktop Navbar mit Logo */}
         {!isMobile && (
           <header className="desktop-navbar">
-            <h1 className="navbar-title">
-              <span className="title-trap">Trap</span>
-              <span className="title-map">Map</span>
+            <div className="navbar-left">
+              <img src={trapMapLogo} alt="TrapMap" className="navbar-logo" />
               <span className="title-dashboard">Dashboard</span>
-            </h1>
+            </div>
 
             <div className="navbar-right">
               {user && (

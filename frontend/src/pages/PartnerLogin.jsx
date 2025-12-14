@@ -6,6 +6,7 @@
 import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { QrCode, Mail, Lock, LogIn, Loader, AlertCircle, Building2 } from "lucide-react";
+import trapMapLogo from "../assets/trapmap-logo-150.png";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -61,11 +62,10 @@ export default function PartnerLogin() {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        {/* Header */}
+        {/* Header mit Logo */}
         <div style={styles.header}>
           <div style={styles.logoRow}>
-            <QrCode size={40} color="#6366f1" />
-            <h1 style={styles.title}>TrapMap</h1>
+            <img src={trapMapLogo} alt="TrapMap" style={styles.logo} />
           </div>
           <div style={styles.badge}>
             <Building2 size={16} />
@@ -207,13 +207,11 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: "12px",
-    marginBottom: "12px"
+    marginBottom: "16px"
   },
-  title: {
-    fontSize: "28px",
-    fontWeight: "bold",
-    margin: 0
+  logo: {
+    height: "80px",
+    width: "auto"
   },
   badge: {
     display: "inline-flex",

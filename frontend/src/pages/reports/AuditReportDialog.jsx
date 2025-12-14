@@ -1,198 +1,132 @@
-// ============================================
-// AUDIT REPORT DIALOG - MIT BILD-UPLOAD
-// Abschnitt-Auswahl + Custom Fotos
-// ============================================
+/* ============================================================
+   TRAPMAP — LOGIN PAGE
+   Mit Passwort vergessen und Passwort-Ändern-Zwang
+   ============================================================ */
 
-import { useState, useEffect, useRef } from "react";
-import {
-  DocumentTextIcon,
-  CalendarIcon,
-  PhotoIcon,
-  XMarkIcon,
-  ArrowDownTrayIcon,
-  PlusIcon,
-  TrashIcon,
-  ListBulletIcon,
-  ClipboardDocumentListIcon,
-  CameraIcon
-} from "@heroicons/react/24/outline";
+import { useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Eye, EyeOff, Loader, Mail, Lock, AlertCircle, Check, ArrowLeft } from "lucide-react";
+import logoImage from "../../assets/trapmap-logo-200.png";
 
 const API = import.meta.env.VITE_API_URL;
 
-export default function AuditReportDialog({ isOpen, onClose }) {
-  const token = localStorage.getItem("trapmap_token");
-  const hasFetched = useRef(false);
-  const fileInputRef = useRef(null);
-  
-  // Daten
-  const [objects, setObjects] = useState([]);
-  const [loadingObjects, setLoadingObjects] = useState(false);
-  
-  // Auswahl
-  const [selectedObject, setSelectedObject] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  
-  // Report-Optionen (Pflicht = immer an)
-  const [options, setOptions] = useState({
-    includeSummary: true,      // Optional
-    includeBoxList: true,      // Pflicht
-    includeScans: true,        // Optional
-    includePhotos: false,      // Optional - Scan-Fotos
-    includeCustomPhotos: false // Optional - Custom Fotos
-  });
-  
-  // Custom Fotos
-  const [customPhotos, setCustomPhotos] = useState([]);
-  
-  // Status
+export default function Login() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const resetToken = searchParams.get('token');
+
+  // Login State
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [preview, setPreview] = useState(null);
 
-  // ========================================
-  // EFFECTS
-  // ========================================
-  
-  useEffect(() => {
-    if (isOpen && !hasFetched.current) {
-      hasFetched.current = true;
-      loadObjects();
-      setDefaultDates();
-    }
-    if (!isOpen) {
-      hasFetched.current = false;
-      // Reset custom photos on close
-      setCustomPhotos([]);
-    }
-  }, [isOpen]);
+  // View State: "login" | "forgot" | "reset" | "changePassword"
+  const [view, setView] = useState(resetToken ? "reset" : "login");
 
-  // Preview laden bei Auswahl-Änderung
-  useEffect(() => {
-    if (selectedObject && startDate && endDate) {
-      loadPreview();
-    }
-  }, [selectedObject, startDate, endDate]);
+  // Forgot Password State
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSent, setForgotSent] = useState(false);
 
-  // ========================================
-  // FUNCTIONS
-  // ========================================
-  
-  const setDefaultDates = () => {
-    const now = new Date();
-    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-    setStartDate(lastMonth.toISOString().split("T")[0]);
-    setEndDate(endOfLastMonth.toISOString().split("T")[0]);
+  // Reset Password State (mit Token)
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
+
+  // Must Change Password State
+  const [mustChangeUser, setMustChangeUser] = useState(null);
+  const [tempToken, setTempToken] = useState(null);
+
+  // ============================================
+  // LOGIN
+  // ============================================
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
     setError("");
-    setPreview(null);
-  };
 
-  const loadObjects = async () => {
-    setLoadingObjects(true);
-    try {
-      const res = await fetch(`${API}/reports/objects`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setObjects(data || []);
-      }
-    } catch (err) {
-      console.error("Load objects error:", err);
-    } finally {
-      setLoadingObjects(false);
-    }
-  };
+    console.log("LOGIN ATTEMPT:", email);
 
-  const loadPreview = async () => {
     try {
-      const res = await fetch(`${API}/reports/audit/preview`, {
+      const res = await fetch(`${API}/auth/login`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ objectId: selectedObject, startDate, endDate })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
-      if (res.ok) {
-        setPreview(await res.json());
-      }
-    } catch (err) {
-      console.error("Preview error:", err);
-    }
-  };
 
-  const setQuickPeriod = (period) => {
-    const now = new Date();
-    let start, end;
+      console.log("LOGIN RESPONSE STATUS:", res.status);
+      const data = await res.json();
+      console.log("LOGIN DATA:", data);
 
-    switch (period) {
-      case "thisMonth":
-        start = new Date(now.getFullYear(), now.getMonth(), 1);
-        end = now;
-        break;
-      case "lastMonth":
-        start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        end = new Date(now.getFullYear(), now.getMonth(), 0);
-        break;
-      case "last3Months":
-        start = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-        end = now;
-        break;
-      case "thisYear":
-        start = new Date(now.getFullYear(), 0, 1);
-        end = now;
-        break;
-      default:
+      if (!res.ok) {
+        setError(data.error || "Login fehlgeschlagen");
         return;
-    }
+      }
 
-    setStartDate(start.toISOString().split("T")[0]);
-    setEndDate(end.toISOString().split("T")[0]);
-  };
+      // Prüfe ob Passwort geändert werden muss
+      if (data.user.must_change_password) {
+        console.log("MUST CHANGE PASSWORD");
+        setMustChangeUser(data.user);
+        setTempToken(data.token);
+        setView("changePassword");
+        return;
+      }
 
-  // Custom Foto hinzufügen
-  const handleAddPhoto = (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-    
-    const remainingSlots = 10 - customPhotos.length;
-    const filesToAdd = files.slice(0, remainingSlots);
-    
-    filesToAdd.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setCustomPhotos(prev => [...prev, {
-          id: Date.now() + Math.random(),
-          file,
-          preview: event.target.result,
-          caption: ""
-        }]);
-      };
-      reader.readAsDataURL(file);
-    });
-    
-    // Reset input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+      // Normaler Login
+      console.log("SAVING TO LOCALSTORAGE...");
+      localStorage.setItem("trapmap_token", data.token);
+      localStorage.setItem("trapmap_refresh_token", data.refreshToken);
+      localStorage.setItem("trapmap_user", JSON.stringify(data.user));
+
+      window.location.href = "/dashboard";
+      navigate("/dashboard");
+    } catch (err) {
+      console.error("LOGIN ERROR:", err);
+      setError("Verbindungsfehler. Bitte versuchen Sie es erneut.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleRemovePhoto = (id) => {
-    setCustomPhotos(prev => prev.filter(p => p.id !== id));
+  // ============================================
+  // PASSWORT VERGESSEN
+  // ============================================
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch(`${API}/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+
+      // Immer Erfolg anzeigen (Security)
+      setForgotSent(true);
+    } catch (err) {
+      setError("Verbindungsfehler");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleCaptionChange = (id, caption) => {
-    setCustomPhotos(prev => prev.map(p => 
-      p.id === id ? { ...p, caption } : p
-    ));
-  };
+  // ============================================
+  // PASSWORT ZURÜCKSETZEN (mit Token)
+  // ============================================
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    
+    if (newPassword !== confirmPassword) {
+      setError("Passwörter stimmen nicht überein");
+      return;
+    }
 
-  // PDF generieren
-  const handleGenerate = async () => {
-    if (!selectedObject || !startDate || !endDate) {
-      setError("Bitte Objekt und Zeitraum auswählen");
+    if (newPassword.length < 8) {
+      setError("Passwort muss mindestens 8 Zeichen haben");
       return;
     }
 
@@ -200,359 +134,403 @@ export default function AuditReportDialog({ isOpen, onClose }) {
     setError("");
 
     try {
-      // FormData für Fotos
-      const formData = new FormData();
-      formData.append("objectId", selectedObject);
-      formData.append("startDate", startDate);
-      formData.append("endDate", endDate);
-      formData.append("options", JSON.stringify({
-        ...options,
-        includeCustomPhotos: customPhotos.length > 0
-      }));
-      
-      // Custom Fotos anhängen
-      customPhotos.forEach((photo, i) => {
-        formData.append(`photo_${i}`, photo.file);
-        formData.append(`caption_${i}`, photo.caption || "");
+      const res = await fetch(`${API}/auth/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: resetToken, newPassword }),
       });
 
-      const res = await fetch(`${API}/reports/audit`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
-        body: formData
-      });
+      const data = await res.json();
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Unbekannter Fehler" }));
-        throw new Error(err.error || "Fehler beim Generieren");
+        setError(data.error || "Fehler beim Zurücksetzen");
+        return;
       }
 
-      // PDF herunterladen
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      
-      const disposition = res.headers.get("Content-Disposition");
-      let filename = "Audit-Report.pdf";
-      if (disposition) {
-        const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-        if (match) filename = decodeURIComponent(match[1].replace(/['"]/g, ""));
-      }
-      
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      onClose();
+      setResetSuccess(true);
     } catch (err) {
-      setError(err.message);
+      setError("Verbindungsfehler");
     } finally {
       setLoading(false);
     }
   };
 
-  // ========================================
-  // RENDER
-  // ========================================
-  
-  if (!isOpen) return null;
-
-  const sections = [
-    { 
-      key: "includeBoxList", 
-      label: "Box-Übersicht", 
-      desc: "Liste aller Boxen mit Status",
-      icon: ListBulletIcon,
-      required: true 
-    },
-    { 
-      key: "includeSummary", 
-      label: "Zusammenfassung", 
-      desc: "Status-Verteilung und Statistiken",
-      icon: DocumentTextIcon,
-      required: false 
-    },
-    { 
-      key: "includeScans", 
-      label: "Kontrollen-Protokoll", 
-      desc: "Detaillierte Liste aller Kontrollen",
-      icon: ClipboardDocumentListIcon,
-      required: false 
-    },
-    { 
-      key: "includePhotos", 
-      label: "Scan-Fotos", 
-      desc: "Fotos aus Kontrollen (max. 20)",
-      icon: CameraIcon,
-      required: false 
+  // ============================================
+  // NEUES PASSWORT SETZEN (nach erstem Login)
+  // ============================================
+  const handleSetNewPassword = async (e) => {
+    e.preventDefault();
+    
+    if (newPassword !== confirmPassword) {
+      setError("Passwörter stimmen nicht überein");
+      return;
     }
-  ];
 
-  return (
-    <div 
-      className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto"
-      onClick={onClose}
-    >
-      <div 
-        className="bg-gray-800 rounded-xl w-full max-w-2xl overflow-hidden border border-gray-700 my-8"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <DocumentTextIcon className="w-6 h-6 text-white" />
-            <h2 className="text-lg font-semibold text-white">Audit-Report erstellen</h2>
+    if (newPassword.length < 8) {
+      setError("Passwort muss mindestens 8 Zeichen haben");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch(`${API}/auth/set-password`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${tempToken}`
+        },
+        body: JSON.stringify({ newPassword }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Fehler beim Setzen des Passworts");
+        return;
+      }
+
+      // Erfolg - jetzt einloggen
+      localStorage.setItem("trapmap_token", tempToken);
+      localStorage.setItem("trapmap_user", JSON.stringify({ ...mustChangeUser, must_change_password: false }));
+
+      window.location.href = "/dashboard";
+    } catch (err) {
+      setError("Verbindungsfehler");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============================================
+  // RENDER: LOGIN
+  // ============================================
+  if (view === "login") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0d0d1a] via-[#1a1a2e] to-[#0d0d1a] px-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <img src={logoImage} alt="TrapMap" className="h-36 mx-auto mb-4" />
+            <p className="text-gray-400">Schädlingsüberwachung</p>
           </div>
-          <button onClick={onClose} className="text-white/80 hover:text-white">
-            <XMarkIcon className="w-6 h-6" />
-          </button>
-        </div>
 
-        <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
-          {/* Objekt-Auswahl */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Objekt auswählen *
-            </label>
-            {loadingObjects ? (
-              <div className="w-full px-4 py-3 bg-gray-700 rounded-lg text-gray-400 flex items-center gap-2">
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                Lade Objekte...
+          <div className="bg-[#1a1a2e]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-6 text-center">Anmelden</h2>
+
+            {error && (
+              <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg flex items-center gap-2 text-red-400 text-sm">
+                <AlertCircle size={16} />
+                {error}
               </div>
-            ) : (
-              <select
-                value={selectedObject}
-                onChange={(e) => setSelectedObject(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- Objekt wählen --</option>
-                {objects.map((obj) => (
-                  <option key={obj.id} value={obj.id}>{obj.name}</option>
-                ))}
-              </select>
             )}
-          </div>
 
-          {/* Zeitraum */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              <CalendarIcon className="w-4 h-4 inline mr-1" />
-              Zeitraum *
-            </label>
-            
-            <div className="flex flex-wrap gap-2 mb-3">
-              {[
-                { id: "thisMonth", label: "Dieser Monat" },
-                { id: "lastMonth", label: "Letzter Monat" },
-                { id: "last3Months", label: "3 Monate" },
-                { id: "thisYear", label: "Dieses Jahr" }
-              ].map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => setQuickPeriod(p.id)}
-                  className="px-3 py-1.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition"
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white"
-              />
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white"
-              />
-            </div>
-          </div>
-
-          {/* Preview */}
-          {preview && (
-            <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
-              <div className="grid grid-cols-4 gap-4 text-center">
-                <div>
-                  <div className="text-2xl font-bold text-white">{preview.boxCount || 0}</div>
-                  <div className="text-xs text-gray-500">Boxen</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-white">{preview.stats?.totalScans || 0}</div>
-                  <div className="text-xs text-gray-500">Kontrollen</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-green-500">{preview.stats?.greenScans || 0}</div>
-                  <div className="text-xs text-gray-500">OK</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-red-500">{preview.stats?.redScans || 0}</div>
-                  <div className="text-xs text-gray-500">Befall</div>
+            <form onSubmit={handleLogin} className="space-y-5">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">E-Mail</label>
+                <div className="relative">
+                  <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                    placeholder="ihre@email.de"
+                    required
+                  />
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Report-Abschnitte */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-3">
-              Report-Inhalt
-            </label>
-            <div className="space-y-2">
-              {sections.map((section) => (
-                <label 
-                  key={section.key}
-                  className={`flex items-center gap-3 p-3 rounded-lg border transition cursor-pointer
-                    ${options[section.key] 
-                      ? "bg-blue-500/10 border-blue-500/30" 
-                      : "bg-gray-700/50 border-gray-600 hover:border-gray-500"
-                    }
-                    ${section.required ? "opacity-80" : ""}
-                  `}
-                >
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Passwort</label>
+                <div className="relative">
+                  <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input
-                    type="checkbox"
-                    checked={options[section.key]}
-                    onChange={(e) => !section.required && setOptions(prev => ({
-                      ...prev,
-                      [section.key]: e.target.checked
-                    }))}
-                    disabled={section.required}
-                    className="w-5 h-5 rounded border-gray-500 text-blue-500 focus:ring-blue-500 bg-gray-600"
-                  />
-                  <section.icon className="w-5 h-5 text-gray-400" />
-                  <div className="flex-1">
-                    <div className="text-white text-sm font-medium">
-                      {section.label}
-                      {section.required && (
-                        <span className="ml-2 text-xs text-blue-400">(Pflicht)</span>
-                      )}
-                    </div>
-                    <div className="text-xs text-gray-500">{section.desc}</div>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Custom Fotos */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-3">
-              <PhotoIcon className="w-4 h-4 inline mr-1" />
-              Zusätzliche Fotos (max. 10)
-            </label>
-            <p className="text-xs text-gray-500 mb-3">
-              Fügen Sie eigene Fotos hinzu, z.B. Standortbilder der Boxen
-            </p>
-            
-            {/* Foto-Grid */}
-            <div className="grid grid-cols-5 gap-2 mb-3">
-              {customPhotos.map((photo) => (
-                <div key={photo.id} className="relative group">
-                  <img 
-                    src={photo.preview} 
-                    alt="Preview" 
-                    className="w-full h-20 object-cover rounded-lg border border-gray-600"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg pl-10 pr-12 py-3 text-white placeholder-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                    placeholder="••••••••"
+                    required
                   />
                   <button
-                    onClick={() => handleRemovePhoto(photo.id)}
-                    className="absolute -top-2 -right-2 p-1 bg-red-500 rounded-full text-white opacity-0 group-hover:opacity-100 transition"
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                    aria-label="Passwort anzeigen"
                   >
-                    <XMarkIcon className="w-3 h-3" />
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
-                  <input
-                    type="text"
-                    placeholder="Beschreibung"
-                    value={photo.caption}
-                    onChange={(e) => handleCaptionChange(photo.id, e.target.value)}
-                    className="w-full mt-1 px-2 py-1 text-xs bg-gray-700 border border-gray-600 rounded text-white placeholder-gray-500"
-                  />
                 </div>
-              ))}
-              
-              {/* Add Button */}
-              {customPhotos.length < 10 && (
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full h-20 border-2 border-dashed border-gray-600 rounded-lg flex flex-col items-center justify-center text-gray-500 hover:border-blue-500 hover:text-blue-400 transition"
-                >
-                  <PlusIcon className="w-6 h-6" />
-                  <span className="text-xs mt-1">Hinzufügen</span>
-                </button>
-              )}
-            </div>
-            
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleAddPhoto}
-              className="hidden"
-            />
-            
-            {customPhotos.length > 0 && (
-              <p className="text-xs text-gray-500">
-                {customPhotos.length}/10 Fotos • Fotos werden {customPhotos.length <= 4 ? "2" : "4"} pro Seite angezeigt
-              </p>
-            )}
-          </div>
+              </div>
 
-          {/* Error */}
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-red-400 text-sm">
-              {error}
-            </div>
-          )}
-        </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {loading ? <Loader size={20} className="animate-spin" /> : "Anmelden"}
+              </button>
+            </form>
 
-        {/* Footer */}
-        <div className="px-6 py-4 bg-gray-900/50 border-t border-gray-700 flex justify-between items-center">
-          <p className="text-xs text-gray-500">
-            HACCP/IFS konform • PDF-Download
-          </p>
-          <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="px-5 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition"
-            >
-              Abbrechen
-            </button>
-            <button
-              onClick={handleGenerate}
-              disabled={loading || !selectedObject || !startDate || !endDate}
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg transition flex items-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Generiere...
-                </>
-              ) : (
-                <>
-                  <ArrowDownTrayIcon className="w-4 h-4" />
-                  PDF erstellen
-                </>
-              )}
-            </button>
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => { setView("forgot"); setError(""); }}
+                className="text-sm text-indigo-400 hover:text-indigo-300"
+              >
+                Passwort vergessen?
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  // ============================================
+  // RENDER: PASSWORT VERGESSEN
+  // ============================================
+  if (view === "forgot") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0d0d1a] via-[#1a1a2e] to-[#0d0d1a] px-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <img src={logoImage} alt="TrapMap" className="h-36 mx-auto mb-4" />
+          </div>
+
+          <div className="bg-[#1a1a2e]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
+            <button
+              onClick={() => { setView("login"); setForgotSent(false); setError(""); }}
+              className="flex items-center gap-1 text-gray-400 hover:text-white mb-4"
+            >
+              <ArrowLeft size={16} />
+              Zurück zum Login
+            </button>
+
+            <h2 className="text-2xl font-bold text-white mb-2">Passwort vergessen</h2>
+            <p className="text-gray-400 text-sm mb-6">
+              Geben Sie Ihre E-Mail-Adresse ein und wir senden Ihnen einen Link zum Zurücksetzen.
+            </p>
+
+            {forgotSent ? (
+              <div className="p-4 bg-green-500/20 border border-green-500/30 rounded-lg text-green-400">
+                <Check size={20} className="inline mr-2" />
+                Falls ein Account mit dieser E-Mail existiert, haben wir Ihnen einen Link gesendet.
+              </div>
+            ) : (
+              <form onSubmit={handleForgotPassword} className="space-y-5">
+                {error && (
+                  <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-400 text-sm">
+                    {error}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">E-Mail</label>
+                  <div className="relative">
+                    <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <input
+                      type="email"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:border-indigo-500 outline-none"
+                      placeholder="ihre@email.de"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {loading ? <Loader size={20} className="animate-spin" /> : "Link senden"}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================
+  // RENDER: PASSWORT ZURÜCKSETZEN (mit Token)
+  // ============================================
+  if (view === "reset") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0d0d1a] via-[#1a1a2e] to-[#0d0d1a] px-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <img src={logoImage} alt="TrapMap" className="h-36 mx-auto mb-4" />
+          </div>
+
+          <div className="bg-[#1a1a2e]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-white mb-2">Neues Passwort</h2>
+            <p className="text-gray-400 text-sm mb-6">
+              Geben Sie Ihr neues Passwort ein.
+            </p>
+
+            {resetSuccess ? (
+              <div className="text-center">
+                <div className="p-4 bg-green-500/20 border border-green-500/30 rounded-lg text-green-400 mb-4">
+                  <Check size={20} className="inline mr-2" />
+                  Passwort erfolgreich geändert!
+                </div>
+                <button
+                  onClick={() => { setView("login"); navigate("/login"); }}
+                  className="text-indigo-400 hover:text-indigo-300"
+                >
+                  Jetzt anmelden →
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleResetPassword} className="space-y-5">
+                {error && (
+                  <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-400 text-sm">
+                    {error}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Neues Passwort</label>
+                  <div className="relative">
+                    <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <input
+                      type={showNewPassword ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg pl-10 pr-12 py-3 text-white placeholder-gray-500 focus:border-indigo-500 outline-none"
+                      placeholder="Mindestens 8 Zeichen"
+                      minLength={8}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                      aria-label="Passwort anzeigen"
+                    >
+                      {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Passwort bestätigen</label>
+                  <div className="relative">
+                    <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:border-indigo-500 outline-none"
+                      placeholder="Passwort wiederholen"
+                      minLength={8}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {loading ? <Loader size={20} className="animate-spin" /> : "Passwort speichern"}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================
+  // RENDER: PASSWORT ÄNDERN (nach erstem Login)
+  // ============================================
+  if (view === "changePassword") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0d0d1a] via-[#1a1a2e] to-[#0d0d1a] px-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <img src={logoImage} alt="TrapMap" className="h-36 mx-auto mb-4" />
+          </div>
+
+          <div className="bg-[#1a1a2e]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
+            <div className="mb-6 p-4 bg-yellow-500/20 border border-yellow-500/30 rounded-lg text-yellow-400">
+              <AlertCircle size={20} className="inline mr-2" />
+              <strong>Willkommen, {mustChangeUser?.first_name}!</strong>
+              <p className="mt-1 text-sm">Bitte ändern Sie Ihr temporäres Passwort.</p>
+            </div>
+
+            <h2 className="text-2xl font-bold text-white mb-2">Neues Passwort festlegen</h2>
+            <p className="text-gray-400 text-sm mb-6">
+              Wählen Sie ein sicheres Passwort für Ihren Account.
+            </p>
+
+            <form onSubmit={handleSetNewPassword} className="space-y-5">
+              {error && (
+                <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-400 text-sm">
+                  {error}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Neues Passwort</label>
+                <div className="relative">
+                  <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg pl-10 pr-12 py-3 text-white placeholder-gray-500 focus:border-indigo-500 outline-none"
+                    placeholder="Mindestens 8 Zeichen"
+                    minLength={8}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                    aria-label="Passwort anzeigen"
+                  >
+                    {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Passwort bestätigen</label>
+                <div className="relative">
+                  <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:border-indigo-500 outline-none"
+                    placeholder="Passwort wiederholen"
+                    minLength={8}
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {loading ? <Loader size={20} className="animate-spin" /> : "Passwort speichern & Anmelden"}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }

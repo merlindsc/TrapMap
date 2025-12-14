@@ -17,6 +17,7 @@ import {
   ChevronRight, Camera, X, Eye, EyeOff, Lock, Save
 } from "lucide-react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
+import trapMapLogo from "../assets/trapmap-logo-150.png";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -378,13 +379,12 @@ export default function PartnerDashboard() {
   return (
     <div style={styles.container}>
       {/* ============================================ */}
-      {/* HEADER */}
+      {/* HEADER MIT LOGO */}
       {/* ============================================ */}
       <header style={styles.header}>
         <div style={styles.headerLeft}>
-          <QrCode size={28} color="#6366f1" />
+          <img src={trapMapLogo} alt="TrapMap" style={styles.headerLogo} />
           <div>
-            <h1 style={styles.title}>TrapMap</h1>
             <p style={styles.subtitle}>Partner-Portal</p>
           </div>
         </div>
@@ -715,7 +715,7 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: "16px 20px",
+    padding: "12px 20px",
     background: "#1e293b",
     borderBottom: "1px solid #334155"
   },
@@ -724,10 +724,9 @@ const styles = {
     alignItems: "center",
     gap: 12
   },
-  title: {
-    margin: 0,
-    fontSize: 20,
-    fontWeight: 700
+  headerLogo: {
+    height: 44,
+    width: "auto"
   },
   subtitle: {
     margin: 0,

@@ -131,6 +131,13 @@ body.sidebar-open {
   color: var(--text-primary);
 }
 
+/* Mobile Header Logo */
+.mobile-header-logo {
+  height: 88px;
+  width: auto;
+  object-fit: contain;
+}
+
 .mobile-logo {
   display: flex;
   font-size: 20px;
@@ -166,6 +173,19 @@ body.sidebar-open {
   flex-shrink: 0;
 }
 
+.navbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Desktop Navbar Logo */
+.navbar-logo {
+  height: 94px;
+  width: auto;
+  object-fit: contain;
+}
+
 .navbar-title {
   display: flex;
   align-items: center;
@@ -189,7 +209,7 @@ body.sidebar-open {
 .title-dashboard {
   color: var(--text-muted);
   font-weight: 400;
-  margin-left: 8px;
+  font-size: 16px;
 }
 
 .navbar-right {
@@ -294,12 +314,20 @@ body.sidebar-open {
   .user-name-text {
     display: none;
   }
+  
+  .mobile-header-logo {
+    height: 36px;
+  }
 }
 
 /* Very small screens adjustments */
 @media (max-width: 480px) {
   .card { padding: 12px; border-radius: 10px; }
   .btn { padding: 8px 12px; font-size: 13px; }
+  
+  .mobile-header-logo {
+    height: 32px;
+  }
 }
 
 /* ============================================================
