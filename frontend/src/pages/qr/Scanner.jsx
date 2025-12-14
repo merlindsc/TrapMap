@@ -227,6 +227,50 @@ export default function Scanner() {
     }
   };
 
+  // Stopp-Helper: stoppt html5-qrcode, clear() und alle lingering video tracks
+  const stopScanner = async () => {
+    try {
+      if (html5QrCodeRef.current) {
+        try {
+          const state = html5QrCodeRef.current.getState();
+          if (state === 2) {
+            await html5QrCodeRef.current.stop();
+            console.log('⏹️ html5QrCode stopped');
+          }
+        } catch (e) {
+          console.warn('stopScanner: error stopping instance', e?.message || e);
+        }
+
+        try {
+          html5QrCodeRef.current.clear();
+        } catch (e) { /* ignore */ }
+        html5QrCodeRef.current = null;
+      }
+
+      // Stop any remaining video tracks on the page (best-effort)
+      try {
+        const vids = document.querySelectorAll('#qr-reader video');
+        vids.forEach(v => {
+          try {
+            const s = v.srcObject;
+            if (s && typeof s.getTracks === 'function') {
+              s.getTracks().forEach(t => {
+                try { t.stop(); console.log('🛑 stopped track', t.kind, t.id); } catch (e) {}
+              });
+            }
+            try { v.srcObject = null; } catch (e) {}
+          } catch (e) { /* ignore per video */ }
+        });
+      } catch (e) {
+        console.warn('stopScanner: error stopping tracks', e?.message || e);
+      }
+
+      setIsScanning(false);
+    } catch (err) {
+      console.error('stopScanner general error:', err);
+    }
+  };
+
   // ============================================
   // GPS POSITION HOLEN
   // ============================================
@@ -377,6 +421,7 @@ export default function Scanner() {
       // CASE 3: Direkt zum Scan-Dialog
       console.log("✅ Direkt zum BoxScanDialog");
       setBoxLoading(false);
+      await stopScanner();
       setShowScanDialog(true);
 
     } catch (err) {
@@ -408,9 +453,11 @@ export default function Scanner() {
       // >10m Abweichung → Warnung anzeigen
       if (distance > 10) {
         console.log("⚠️ Distanz > 10m → GPS-Warnung");
+        await stopScanner();
         setShowGPSWarning(true);
       } else {
         console.log("✅ Distanz OK → BoxScanDialog");
+        await stopScanner();
         setShowScanDialog(true);
       }
 
@@ -418,6 +465,7 @@ export default function Scanner() {
       console.error("GPS error:", err);
       // Bei GPS-Fehler trotzdem zum Dialog
       setBoxLoading(false);
+      await stopScanner();
       setShowScanDialog(true);
     }
   };
@@ -451,16 +499,17 @@ export default function Scanner() {
       objectId: boxData.object_id
     });
     setBoxLoading(false);
+    await stopScanner();
     setShowPlacementChoice(true);
   };
 
   // ============================================
   // DIALOG SCHLIESSEN - Scanner läuft weiter!
   // ============================================
-  const resetScanner = () => {
-    console.log("🔄 resetScanner - Dialoge schließen, Scanner läuft weiter");
-    console.log(`🔒 Code "${lastScannedCodeRef.current}" bleibt geblockt`);
-    
+  const resetScanner = async () => {
+    console.log("🔄 resetScanner - Dialoge schließen");
+    console.log(`🔒 Code "${lastScannedCodeRef.current}" wird freigegeben`);
+
     // States zurücksetzen
     setScannedCode(null);
     setCurrentBox(null);
@@ -472,11 +521,27 @@ export default function Scanner() {
     setShowFirstSetup(false);
     setPendingPlacement(null);
     setError("");
-    
-    // Lock aufheben - aber lastScannedCodeRef bleibt!
+
+    // Lock aufheben
     isProcessingRef.current = false;
-    
-    // Scanner läuft weiter, kein Neustart nötig!
+
+    // Letzten Code freigeben (wichtig damit direkt weitergescannt werden kann)
+    lastScannedCodeRef.current = null;
+    setBlockedCode(null);
+
+    // Vollständig stoppen (clear tracks), dann neu starten
+    try {
+      await stopScanner();
+      // Kleiner Delay damit Kamera freigegeben wird
+      await new Promise(r => setTimeout(r, 300));
+      if (currentCamera) {
+        await startScanner(currentCamera.id);
+      } else {
+        await initScanner();
+      }
+    } catch (e) {
+      console.error('resetScanner restart error:', e);
+    }
   };
 
   // Code entsperren (für UI-Button)
@@ -505,9 +570,10 @@ export default function Scanner() {
   // ============================================
   // HANDLER: GPS WARNING
   // ============================================
-  const handleIgnoreGPSWarning = () => {
+  const handleIgnoreGPSWarning = async () => {
     console.log("📍 GPS-Warnung ignoriert → BoxScanDialog");
     setShowGPSWarning(false);
+    await stopScanner();
     setShowScanDialog(true);
   };
 
@@ -539,6 +605,7 @@ export default function Scanner() {
       
       setGpsLoading(false);
       setShowGPSWarning(false);
+      await stopScanner();
       setShowScanDialog(true);
 
     } catch (err) {
@@ -546,6 +613,7 @@ export default function Scanner() {
       setGpsLoading(false);
       // Bei Fehler trotzdem zum Dialog
       setShowGPSWarning(false);
+      await stopScanner();
       setShowScanDialog(true);
     }
   };
@@ -590,6 +658,7 @@ export default function Scanner() {
       
       setGpsLoading(false);
       setShowPlacementChoice(false);
+      await stopScanner();
       setShowFirstSetup(true);
 
     } catch (err) {
