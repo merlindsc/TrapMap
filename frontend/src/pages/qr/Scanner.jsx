@@ -178,18 +178,33 @@ export default function Scanner() {
   };
 
   const startScanner = async (cameraId) => {
+    console.log("🎥 startScanner called with camera:", cameraId);
+    
     try {
-      // Erst vorherigen Scanner stoppen falls läuft
-      if (html5QrCodeRef.current && isScanning) {
+      // WICHTIG: Erst sicher stoppen falls noch aktiv
+      if (html5QrCodeRef.current) {
         try {
-          await html5QrCodeRef.current.stop();
-        } catch (e) {
-          console.log("Stop before restart:", e.message);
+          const state = html5QrCodeRef.current.getState();
+          console.log("📊 Scanner state:", state);
+          
+          // State 2 = SCANNING - muss gestoppt werden
+          if (state === 2) {
+            console.log("⏹️ Stoppe laufenden Scanner...");
+            await html5QrCodeRef.current.stop();
+            console.log("✅ Scanner gestoppt");
+          }
+          
+          // Instanz existiert und ist nicht am scannen - wiederverwenden!
+          console.log("♻️ Verwende existierende Scanner-Instanz");
+          
+        } catch (stateErr) {
+          // getState() kann fehlschlagen - dann neue Instanz
+          console.log("⚠️ State check failed, erstelle neue Instanz:", stateErr.message);
+          html5QrCodeRef.current = new Html5Qrcode("qr-reader");
         }
-      }
-
-      // Neue Instanz NUR wenn keine existiert oder Element beschädigt
-      if (!html5QrCodeRef.current) {
+      } else {
+        // Keine Instanz - neue erstellen
+        console.log("🔧 Erstelle neue Scanner-Instanz...");
         html5QrCodeRef.current = new Html5Qrcode("qr-reader");
       }
 
@@ -203,8 +218,7 @@ export default function Scanner() {
         }
       };
 
-      console.log("🎥 Starting scanner with camera:", cameraId);
-      
+      console.log("▶️ Starte Scanner...");
       await html5QrCodeRef.current.start(
         cameraId,
         config,
@@ -214,7 +228,7 @@ export default function Scanner() {
 
       setIsScanning(true);
       setError("");
-      console.log("✅ Scanner gestartet");
+      console.log("✅ Scanner läuft!");
 
       try {
         const capabilities = html5QrCodeRef.current.getRunningTrackCapabilities();
@@ -224,46 +238,38 @@ export default function Scanner() {
       }
 
     } catch (err) {
-      console.error("Scanner start error:", err);
-      
-      // Falls Element beschädigt - neue Instanz erstellen
-      if (err.message?.includes("element") || err.message?.includes("not found")) {
-        console.log("🔧 Erstelle neue Scanner-Instanz...");
-        html5QrCodeRef.current = new Html5Qrcode("qr-reader");
-        // Rekursiv nochmal versuchen (nur 1x)
-        try {
-          await html5QrCodeRef.current.start(
-            cameraId,
-            { fps: 15, qrbox: { width: 250, height: 250 } },
-            onScanSuccess,
-            onScanFailure
-          );
-          setIsScanning(true);
-          setError("");
-          console.log("✅ Scanner gestartet (2. Versuch)");
-          return;
-        } catch (retryErr) {
-          console.error("Scanner retry failed:", retryErr);
-        }
-      }
-      
+      console.error("❌ Scanner start error:", err);
+      setIsScanning(false);
       setError("Scanner konnte nicht gestartet werden: " + (err.message || err));
     }
   };
 
   const stopScanner = async (clearElement = false) => {
-    if (html5QrCodeRef.current && isScanning) {
+    console.log("⏹️ stopScanner called, clearElement:", clearElement);
+    
+    if (html5QrCodeRef.current) {
       try {
-        await html5QrCodeRef.current.stop();
-        // NUR beim Unmount clearen, nicht beim normalen Stop!
+        const state = html5QrCodeRef.current.getState();
+        console.log("📊 Scanner state:", state);
+        
+        // State 2 = SCANNING - muss gestoppt werden
+        if (state === 2) {
+          await html5QrCodeRef.current.stop();
+          console.log("✅ Scanner gestoppt");
+        }
+        
+        // Clear nur wenn gewünscht UND Scanner nicht mehr läuft
         if (clearElement) {
           html5QrCodeRef.current.clear();
+          html5QrCodeRef.current = null;
+          console.log("🧹 Scanner cleared");
         }
       } catch (e) {
-        console.error("Stop scanner error:", e);
+        console.error("Stop scanner error:", e.message);
       }
     }
     setIsScanning(false);
+  };
   };
 
   // ============================================
@@ -773,25 +779,19 @@ export default function Scanner() {
     setError("");
     setProcessingCode(false); // Lock zurücksetzen!
     
-    // WICHTIG: lastScannedCodeRef NICHT zurücksetzen!
-    // Der Code bleibt geblockt bis ein ANDERER Code gescannt wird
+    // WICHTIG: Erst Scanner komplett stoppen
+    await stopScanner(false);
     
-    // Scanner nach längerem Delay neu starten (DOM muss sich aktualisieren)
+    // Dann nach Delay neu starten
     setTimeout(async () => {
       if (currentCamera) {
-        console.log("🎥 Scanner neu starten - gleicher Code wird ignoriert");
-        try {
-          await startScanner(currentCamera.id);
-        } catch (err) {
-          console.error("❌ Scanner restart error:", err);
-          setError("Scanner konnte nicht neu gestartet werden");
-        }
+        console.log("🎥 Scanner neu starten...");
+        await startScanner(currentCamera.id);
       } else {
-        console.error("❌ Keine Kamera verfügbar für Restart");
-        // Versuche Scanner komplett neu zu initialisieren
+        console.error("❌ Keine Kamera verfügbar");
         initScanner();
       }
-    }, 500); // 500ms statt 200ms
+    }, 300);
   };
   
   // Manuelles Entsperren des letzten Codes (falls User wirklich nochmal scannen will)
@@ -1248,4 +1248,3 @@ export default function Scanner() {
       `}</style>
     </div>
   );
-}
