@@ -1,7 +1,7 @@
 // ============================================
 // QR SERVICE - KOMPLETT (FIXED)
 // Bei Code-Generierung wird automatisch Box erstellt!
-// FIX: Sortierung nach sequence_number (aufsteigend)
+// FIX: checkCode lädt alle nötigen Felder für Scanner
 // ============================================
 
 const { supabase } = require("../config/supabase");
@@ -86,7 +86,8 @@ exports.generateCodes = async (organisation_id, count) => {
 };
 
 // ============================================
-// CHECK CODE
+// CHECK CODE - FIXED!
+// Lädt alle Felder die der Scanner braucht
 // ============================================
 exports.checkCode = async (code) => {
   const { data, error } = await supabase
@@ -94,7 +95,24 @@ exports.checkCode = async (code) => {
     .select(`
       id, organisation_id, box_id, assigned, sequence_number,
       boxes:box_id (
-        id, number, status, position_type, object_id, box_type_id, current_status,
+        id, 
+        number, 
+        qr_code,
+        status, 
+        position_type, 
+        object_id, 
+        box_type_id, 
+        current_status,
+        lat,
+        lng,
+        floor_plan_id,
+        pos_x,
+        pos_y,
+        grid_position,
+        notes,
+        control_interval_days,
+        last_check,
+        next_check,
         objects:object_id (id, name),
         box_types:box_type_id (id, name)
       )
@@ -117,6 +135,7 @@ exports.getCodesByOrganisation = async (organisation_id) => {
       id, box_id, assigned, created_at, sequence_number,
       boxes:box_id (
         id, number, status, position_type, object_id, box_type_id, current_status,
+        lat, lng, floor_plan_id, pos_x, pos_y, grid_position,
         objects:object_id (id, name),
         box_types:box_type_id (id, name)
       )
@@ -182,6 +201,7 @@ exports.assignToObject = async (box_id, object_id, organisation_id) => {
     .update({
       object_id: parseInt(object_id),
       status: "assigned",
+      object_assigned_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     })
     .eq("id", parseInt(box_id))
@@ -206,6 +226,8 @@ exports.returnToPool = async (box_id, organisation_id) => {
       floor_plan_id: null,
       pos_x: null,
       pos_y: null,
+      grid_position: null,
+      object_assigned_at: null,
       updated_at: new Date().toISOString()
     })
     .eq("id", parseInt(box_id))
@@ -230,6 +252,8 @@ exports.moveToObject = async (box_id, new_object_id, organisation_id) => {
       floor_plan_id: null,
       pos_x: null,
       pos_y: null,
+      grid_position: null,
+      object_assigned_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     })
     .eq("id", parseInt(box_id))
