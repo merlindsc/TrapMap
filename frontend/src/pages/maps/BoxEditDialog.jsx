@@ -74,6 +74,17 @@ export default function BoxEditDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
+  // GPS State für Ersteinrichtung
+  const [gpsPosition, setGpsPosition] = useState(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsSaved, setGpsSaved] = useState(false);
+  const [gpsError, setGpsError] = useState(null);
+  const [gpsRequested, setGpsRequested] = useState(false);
+  
+  // Mobile Detection
+  const isMobile = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+    || (navigator.maxTouchPoints > 0 && window.innerWidth < 1024);
+
   // QR-Info
   const qrNumber = getShortQr(box);
   const hasCustomNumber = displayNumber && displayNumber.toString() !== qrNumber;
@@ -106,6 +117,7 @@ export default function BoxEditDialog({
     { value: 90, label: "90 Tage", sub: "quartalsweise" }
   ];
 
+  // Initialisiere Box-Daten
   useEffect(() => {
     if (box?.box_type_id) setBoxTypeId(box.box_type_id);
     if (box?.name || box?.box_name) setBoxName(box.name || box.box_name);
@@ -136,7 +148,95 @@ export default function BoxEditDialog({
         setCustomBait(box.bait);
       }
     }
+    
+    // Prüfen ob Box bereits GPS hat
+    if (box?.lat && box?.lng) {
+      console.log("📍 Box hat bereits GPS:", box.lat, box.lng);
+      setGpsPosition({ lat: box.lat, lng: box.lng });
+      setGpsSaved(true);
+    }
   }, [box]);
+
+  // AUTOMATISCH GPS anfordern bei Ersteinrichtung auf Mobile
+  // NUR wenn Box noch KEINE GPS Position hat!
+  useEffect(() => {
+    // Warten bis Box-Daten geladen sind (box.id muss existieren)
+    if (!box?.id) return;
+    
+    // Nur bei Ersteinrichtung auf Mobile
+    if (!isFirstSetup || !isMobile) return;
+    
+    // Wenn Box schon GPS hat, nicht nochmal anfordern
+    if (box?.lat && box?.lng) {
+      console.log("📍 Box hat schon GPS, überspringe Anforderung");
+      return;
+    }
+    
+    // Nur einmal anfordern
+    if (gpsRequested || gpsLoading) return;
+    
+    console.log("📍 Ersteinrichtung: Fordere GPS an...");
+    setGpsRequested(true);
+    requestGPSPosition();
+  }, [box?.id, isFirstSetup, isMobile, box?.lat, box?.lng, gpsRequested, gpsLoading]);
+
+  // GPS-Position anfordern und speichern
+  const requestGPSPosition = async () => {
+    if (!navigator.geolocation) {
+      setGpsError("GPS nicht verfügbar");
+      return;
+    }
+
+    setGpsLoading(true);
+    setGpsError(null);
+    console.log("📍 GPS wird angefordert...");
+
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          reject,
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
+      });
+
+      console.log("📍 GPS Position erhalten:", position);
+      setGpsPosition(position);
+
+      // Sofort in DB speichern
+      if (box?.id) {
+        try {
+          const response = await fetch(`${API}/boxes/${box.id}/position`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              lat: position.lat,
+              lng: position.lng,
+              position_type: "gps"
+            })
+          });
+
+          if (response.ok) {
+            console.log("✅ GPS Position gespeichert");
+            setGpsSaved(true);
+          } else {
+            console.error("GPS save error:", await response.text());
+          }
+        } catch (saveErr) {
+          console.error("GPS save error:", saveErr);
+        }
+      }
+
+      setGpsLoading(false);
+    } catch (err) {
+      console.error("GPS error:", err);
+      setGpsLoading(false);
+      setGpsError(err.message || "GPS-Position konnte nicht ermittelt werden");
+    }
+  };
 
   // Box-Typ Erkennung
   const selectedType = boxTypes.find(t => t.id === parseInt(boxTypeId));
@@ -294,6 +394,52 @@ export default function BoxEditDialog({
             <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 flex items-center gap-2 text-green-400 text-sm">
               <CheckCircle size={16} />
               Ersteinrichtungs-Scan wird automatisch erstellt
+            </div>
+          )}
+
+          {/* GPS Status bei Ersteinrichtung auf Mobile */}
+          {isFirstSetup && isMobile && (
+            <div className={`rounded-lg p-3 flex items-center gap-3 text-sm ${
+              gpsSaved 
+                ? "bg-green-500/10 border border-green-500/20 text-green-400"
+                : gpsLoading
+                  ? "bg-blue-500/10 border border-blue-500/20 text-blue-400"
+                  : gpsError
+                    ? "bg-red-500/10 border border-red-500/20 text-red-400"
+                    : "bg-gray-500/10 border border-gray-500/20 text-gray-400"
+            }`}>
+              {gpsLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                  <span>GPS-Position wird ermittelt...</span>
+                </>
+              ) : gpsSaved ? (
+                <>
+                  <Navigation size={16} className="text-green-400" />
+                  <span className="flex-1">GPS-Position gespeichert</span>
+                  {gpsPosition && (
+                    <span className="text-xs text-green-400/60 font-mono">
+                      {gpsPosition.lat.toFixed(5)}, {gpsPosition.lng.toFixed(5)}
+                    </span>
+                  )}
+                </>
+              ) : gpsError ? (
+                <>
+                  <Navigation size={16} className="text-red-400" />
+                  <span className="flex-1">{gpsError}</span>
+                  <button
+                    onClick={requestGPSPosition}
+                    className="px-2 py-1 bg-red-500/20 hover:bg-red-500/30 rounded text-xs"
+                  >
+                    Erneut
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Navigation size={16} />
+                  <span>GPS-Position ausstehend</span>
+                </>
+              )}
             </div>
           )}
 
@@ -599,12 +745,32 @@ export default function BoxEditDialog({
               </button>
               
               {/* GPS Button NUR auf Mobile */}
-              {/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) && (
+              {isMobile && (
                 <button
-                  onClick={() => { onSetGPS && onSetGPS(); }}
-                  className="flex items-center justify-center gap-2 py-2.5 px-3 bg-[#0d1117] border border-white/10 rounded-lg text-gray-400 text-sm hover:border-white/20 transition-colors"
+                  onClick={requestGPSPosition}
+                  disabled={gpsLoading}
+                  className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm transition-colors ${
+                    gpsSaved 
+                      ? "bg-green-500/10 border border-green-500/30 text-green-400"
+                      : gpsLoading
+                        ? "bg-blue-500/10 border border-blue-500/30 text-blue-400"
+                        : "bg-[#0d1117] border border-white/10 text-gray-400 hover:border-white/20"
+                  }`}
                 >
-                  <Navigation size={14} /> GPS aktualisieren
+                  {gpsLoading ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      GPS...
+                    </>
+                  ) : gpsSaved ? (
+                    <>
+                      <CheckCircle size={14} /> GPS gespeichert
+                    </>
+                  ) : (
+                    <>
+                      <Navigation size={14} /> GPS aktualisieren
+                    </>
+                  )}
                 </button>
               )}
             </div>
