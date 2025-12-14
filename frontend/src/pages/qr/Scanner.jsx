@@ -82,6 +82,9 @@ export default function Scanner() {
   const lastScannedCodeRef = useRef(null);
   const [blockedCode, setBlockedCode] = useState(null); // Für UI-Anzeige
   
+  // KRITISCH: Stabile Callback-Referenz für den Scanner
+  const onScanSuccessRef = useRef(null);
+  
   // Mobile Detection (einmal berechnen)
   const isMobile = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
     || (navigator.maxTouchPoints > 0 && window.innerWidth < 1024);
@@ -111,6 +114,11 @@ export default function Scanner() {
 
   // Helper: Prüfen ob ein Dialog aktiv ist
   const hasActiveDialog = showScanDialog || showGPSWarning || showPlacementChoice || showFirstSetup;
+
+  // KRITISCH: Callback-Ref immer aktuell halten!
+  useEffect(() => {
+    onScanSuccessRef.current = onScanSuccess;
+  });
 
   // ============================================
   // SCANNER INIT
@@ -205,7 +213,12 @@ export default function Scanner() {
       await html5QrCodeRef.current.start(
         cameraId,
         config,
-        onScanSuccess,
+        // KRITISCH: Wrapper-Funktion ruft immer die aktuelle Ref auf!
+        (decodedText, decodedResult) => {
+          if (onScanSuccessRef.current) {
+            onScanSuccessRef.current(decodedText, decodedResult);
+          }
+        },
         onScanFailure
       );
 
@@ -224,50 +237,6 @@ export default function Scanner() {
     } catch (err) {
       console.error("Scanner start error:", err);
       setError("Scanner konnte nicht gestartet werden: " + (err.message || err));
-    }
-  };
-
-  // Stopp-Helper: stoppt html5-qrcode, clear() und alle lingering video tracks
-  const stopScanner = async () => {
-    try {
-      if (html5QrCodeRef.current) {
-        try {
-          const state = html5QrCodeRef.current.getState();
-          if (state === 2) {
-            await html5QrCodeRef.current.stop();
-            console.log('⏹️ html5QrCode stopped');
-          }
-        } catch (e) {
-          console.warn('stopScanner: error stopping instance', e?.message || e);
-        }
-
-        try {
-          html5QrCodeRef.current.clear();
-        } catch (e) { /* ignore */ }
-        html5QrCodeRef.current = null;
-      }
-
-      // Stop any remaining video tracks on the page (best-effort)
-      try {
-        const vids = document.querySelectorAll('#qr-reader video');
-        vids.forEach(v => {
-          try {
-            const s = v.srcObject;
-            if (s && typeof s.getTracks === 'function') {
-              s.getTracks().forEach(t => {
-                try { t.stop(); console.log('🛑 stopped track', t.kind, t.id); } catch (e) {}
-              });
-            }
-            try { v.srcObject = null; } catch (e) {}
-          } catch (e) { /* ignore per video */ }
-        });
-      } catch (e) {
-        console.warn('stopScanner: error stopping tracks', e?.message || e);
-      }
-
-      setIsScanning(false);
-    } catch (err) {
-      console.error('stopScanner general error:', err);
     }
   };
 
@@ -303,10 +272,9 @@ export default function Scanner() {
 
   // ============================================
   // SCAN SUCCESS - HAUPTLOGIK
-  // Scanner läuft IMMER weiter!
   // ============================================
   const onScanSuccess = async (decodedText, decodedResult) => {
-    // SOFORT prüfen mit Ref (kein Re-Render nötig!)
+    // Lock prüfen
     if (!decodedText || isProcessingRef.current) return;
     
     // URL-Format prüfen und Code extrahieren
@@ -320,20 +288,29 @@ export default function Scanner() {
       return;
     }
     
-    // NEUER CODE! Lock setzen SOFORT mit Ref
+    // NEUER CODE! Lock setzen
     isProcessingRef.current = true;
     lastScannedCodeRef.current = code;
     setBlockedCode(code);
     setScannedCode(decodedText);
     
-    console.log(`📱 Neuer Scan: ${code} (isMobile: ${isMobile})`);
+    console.log(`📱 Neuer Scan: ${code}`);
+
+    // SCANNER PAUSIEREN!
+    try {
+      if (html5QrCodeRef.current) {
+        await html5QrCodeRef.current.pause(true);
+        console.log("⏸️ Scanner pausiert");
+      }
+    } catch (e) {
+      console.log("Pause error:", e.message);
+    }
 
     // Vibration Feedback
     if (navigator.vibrate) {
       navigator.vibrate([100, 50, 100]);
     }
 
-    // WICHTIG: Scanner NICHT stoppen! Er läuft weiter im Hintergrund.
     await handleCodeCheck(code);
   };
 
@@ -421,7 +398,6 @@ export default function Scanner() {
       // CASE 3: Direkt zum Scan-Dialog
       console.log("✅ Direkt zum BoxScanDialog");
       setBoxLoading(false);
-      await stopScanner();
       setShowScanDialog(true);
 
     } catch (err) {
@@ -453,11 +429,9 @@ export default function Scanner() {
       // >10m Abweichung → Warnung anzeigen
       if (distance > 10) {
         console.log("⚠️ Distanz > 10m → GPS-Warnung");
-        await stopScanner();
         setShowGPSWarning(true);
       } else {
         console.log("✅ Distanz OK → BoxScanDialog");
-        await stopScanner();
         setShowScanDialog(true);
       }
 
@@ -465,7 +439,6 @@ export default function Scanner() {
       console.error("GPS error:", err);
       // Bei GPS-Fehler trotzdem zum Dialog
       setBoxLoading(false);
-      await stopScanner();
       setShowScanDialog(true);
     }
   };
@@ -499,17 +472,15 @@ export default function Scanner() {
       objectId: boxData.object_id
     });
     setBoxLoading(false);
-    await stopScanner();
     setShowPlacementChoice(true);
   };
 
   // ============================================
-  // DIALOG SCHLIESSEN - Scanner läuft weiter!
+  // DIALOG SCHLIESSEN - Scanner fortsetzen!
   // ============================================
   const resetScanner = async () => {
-    console.log("🔄 resetScanner - Dialoge schließen");
-    console.log(`🔒 Code "${lastScannedCodeRef.current}" wird freigegeben`);
-
+    console.log("🔄 resetScanner - Dialog schließen, Scanner fortsetzen");
+    
     // States zurücksetzen
     setScannedCode(null);
     setCurrentBox(null);
@@ -521,26 +492,34 @@ export default function Scanner() {
     setShowFirstSetup(false);
     setPendingPlacement(null);
     setError("");
-
+    
     // Lock aufheben
     isProcessingRef.current = false;
-
-    // Letzten Code freigeben (wichtig damit direkt weitergescannt werden kann)
-    lastScannedCodeRef.current = null;
-    setBlockedCode(null);
-
-    // Vollständig stoppen (clear tracks), dann neu starten
+    
+    // SCANNER FORTSETZEN!
     try {
-      await stopScanner();
-      // Kleiner Delay damit Kamera freigegeben wird
-      await new Promise(r => setTimeout(r, 300));
-      if (currentCamera) {
-        await startScanner(currentCamera.id);
-      } else {
-        await initScanner();
+      if (html5QrCodeRef.current) {
+        const state = html5QrCodeRef.current.getState();
+        console.log("📊 Scanner state:", state);
+        
+        // State 3 = PAUSED
+        if (state === 3) {
+          await html5QrCodeRef.current.resume();
+          console.log("▶️ Scanner fortgesetzt");
+        } else if (state !== 2) {
+          // Nicht am scannen und nicht pausiert → neu starten
+          console.log("🔄 Scanner neu starten...");
+          if (currentCamera) {
+            await startScanner(currentCamera.id);
+          }
+        }
       }
     } catch (e) {
-      console.error('resetScanner restart error:', e);
+      console.error("Resume error:", e.message);
+      // Fallback: Neu starten
+      if (currentCamera) {
+        await startScanner(currentCamera.id);
+      }
     }
   };
 
@@ -570,10 +549,9 @@ export default function Scanner() {
   // ============================================
   // HANDLER: GPS WARNING
   // ============================================
-  const handleIgnoreGPSWarning = async () => {
+  const handleIgnoreGPSWarning = () => {
     console.log("📍 GPS-Warnung ignoriert → BoxScanDialog");
     setShowGPSWarning(false);
-    await stopScanner();
     setShowScanDialog(true);
   };
 
@@ -605,7 +583,6 @@ export default function Scanner() {
       
       setGpsLoading(false);
       setShowGPSWarning(false);
-      await stopScanner();
       setShowScanDialog(true);
 
     } catch (err) {
@@ -613,7 +590,6 @@ export default function Scanner() {
       setGpsLoading(false);
       // Bei Fehler trotzdem zum Dialog
       setShowGPSWarning(false);
-      await stopScanner();
       setShowScanDialog(true);
     }
   };
@@ -658,7 +634,6 @@ export default function Scanner() {
       
       setGpsLoading(false);
       setShowPlacementChoice(false);
-      await stopScanner();
       setShowFirstSetup(true);
 
     } catch (err) {
