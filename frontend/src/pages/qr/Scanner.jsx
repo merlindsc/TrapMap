@@ -1,6 +1,12 @@
 /* ============================================================
    TRAPMAP - QR SCANNER
    Mit html5-qrcode Library - schneller & zuverlässiger
+   
+   ROUTING LOGIK:
+   1. Pool (kein object_id) → Objekt-Zuweisung
+   2. Lageplan-Box → Object-Page mit Lageplan-Tab
+   3. GPS-Box → Maps mit FlyTo
+   4. Zugewiesen aber nicht platziert → Platzierungsauswahl (GPS/Lageplan)
    ============================================================ */
 
 import React, { useEffect, useRef, useState } from "react";
@@ -8,7 +14,10 @@ import { Html5Qrcode } from "html5-qrcode";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import axios from "axios";
-import { Camera, X, RotateCcw, Flashlight, SwitchCamera } from "lucide-react";
+import { 
+  Camera, X, RotateCcw, Flashlight, SwitchCamera,
+  Map, Layers, Package, Building2, MapPin, Navigation
+} from "lucide-react";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -25,6 +34,11 @@ export default function Scanner() {
   const [torchOn, setTorchOn] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
 
+  // NEU: Platzierungsauswahl State
+  const [showPlacementChoice, setShowPlacementChoice] = useState(false);
+  const [pendingBox, setPendingBox] = useState(null);
+  const [objectHasFloorplans, setObjectHasFloorplans] = useState(false);
+
   const navigate = useNavigate();
   const { token } = useAuth();
 
@@ -35,14 +49,12 @@ export default function Scanner() {
 
   const initScanner = async () => {
     try {
-      // Kamera-Berechtigung prüfen
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         setError("Kamera wird von diesem Browser nicht unterstützt");
         setPermissionState("unsupported");
         return;
       }
 
-      // Verfügbare Kameras auflisten
       const devices = await Html5Qrcode.getCameras();
       
       if (!devices || devices.length === 0) {
@@ -88,12 +100,10 @@ export default function Scanner() {
 
   const startScanner = async (cameraId) => {
     try {
-      // Alten Scanner stoppen falls vorhanden
       if (html5QrCodeRef.current && isScanning) {
         await html5QrCodeRef.current.stop();
       }
 
-      // Neuen Scanner erstellen
       html5QrCodeRef.current = new Html5Qrcode("qr-reader");
 
       const config = {
@@ -116,7 +126,6 @@ export default function Scanner() {
       setIsScanning(true);
       setError("");
 
-      // Prüfen ob Taschenlampe unterstützt wird
       try {
         const capabilities = html5QrCodeRef.current.getRunningTrackCapabilities();
         setTorchSupported(capabilities?.torch === true);
@@ -155,7 +164,6 @@ export default function Scanner() {
 
     // Prüfen ob es eine URL ist
     if (decodedText.includes("trap-map.de/s/")) {
-      // Direkt zur URL navigieren
       const code = decodedText.split("/s/")[1];
       if (code) {
         navigate(`/s/${code}`, { replace: true });
@@ -171,12 +179,16 @@ export default function Scanner() {
     // Stille Fehler - kontinuierliches Scannen
   };
 
+  // ============================================
+  // HAUPTLOGIK: CODE PRÜFEN UND WEITERLEITEN
+  // ============================================
   const handleCodeCheck = async (code) => {
     try {
       const res = await axios.get(`${API}/qr/check/${code}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
+      // Code nicht in DB
       if (!res.data || !res.data.box_id) {
         navigate(`/qr/assign/${code}`);
         return;
@@ -185,20 +197,65 @@ export default function Scanner() {
       const boxData = res.data.boxes;
       const boxId = res.data.box_id;
       const objectId = boxData?.object_id;
-      const hasPosition = boxData?.lat && boxData?.lng;
       const positionType = boxData?.position_type;
+      const floorPlanId = boxData?.floor_plan_id;
+      const hasGPS = boxData?.lat && boxData?.lng;
+      const hasFloorplanPosition = floorPlanId && boxData?.pos_x !== null && boxData?.pos_y !== null;
 
+      // ============================================
+      // FALL 1: Box im Pool (nicht zugewiesen)
+      // → Objekt-Zuweisung
+      // ============================================
       if (!objectId) {
         navigate(`/qr/assign-object/${code}?box_id=${boxId}`);
         return;
       }
 
-      if (!hasPosition || positionType === 'none') {
-        navigate(`/maps?object_id=${objectId}&openBox=${boxId}&firstSetup=true&flyTo=true`);
+      // ============================================
+      // FALL 2: Box auf LAGEPLAN platziert
+      // → Object-Seite mit Lageplan-Tab öffnen
+      // ============================================
+      if (positionType === 'floorplan' && hasFloorplanPosition) {
+        navigate(`/objects/${objectId}?tab=floorplan&openBox=${boxId}`);
         return;
       }
 
-      navigate(`/maps?object_id=${objectId}&openBox=${boxId}&flyTo=true`);
+      // ============================================
+      // FALL 3: Box mit GPS platziert
+      // → Maps mit FlyTo öffnen
+      // ============================================
+      if ((positionType === 'gps' || positionType === 'map') && hasGPS) {
+        navigate(`/maps?object_id=${objectId}&openBox=${boxId}&flyTo=true`);
+        return;
+      }
+
+      // ============================================
+      // FALL 4: Zugewiesen aber NICHT platziert
+      // → IMMER Platzierungsauswahl zeigen!
+      // User entscheidet: GPS oder Lageplan
+      // ============================================
+      
+      // Prüfen ob das Objekt Lagepläne hat (für UI-Hinweis)
+      let floorplans = [];
+      try {
+        const floorplanRes = await axios.get(`${API}/floorplans/object/${objectId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        floorplans = floorplanRes.data || [];
+      } catch (err) {
+        console.error("Floorplan check error:", err);
+      }
+      
+      // IMMER Auswahl zeigen - User entscheidet!
+      setPendingBox({
+        boxId,
+        objectId,
+        code,
+        boxData,
+        floorplans
+      });
+      setObjectHasFloorplans(floorplans.length > 0);
+      setShowPlacementChoice(true);
 
     } catch (err) {
       console.error("QR check error:", err);
@@ -208,6 +265,20 @@ export default function Scanner() {
         await startScanner(currentCamera.id);
       }
     }
+  };
+
+  // ============================================
+  // PLATZIERUNGSAUSWAHL HANDLER
+  // ============================================
+  const handleChooseGPS = () => {
+    if (!pendingBox) return;
+    navigate(`/maps?object_id=${pendingBox.objectId}&openBox=${pendingBox.boxId}&firstSetup=true`);
+  };
+
+  const handleChooseFloorplan = () => {
+    if (!pendingBox) return;
+    // Zum Objekt mit Lageplan-Tab, Box öffnen für Platzierung
+    navigate(`/objects/${pendingBox.objectId}?tab=floorplan&openBox=${pendingBox.boxId}&place=true`);
   };
 
   const switchCamera = async () => {
@@ -238,9 +309,132 @@ export default function Scanner() {
     setError("");
     setScannedCode(null);
     setPermissionState("checking");
+    setShowPlacementChoice(false);
+    setPendingBox(null);
     await initScanner();
   };
 
+  // ============================================
+  // RENDER: PLATZIERUNGSAUSWAHL
+  // ============================================
+  if (showPlacementChoice && pendingBox) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] text-white">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 bg-[#111] border-b border-white/10">
+          <button
+            onClick={retryScanner}
+            className="p-2 text-gray-400 hover:text-white"
+          >
+            <X size={24} />
+          </button>
+          <h1 className="text-lg font-semibold flex items-center gap-2">
+            <Package size={20} />
+            Box platzieren
+          </h1>
+          <div className="w-10" />
+        </div>
+
+        {/* Content */}
+        <div className="p-4 space-y-6">
+          {/* Info */}
+          <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-indigo-500/30 rounded-lg flex items-center justify-center">
+                <Package size={20} className="text-indigo-400" />
+              </div>
+              <div>
+                <p className="font-semibold">Box #{pendingBox.boxData?.number || pendingBox.boxId}</p>
+                <p className="text-sm text-gray-400">
+                  {pendingBox.boxData?.qr_code || scannedCode}
+                </p>
+              </div>
+            </div>
+            <p className="text-indigo-300 text-sm">
+              Diese Box ist zugewiesen, aber noch nicht platziert. Wo möchtest du sie positionieren?
+            </p>
+          </div>
+
+          {/* Auswahl */}
+          <div className="space-y-3">
+            {/* GPS Option - immer verfügbar */}
+            <button
+              onClick={handleChooseGPS}
+              className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-green-500/50 rounded-xl p-5 text-left transition-all"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Navigation size={28} className="text-green-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-lg text-white">GPS-Karte</h3>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Box auf der Karte platzieren mit GPS-Koordinaten. 
+                    Ideal für Außenbereiche.
+                  </p>
+                </div>
+              </div>
+            </button>
+
+            {/* Lageplan Option - nur wenn Pläne vorhanden */}
+            {objectHasFloorplans ? (
+              <button
+                onClick={handleChooseFloorplan}
+                className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-blue-500/50 rounded-xl p-5 text-left transition-all"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Layers size={28} className="text-blue-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-lg text-white">Lageplan</h3>
+                    <p className="text-sm text-gray-400 mt-1">
+                      Box auf einem Gebäudeplan platzieren mit Grid-Position.
+                      Ideal für Innenbereiche.
+                    </p>
+                    {pendingBox.floorplans && (
+                      <p className="text-xs text-blue-400 mt-2">
+                        {pendingBox.floorplans.length} Lageplan{pendingBox.floorplans.length > 1 ? 'e' : ''} verfügbar
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </button>
+            ) : (
+              <div className="w-full bg-[#111] border border-white/5 rounded-xl p-5 opacity-50">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 bg-gray-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Layers size={28} className="text-gray-500" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-lg text-gray-400">Lageplan</h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Kein Lageplan für dieses Objekt vorhanden.
+                    </p>
+                    <p className="text-xs text-gray-600 mt-2">
+                      Lagepläne können in den Objekt-Einstellungen hochgeladen werden.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Zurück */}
+          <button
+            onClick={retryScanner}
+            className="w-full py-3 text-gray-400 hover:text-white text-sm"
+          >
+            ← Anderen Code scannen
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================
+  // RENDER: SCANNER
+  // ============================================
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
       {/* Header */}
@@ -323,15 +517,11 @@ export default function Scanner() {
         {/* Custom Overlay */}
         {isScanning && !scannedCode && (
           <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-            {/* Scan Frame */}
             <div className="relative w-64 h-64">
-              {/* Ecken */}
               <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-green-400 rounded-tl-lg" />
               <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-green-400 rounded-tr-lg" />
               <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-green-400 rounded-bl-lg" />
               <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-green-400 rounded-br-lg" />
-              
-              {/* Scan Line Animation */}
               <div className="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-green-400 to-transparent animate-scan" />
             </div>
           </div>
@@ -339,7 +529,7 @@ export default function Scanner() {
       </div>
 
       {/* Success */}
-      {scannedCode && (
+      {scannedCode && !showPlacementChoice && (
         <div className="m-4 p-4 bg-green-900/50 border border-green-500/50 rounded-xl">
           <p className="text-green-400 font-medium flex items-center gap-2">
             <span className="text-xl">✓</span>

@@ -1,91 +1,144 @@
 /* ============================================================
-   BOX MARKER GPS - VERSION 5.0
+   TRAPMAP - BOX MARKER KOMPONENTE
+   
+   Zeigt:
+   - QR-Nummer (kurz) ÜBER dem Kreis
+   - Display-Nummer (1, 2, 3...) IM Kreis
+   - Grid-Position UNTER dem Kreis (nur Lageplan)
+   - Status-Farbe als Kreis-Hintergrund
    ============================================================ */
 
-import { Marker, Popup } from "react-leaflet";
-import L from "leaflet";
+import React from 'react';
+import { Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import { getShortQr, getStatusColor, getBoxIcon } from './boxHelpers';
 
-// Custom icon based on status
-const getBoxIcon = (status) => {
-  const colors = {
-    green: "#10b981",
-    yellow: "#eab308",
-    orange: "#fb923c",
-    red: "#dc2626",
-    gray: "#6b7280",
-    blue: "#3b82f6",
-  };
+/**
+ * Erstellt das Marker-Icon mit allen Nummern
+ */
+function createBoxIcon(box, displayNumber, isFloorplan = false) {
+  const shortQr = getShortQr(box);
+  const statusColor = getStatusColor(box.current_status);
+  
+  // Grid-Position nur bei Lageplan
+  const gridHtml = isFloorplan && box.grid_position 
+    ? `<div class="box-grid-label">${box.grid_position}</div>` 
+    : '';
 
-  const color = colors[status] || colors.gray;
+  const html = `
+    <div class="box-marker-container">
+      <div class="box-qr-label">${shortQr}</div>
+      <div class="box-circle" style="background-color: ${statusColor}">
+        <span class="box-display-number">${displayNumber || '?'}</span>
+      </div>
+      ${gridHtml}
+    </div>
+  `;
 
   return L.divIcon({
-    className: "custom-box-marker",
-    html: `
-      <div style="
-        width: 32px;
-        height: 32px;
-        background: ${color};
-        border: 3px solid white;
-        border-radius: 50%;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        transition: transform 0.2s;
-      ">
-        <div style="
-          width: 10px;
-          height: 10px;
-          background: white;
-          border-radius: 50%;
-        "></div>
-      </div>
-    `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -16],
+    html: html,
+    className: 'box-marker-wrapper',
+    iconSize: [40, 60],
+    iconAnchor: [20, 50],
+    popupAnchor: [0, -50]
   });
-};
+}
 
-export default function BoxMarkerGPS({ box, onClick, onEdit }) {
-  if (!box?.lat || !box?.lng) return null;
+/**
+ * BoxMarker für Leaflet Maps
+ */
+export function BoxMarker({ 
+  box, 
+  displayNumber,
+  position,
+  isFloorplan = false,
+  onClick,
+  onDragEnd,
+  draggable = false
+}) {
+  if (!position || !position[0] || !position[1]) return null;
 
-  const icon = getBoxIcon(box.current_status);
+  const icon = createBoxIcon(box, displayNumber, isFloorplan);
 
   return (
     <Marker
-      position={[box.lat, box.lng]}
+      position={position}
       icon={icon}
+      draggable={draggable}
       eventHandlers={{
-        click: () => onClick(box),
+        click: () => onClick?.(box),
+        dragend: (e) => {
+          const { lat, lng } = e.target.getLatLng();
+          onDragEnd?.(box, { lat, lng });
+        }
       }}
     >
       <Popup>
-        <div style={{ minWidth: "150px" }}>
-          <div style={{ fontWeight: "600", marginBottom: "4px" }}>
-            {box.box_name || `Box ${box.id}`}
+        <div className="box-popup">
+          <div className="box-popup-header">
+            <span className="box-popup-icon">{getBoxIcon(box)}</span>
+            <strong>Box #{displayNumber}</strong>
           </div>
-          <div style={{ fontSize: "12px", color: "#64748b" }}>
-            Box #{box.box_number || box.id}
+          <div className="box-popup-info">
+            <div>QR: {box.qr_code}</div>
+            <div>Typ: {box.box_type_name || 'Standard'}</div>
+            <div>Status: {box.current_status || 'pending'}</div>
+            {box.grid_position && <div>Position: {box.grid_position}</div>}
+            {box.bait && <div>Köder: {box.bait}</div>}
           </div>
-          <button
-            onClick={() => onEdit(box)}
-            style={{
-              marginTop: "8px",
-              padding: "4px 8px",
-              background: "#6366f1",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "12px",
-            }}
-          >
-            Bearbeiten
-          </button>
         </div>
       </Popup>
     </Marker>
   );
 }
+
+/**
+ * BoxMarker für Lageplan (ImageOverlay)
+ * Verwendet absolute Positionierung statt Leaflet
+ */
+export function FloorplanBoxMarker({
+  box,
+  displayNumber,
+  containerWidth,
+  containerHeight,
+  onClick,
+  isSelected = false,
+  isDragging = false
+}) {
+  const shortQr = getShortQr(box);
+  const statusColor = getStatusColor(box.current_status);
+
+  // Position in Pixel umrechnen
+  const x = (box.pos_x / 100) * containerWidth;
+  const y = (box.pos_y / 100) * containerHeight;
+
+  return (
+    <div
+      className={`floorplan-box-marker ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`}
+      style={{
+        left: x,
+        top: y,
+        transform: 'translate(-50%, -50%)'
+      }}
+      onClick={() => onClick?.(box)}
+    >
+      {/* QR-Nummer über dem Kreis */}
+      <div className="box-qr-label">{shortQr}</div>
+      
+      {/* Kreis mit Display-Nummer */}
+      <div 
+        className="box-circle" 
+        style={{ backgroundColor: statusColor }}
+      >
+        <span className="box-display-number">{displayNumber || '?'}</span>
+      </div>
+      
+      {/* Grid-Position unter dem Kreis */}
+      {box.grid_position && (
+        <div className="box-grid-label">{box.grid_position}</div>
+      )}
+    </div>
+  );
+}
+
+export default BoxMarker;

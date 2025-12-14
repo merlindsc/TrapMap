@@ -1,23 +1,31 @@
 /* ============================================================
-   TRAPMAP - FLOOR PLAN EDITOR V7
-   - Grid-Setup beim Erstellen (Preset ODER echte Maße)
-   - Festes Grid pro Lageplan (ändert sich nicht beim Zoomen)
-   - Original Dialog-Style wie Maps
-   - Passive Event Listener Fix
-   - MIT EMOJI ICONS
+   TRAPMAP - FLOOR PLAN EDITOR V8
+   
+   ÄNDERUNGEN:
+   - QR-Nummer über Marker anzeigen
+   - display_number statt Box-ID im Kreis
+   - Logik wie Maps: Platzieren → Ersteinrichtung → Scan
+   - BoxEditDialog ohne GPS
+   - URL-Parameter Support (openBox)
+   - calculateDisplayNumbers Integration
    ============================================================ */
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { 
   Upload, Plus, Trash2, Grid3X3, X, ZoomIn, ZoomOut, 
   Package, Move, ChevronLeft, ChevronRight, Maximize2,
   Circle, Square, ArrowRight, Pencil, Eraser, RotateCcw,
   Hand, MousePointer, AlertTriangle, Save,
-  Settings, Ruler, LayoutGrid, Check
+  Settings, Ruler, LayoutGrid, Check, Clock
 } from "lucide-react";
 
 import BoxScanDialog from "./BoxScanDialog";
+import BoxEditDialog from "../pages/maps/BoxEditDialog";
+
+// Helpers importieren
+import { calculateDisplayNumbers, getShortQr } from "./boxes/BoxHelpers";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -131,7 +139,12 @@ const getColLabel = (index, totalCols) => {
   return 'A' + String.fromCharCode(65 + (index - 26));
 };
 
-export default function FloorPlanEditor({ objectId, objectName }) {
+export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp }) {
+  // URL-Parameter
+  const [searchParams] = useSearchParams();
+  const openBoxId = openBoxIdProp || searchParams.get("openBox");
+  const shouldPlaceBox = searchParams.get("place") === "true";
+
   // Data State
   const [floorPlans, setFloorPlans] = useState([]);
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -164,6 +177,10 @@ export default function FloorPlanEditor({ objectId, objectName }) {
   const [scanDialogOpen, setScanDialogOpen] = useState(false);
   const [selectedBox, setSelectedBox] = useState(null);
   const [showGridSettings, setShowGridSettings] = useState(false);
+  
+  // NEU: Edit Dialog States
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [isFirstSetup, setIsFirstSetup] = useState(false);
   
   // Drag & Place
   const [draggedBox, setDraggedBox] = useState(null);
@@ -299,6 +316,63 @@ export default function FloorPlanEditor({ objectId, objectName }) {
     }
   }, [selectedPlan]);
 
+  // ============================================
+  // URL-PARAMETER: Box per openBox öffnen
+  // ============================================
+  useEffect(() => {
+    if (openBoxId && boxesOnPlan.length > 0) {
+      const boxToOpen = boxesOnPlan.find(b => b.id === parseInt(openBoxId));
+      
+      if (boxToOpen) {
+        // Box ist bereits auf diesem Plan platziert
+        const needsSetup = !boxToOpen.box_type_id;
+        
+        setSelectedBox(boxToOpen);
+        
+        if (needsSetup) {
+          setIsFirstSetup(true);
+          setEditDialogOpen(true);
+        } else {
+          setScanDialogOpen(true);
+        }
+        
+        // URL-Parameter entfernen
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete("openBox");
+        newParams.delete("place");
+        const newUrl = newParams.toString() 
+          ? `${window.location.pathname}?${newParams}` 
+          : window.location.pathname;
+        window.history.replaceState({}, "", newUrl);
+      }
+    }
+  }, [openBoxId, boxesOnPlan]);
+
+  // ============================================
+  // URL-PARAMETER: Box platzieren (place=true)
+  // Box ist zugewiesen aber noch nicht auf Plan
+  // ============================================
+  useEffect(() => {
+    if (shouldPlaceBox && openBoxId && unplacedBoxes.length > 0) {
+      const boxToPlace = unplacedBoxes.find(b => b.id === parseInt(openBoxId));
+      
+      if (boxToPlace) {
+        // Box zum Platzieren auswählen
+        setDraggedBox(boxToPlace);
+        setMode("place");
+        
+        // URL-Parameter entfernen
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete("openBox");
+        newParams.delete("place");
+        const newUrl = newParams.toString() 
+          ? `${window.location.pathname}?${newParams}` 
+          : window.location.pathname;
+        window.history.replaceState({}, "", newUrl);
+      }
+    }
+  }, [shouldPlaceBox, openBoxId, unplacedBoxes]);
+
   const loadFloorPlans = async () => {
     try {
       const res = await axios.get(`${API}/floorplans/object/${objectId}`, { headers });
@@ -314,19 +388,31 @@ export default function FloorPlanEditor({ objectId, objectName }) {
     }
   };
 
+  // GEÄNDERT: Mit calculateDisplayNumbers
   const loadBoxesOnPlan = async (planId) => {
     try {
       const res = await axios.get(`${API}/floorplans/${planId}/boxes`, { headers });
-      setBoxesOnPlan(res.data || []);
+      let boxesData = res.data || [];
+      
+      // NEU: display_number berechnen!
+      boxesData = calculateDisplayNumbers(boxesData);
+      
+      setBoxesOnPlan(boxesData);
     } catch (err) {
       console.error("Load boxes error:", err);
     }
   };
 
+  // GEÄNDERT: Mit calculateDisplayNumbers
   const loadUnplacedBoxes = async () => {
     try {
       const res = await axios.get(`${API}/floorplans/object/${objectId}/unplaced`, { headers });
-      setUnplacedBoxes(res.data || []);
+      let boxesData = res.data || [];
+      
+      // NEU: display_number berechnen!
+      boxesData = calculateDisplayNumbers(boxesData);
+      
+      setUnplacedBoxes(boxesData);
     } catch (err) {
       console.error("Load unplaced boxes error:", err);
     }
@@ -400,13 +486,10 @@ export default function FloorPlanEditor({ objectId, objectName }) {
   const handleUpdateGridSettings = async (gridConfig) => {
     if (!selectedPlan) return;
 
-    // Error werfen wenn was schief geht - GridSettingsDialog behandelt es
     await axios.put(`${API}/floorplans/${selectedPlan.id}`, gridConfig, { headers });
     await loadFloorPlans();
     
-    // Aktualisiere selectedPlan
     setSelectedPlan(prev => ({ ...prev, ...gridConfig }));
-    // setShowGridSettings(false) wird jetzt vom Dialog selbst gemacht nach Erfolg
   };
 
   // ============================================
@@ -558,14 +641,42 @@ export default function FloorPlanEditor({ objectId, objectName }) {
 
   const placeBox = async (boxId, x, y, gridPosition) => {
     try {
-      await axios.put(`${API}/floorplans/${selectedPlan.id}/boxes/${boxId}`, {
+      // Box platzieren und Response bekommen
+      const response = await axios.put(`${API}/floorplans/${selectedPlan.id}/boxes/${boxId}`, {
         pos_x: x, pos_y: y, grid_position: gridPosition
       }, { headers });
       
-      loadBoxesOnPlan(selectedPlan.id);
-      loadUnplacedBoxes();
+      const placedBox = response.data || draggedBox;
+      
+      // Daten neu laden
+      await loadBoxesOnPlan(selectedPlan.id);
+      await loadUnplacedBoxes();
+      
       setDraggedBox(null);
       setMode("view");
+      
+      // WICHTIG: Nach dem Platzieren Ersteinrichtung öffnen!
+      if (placedBox) {
+        // placedBox mit allen nötigen Daten
+        const boxForDialog = {
+          ...draggedBox,
+          ...placedBox,
+          pos_x: x,
+          pos_y: y,
+          grid_position: gridPosition
+        };
+        
+        setSelectedBox(boxForDialog);
+        
+        const needsSetup = !boxForDialog.box_type_id;
+        if (needsSetup) {
+          setIsFirstSetup(true);
+          setEditDialogOpen(true);
+        } else {
+          // Box hat schon Typ → Scan-Dialog
+          setScanDialogOpen(true);
+        }
+      }
     } catch (err) {
       console.error("Place box error:", err);
     }
@@ -586,14 +697,26 @@ export default function FloorPlanEditor({ objectId, objectName }) {
   };
 
   // ============================================
-  // BOX INTERACTIONS
+  // BOX INTERACTIONS - GEÄNDERT: Logik wie Maps!
   // ============================================
   const handleBoxClick = (box, e) => {
     e.stopPropagation();
     if (mode !== "view") return;
     
     setSelectedBox(box);
-    setScanDialogOpen(true);
+    
+    // NEU: Prüfen ob Ersteinrichtung nötig (wie Maps!)
+    const needsSetup = !box.box_type_id;
+    
+    if (needsSetup) {
+      // Ersteinrichtung: BoxEditDialog öffnen
+      setIsFirstSetup(true);
+      setEditDialogOpen(true);
+    } else {
+      // Normal: Scan-Dialog öffnen
+      setIsFirstSetup(false);
+      setScanDialogOpen(true);
+    }
   };
 
   const handleBoxCreated = () => {
@@ -607,6 +730,14 @@ export default function FloorPlanEditor({ objectId, objectName }) {
     loadBoxesOnPlan(selectedPlan.id);
     setScanDialogOpen(false);
     setSelectedBox(null);
+  };
+
+  const handleEditCompleted = () => {
+    loadBoxesOnPlan(selectedPlan.id);
+    loadUnplacedBoxes();
+    setEditDialogOpen(false);
+    setSelectedBox(null);
+    setIsFirstSetup(false);
   };
 
   const zoomIn = () => setZoom(prev => Math.min(5, prev + 0.25));
@@ -863,7 +994,7 @@ export default function FloorPlanEditor({ objectId, objectName }) {
                   <GridLabels gridConfig={gridConfig} zoom={zoom} />
                 )}
 
-                {/* Boxes - MIT EMOJI ICONS */}
+                {/* Boxes - MIT QR-LABEL UND DISPLAY_NUMBER */}
                 {boxesOnPlan.map(box => (
                   <BoxMarker
                     key={box.id}
@@ -895,7 +1026,7 @@ export default function FloorPlanEditor({ objectId, objectName }) {
           </div>
         </div>
 
-        {/* SIDEBAR - MIT EMOJI ICONS */}
+        {/* SIDEBAR - MIT QR UND DISPLAY_NUMBER */}
         <Sidebar
           open={sidebarOpen}
           boxesOnPlan={boxesOnPlan}
@@ -905,6 +1036,8 @@ export default function FloorPlanEditor({ objectId, objectName }) {
           setMode={setMode}
           setSelectedBox={setSelectedBox}
           setScanDialogOpen={setScanDialogOpen}
+          setEditDialogOpen={setEditDialogOpen}
+          setIsFirstSetup={setIsFirstSetup}
           onToggle={() => setSidebarOpen(!sidebarOpen)}
         />
       </div>
@@ -940,12 +1073,43 @@ export default function FloorPlanEditor({ objectId, objectName }) {
         />
       )}
 
+      {/* Scan-Dialog mit onEdit */}
       {scanDialogOpen && selectedBox && (
         <BoxScanDialog
           box={selectedBox}
           onClose={() => { setScanDialogOpen(false); setSelectedBox(null); }}
           onSave={handleScanCompleted}
           onScanCreated={handleScanCompleted}
+          // NEU: onEdit Handler
+          onEdit={() => {
+            setScanDialogOpen(false);
+            setIsFirstSetup(false);
+            setEditDialogOpen(true);
+          }}
+          // Position ändern = Box zum Verschieben auswählen
+          onAdjustPosition={(box) => {
+            setScanDialogOpen(false);
+            setRelocatingBox(box);
+            setMode("relocate");
+          }}
+          // KEIN onSetGPS! Box ist auf Lageplan
+        />
+      )}
+
+      {/* NEU: BoxEditDialog (wie Maps, ohne GPS) */}
+      {editDialogOpen && selectedBox && (
+        <BoxEditDialog
+          box={selectedBox}
+          boxTypes={boxTypes}
+          isFirstSetup={isFirstSetup}
+          onClose={() => { 
+            setEditDialogOpen(false); 
+            setSelectedBox(null); 
+            setIsFirstSetup(false);
+          }}
+          onSave={handleEditCompleted}
+          // WICHTIG: Keine GPS-Funktionen!
+          // onAdjustPosition und onSetGPS werden NICHT übergeben
         />
       )}
     </div>
@@ -1139,7 +1303,7 @@ function GridSettingsDialog({ plan, hasBoxes, onSave, onClose }) {
   const [realHeight, setRealHeight] = useState(plan.real_height_m || 30);
   const [cellSize, setCellSize] = useState(plan.cell_size_m || 2);
   const [saving, setSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState(null); // 'success' | 'error' | null
+  const [saveStatus, setSaveStatus] = useState(null);
 
   const calculatedCols = mode === "custom" ? Math.ceil(realWidth / cellSize) : GRID_PRESETS[selectedPreset]?.cols || 20;
   const calculatedRows = mode === "custom" ? Math.ceil(realHeight / cellSize) : GRID_PRESETS[selectedPreset]?.rows || 20;
@@ -1167,7 +1331,6 @@ function GridSettingsDialog({ plan, hasBoxes, onSave, onClose }) {
     try {
       await onSave(config);
       setSaveStatus('success');
-      // Nach 1.5s schließen
       setTimeout(() => {
         onClose();
       }, 1500);
@@ -1191,7 +1354,6 @@ function GridSettingsDialog({ plan, hasBoxes, onSave, onClose }) {
           </button>
         </div>
 
-        {/* Success Toast */}
         {saveStatus === 'success' && (
           <div className="mx-4 mt-4 p-3 bg-green-900/50 border border-green-600 rounded-lg flex items-center gap-3">
             <Check className="w-6 h-6 text-green-400" />
@@ -1202,7 +1364,6 @@ function GridSettingsDialog({ plan, hasBoxes, onSave, onClose }) {
           </div>
         )}
 
-        {/* Error Toast */}
         {saveStatus === 'error' && (
           <div className="mx-4 mt-4 p-3 bg-red-900/50 border border-red-600 rounded-lg flex items-center gap-3">
             <AlertTriangle className="w-6 h-6 text-red-400" />
@@ -1400,6 +1561,7 @@ function BoxCreateDialogFloorPlan({ objectId, floorPlanId, position, boxTypes, o
           pos_x: position.x,
           pos_y: position.y,
           grid_position: position.gridPosition,
+          position_type: "floorplan",
           current_status: "green"
         }),
       });
@@ -1604,36 +1766,30 @@ function StatusDot({ status }) {
 function GridLabels({ gridConfig, zoom }) {
   const { cols, rows } = gridConfig;
   
-  // Berechne wie viele Labels wir anzeigen können ohne Überlappung
   const getSkipInterval = (count, isVertical = false) => {
-    const effectiveSize = isVertical ? 12 : 20; // Mindestbreite pro Label in px
-    const availableSpace = isVertical ? 500 : 800; // Ungefähre verfügbare Größe
+    const effectiveSize = isVertical ? 12 : 20;
+    const availableSpace = isVertical ? 500 : 800;
     const spacePerItem = (availableSpace * zoom) / count;
     
-    if (spacePerItem >= effectiveSize) return 1; // Alle anzeigen
-    if (spacePerItem >= effectiveSize / 2) return 2; // Jeden 2.
-    if (spacePerItem >= effectiveSize / 5) return 5; // Jeden 5.
-    if (spacePerItem >= effectiveSize / 10) return 10; // Jeden 10.
+    if (spacePerItem >= effectiveSize) return 1;
+    if (spacePerItem >= effectiveSize / 2) return 2;
+    if (spacePerItem >= effectiveSize / 5) return 5;
+    if (spacePerItem >= effectiveSize / 10) return 10;
     return Math.ceil(effectiveSize / spacePerItem);
   };
 
   const colSkip = getSkipInterval(cols, false);
   const rowSkip = getSkipInterval(rows, true);
-  
-  // Entscheide ob Labels vertikal rotiert werden sollen
   const rotateColLabels = cols > 30;
   
   return (
     <>
-      {/* Spalten-Labels (oben) */}
       <div 
         className="absolute left-0 right-0 flex" 
         style={{ top: rotateColLabels ? -24 : -14 }}
       >
         {Array.from({ length: cols }).map((_, i) => {
-          // Nur jeden n-ten anzeigen
           if (i % colSkip !== 0) return null;
-          
           const label = getColLabel(i, cols);
           
           return (
@@ -1657,13 +1813,11 @@ function GridLabels({ gridConfig, zoom }) {
         })}
       </div>
       
-      {/* Zeilen-Labels (links) */}
       <div 
         className="absolute top-0 bottom-0 flex flex-col" 
         style={{ left: -22, width: 20 }}
       >
         {Array.from({ length: rows }).map((_, i) => {
-          // Nur jeden n-ten anzeigen
           if (i % rowSkip !== 0) return null;
           
           return (
@@ -1691,7 +1845,7 @@ function GridLabels({ gridConfig, zoom }) {
 }
 
 // ============================================
-// BOX MARKER - MIT EMOJI ICONS
+// BOX MARKER - MIT QR-LABEL UND DISPLAY_NUMBER
 // ============================================
 function BoxMarker({ box, onClick, disabled, zoom }) {
   const colors = { green: "#10b981", yellow: "#eab308", orange: "#f97316", red: "#ef4444", gray: "#6b7280" };
@@ -1699,9 +1853,13 @@ function BoxMarker({ box, onClick, disabled, zoom }) {
   const size = Math.max(16, Math.min(26, 22 / zoom));
   const fontSize = Math.max(6, Math.min(9, 8 / zoom));
 
-  // Get emoji icons for this box type
+  // Emoji Icons
   const emojis = getBoxTypeEmojis(box.box_type_name);
   const hasEmojis = emojis && emojis.length > 0;
+
+  // NEU: QR-Nummer und display_number
+  const shortQr = getShortQr(box);
+  const displayNumber = box.display_number || '?';
 
   return (
     <div
@@ -1710,12 +1868,22 @@ function BoxMarker({ box, onClick, disabled, zoom }) {
       style={{ 
         left: `${box.pos_x}%`, 
         top: `${box.pos_y}%`,
-        transform: hasEmojis ? 'translate(-50%, -100%)' : 'translate(-50%, -50%)'
+        transform: 'translate(-50%, -100%)'
       }}
     >
-      {/* Emoji Badge - über dem Kreis */}
+      {/* QR-Nummer Badge - ganz oben */}
+      <div className="flex justify-center mb-0.5">
+        <div 
+          className="bg-black/90 rounded px-1.5 py-0.5 border border-white/30 shadow-lg text-white font-mono font-bold"
+          style={{ fontSize: Math.max(7, Math.min(10, 9 / zoom)) }}
+        >
+          {shortQr}
+        </div>
+      </div>
+
+      {/* Emoji Badge - über dem Kreis (wenn vorhanden) */}
       {hasEmojis && (
-        <div className="flex justify-center mb-1">
+        <div className="flex justify-center mb-0.5">
           <div 
             className="bg-black/90 rounded px-1.5 py-0.5 border border-white/30 shadow-lg"
             style={{ fontSize: Math.max(8, Math.min(12, 10 / zoom)) }}
@@ -1725,19 +1893,19 @@ function BoxMarker({ box, onClick, disabled, zoom }) {
         </div>
       )}
 
-      {/* Status Kreis mit Nummer */}
+      {/* Status Kreis mit display_number */}
       <div
-        className="rounded-full flex items-center justify-center text-white font-bold shadow-lg border-2 border-white"
+        className="rounded-full flex items-center justify-center text-white font-bold shadow-lg border-2 border-white mx-auto"
         style={{ backgroundColor: color, width: size, height: size, fontSize }}
       >
-        {box.number?.toString().slice(0, 3) || "?"}
+        {displayNumber}
       </div>
 
       {/* Grid Position Label */}
       {box.grid_position && (
         <div 
           className="absolute left-1/2 -translate-x-1/2 bg-black/80 text-white px-1 rounded whitespace-nowrap font-mono"
-          style={{ top: size + 1, fontSize: Math.max(5, fontSize - 1) }}
+          style={{ top: '100%', marginTop: 2, fontSize: Math.max(5, fontSize - 1) }}
         >
           {box.grid_position}
         </div>
@@ -1775,9 +1943,37 @@ function Annotation({ data }) {
 }
 
 // ============================================
-// SIDEBAR - MIT EMOJI ICONS
+// SIDEBAR - MIT QR UND DISPLAY_NUMBER
 // ============================================
-function Sidebar({ open, boxesOnPlan, unplacedBoxes, draggedBox, setDraggedBox, setMode, setSelectedBox, setScanDialogOpen, onToggle }) {
+function Sidebar({ 
+  open, 
+  boxesOnPlan, 
+  unplacedBoxes, 
+  draggedBox, 
+  setDraggedBox, 
+  setMode, 
+  setSelectedBox, 
+  setScanDialogOpen,
+  setEditDialogOpen,
+  setIsFirstSetup,
+  onToggle 
+}) {
+  
+  // Box in Sidebar anklicken
+  const handleBoxClick = (box) => {
+    setSelectedBox(box);
+    
+    // Prüfen ob Ersteinrichtung nötig
+    const needsSetup = !box.box_type_id;
+    
+    if (needsSetup) {
+      setIsFirstSetup(true);
+      setEditDialogOpen(true);
+    } else {
+      setScanDialogOpen(true);
+    }
+  };
+  
   return (
     <>
       <div className={`${open ? "w-56" : "w-0"} bg-gray-800 border-l border-gray-700 overflow-hidden transition-all flex flex-col shrink-0`}>
@@ -1793,6 +1989,7 @@ function Sidebar({ open, boxesOnPlan, unplacedBoxes, draggedBox, setDraggedBox, 
               <div className="space-y-1 max-h-28 overflow-y-auto">
                 {unplacedBoxes.map(box => {
                   const emojis = getBoxTypeEmojis(box.box_type_name);
+                  const shortQr = getShortQr(box);
                   return (
                     <div
                       key={box.id}
@@ -1803,7 +2000,8 @@ function Sidebar({ open, boxesOnPlan, unplacedBoxes, draggedBox, setDraggedBox, 
                     >
                       <div className="flex items-center gap-1.5">
                         <StatusDot status={box.current_status} />
-                        <span>{box.number || `Box ${box.id}`}</span>
+                        <span>#{box.display_number || '?'}</span>
+                        <span className="text-[9px] text-gray-500">{shortQr}</span>
                         {emojis && <span className="text-xs">{emojis}</span>}
                       </div>
                     </div>
@@ -1818,15 +2016,17 @@ function Sidebar({ open, boxesOnPlan, unplacedBoxes, draggedBox, setDraggedBox, 
             <div className="space-y-1 max-h-40 overflow-y-auto">
               {boxesOnPlan.map(box => {
                 const emojis = getBoxTypeEmojis(box.box_type_name);
+                const shortQr = getShortQr(box);
                 return (
                   <div
                     key={box.id}
                     className="p-1.5 rounded text-xs bg-gray-900 text-gray-300 hover:bg-gray-700 cursor-pointer flex items-center justify-between"
-                    onClick={() => { setSelectedBox(box); setScanDialogOpen(true); }}
+                    onClick={() => handleBoxClick(box)}
                   >
                     <div className="flex items-center gap-1.5">
                       <StatusDot status={box.current_status} />
-                      <span>{box.number || `Box ${box.id}`}</span>
+                      <span>#{box.display_number || '?'}</span>
+                      <span className="text-[9px] text-gray-500">{shortQr}</span>
                       {emojis && <span className="text-xs">{emojis}</span>}
                     </div>
                     {box.grid_position && (

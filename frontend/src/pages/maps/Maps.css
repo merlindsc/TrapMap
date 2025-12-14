@@ -1559,4 +1559,226 @@
   .box-item.unplaced {
     cursor: pointer;
   }
+}/* ============================================================
+   TRAPMAP - MAPS.CSS ERWEITERUNGEN
+   Füge diese Styles zu deiner bestehenden Maps.css hinzu
+   ============================================================ */
+
+/* ============================================
+   BOX MARKER MIT QR-LABEL
+   ============================================ */
+.box-marker-wrapper {
+  background: transparent !important;
+  border: none !important;
+}
+
+.box-marker-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.box-qr-label {
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.box-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.box-display-number {
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ============================================
+   BOX LIST ITEM - Erweitert
+   ============================================ */
+.box-item-detailed {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  background: #1f2937;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  margin-bottom: 6px;
+  position: relative;
+}
+
+.box-item-detailed:hover {
+  background: #374151;
+}
+
+.box-item-detailed.floorplan {
+  border-left: 3px solid #6366f1;
+}
+
+.box-item-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.box-number-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.box-number-badge.green { background: #10b981; }
+.box-number-badge.yellow { background: #eab308; }
+.box-number-badge.orange { background: #fb923c; }
+.box-number-badge.red { background: #dc2626; }
+.box-number-badge.gray { background: #6b7280; }
+
+.box-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.box-item-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: white;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.box-item-name .qr-badge {
+  font-size: 11px;
+  color: #9ca3af;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 400;
+}
+
+.box-item-name .floorplan-badge {
+  color: #a5b4fc;
+  margin-left: 2px;
+}
+
+.box-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 3px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.box-item-meta .box-type {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.box-item-meta .last-scan {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.box-item-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* FlyTo Button */
+.flyto-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.2);
+  border: none;
+  color: #a5b4fc;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.15s ease;
+}
+
+.box-item-detailed:hover .flyto-btn,
+.box-item-detailed .flyto-btn:focus {
+  opacity: 1;
+}
+
+.flyto-btn:hover {
+  background: #4f46e5;
+  color: white;
+}
+
+/* Mobile: Immer sichtbar */
+@media (max-width: 768px) {
+  .flyto-btn {
+    opacity: 1;
+  }
+}
+
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-indicator.green { background: #10b981; }
+.status-indicator.yellow { background: #eab308; }
+.status-indicator.orange { background: #fb923c; }
+.status-indicator.red { background: #dc2626; }
+.status-indicator.gray { background: #6b7280; }
+
+.item-chevron {
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+/* ============================================
+   UNPLACED BOX ITEM - QR Badge
+   ============================================ */
+.qr-badge-small {
+  font-size: 10px;
+  color: #9ca3af;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 4px;
+  border-radius: 2px;
+  margin-left: 4px;
+  font-weight: 400;
+}
+
+/* ============================================
+   GROUP HOVER FÜR FLYTO
+   ============================================ */
+.group:hover .flyto-btn {
+  opacity: 1;
 }

@@ -1,9 +1,9 @@
 /* ============================================================
-   TRAPMAP - MAPS V11 - MOBILE OPTIMIZED
+   TRAPMAP - MAPS V12 - MIT DISPLAY_NUMBER & FLYTO
    - Bottom Sheet für Mobile (Slide-Up Panel)
-   - Swipe-Gesten zum Auf/Zuklappen
-   - Floating Action Buttons
-   - Touch-optimiert
+   - Dynamische display_number pro Objekt (1, 2, 3...)
+   - FlyTo Button für GPS-Boxen
+   - QR-Nummer als Badge
    ============================================================ */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -30,6 +30,15 @@ import BoxScanDialog from "../../components/BoxScanDialog";
 import BoxEditDialog from "./BoxEditDialog";
 import ObjectCreateDialog from "./ObjectCreateDialog";
 import ObjectEditDialog from "./ObjectEditDialog";
+
+// Box Helpers - NEUE IMPORTS
+import { 
+  calculateDisplayNumbers, 
+  getShortQr, 
+  isGpsBox, 
+  isFloorplanBox,
+  getStatusColor as getStatusColorHelper 
+} from "../../components/boxes/BoxHelpers";
 
 // Logo - optional, mit Fallback
 let logoImg = null;
@@ -71,14 +80,6 @@ const createObjectIcon = () => {
   });
 };
 
-const getBoxDisplayNumber = (box) => {
-  if (box.qr_code) {
-    const match = box.qr_code.match(/(\d+)$/);
-    if (match) return parseInt(match[1], 10).toString();
-  }
-  return box.number || box.id;
-};
-
 const getStatusColor = (status) => {
   const s = (status || "").toLowerCase();
   if (s === "green" || s === "ok") return "green";
@@ -86,6 +87,18 @@ const getStatusColor = (status) => {
   if (s === "orange" || s.includes("auffällig")) return "orange";
   if (s === "red" || s.includes("befall")) return "red";
   return "gray";
+};
+
+const getStatusHex = (status) => {
+  const colors = {
+    green: "#10b981",
+    yellow: "#eab308",
+    orange: "#fb923c",
+    red: "#dc2626",
+    gray: "#6b7280",
+    blue: "#3b82f6",
+  };
+  return colors[getStatusColor(status)] || colors.gray;
 };
 
 const getBoxIcon = (box) => {
@@ -97,34 +110,36 @@ const getBoxIcon = (box) => {
   return "B";
 };
 
-const createBoxIcon = (displayNumber, status = "green") => {
-  const colors = {
-    green: "#10b981",
-    yellow: "#eab308",
-    orange: "#fb923c",
-    red: "#dc2626",
-    gray: "#6b7280",
-    blue: "#3b82f6",
-  };
-  const color = colors[status] || colors.green;
+// Marker mit QR-Label oben und display_number im Kreis
+const createBoxIcon = (displayNumber, shortQr, status = "green") => {
+  const color = getStatusHex(status);
 
   return L.divIcon({
-    html: `<div style="background: ${color}; width: 28px; height: 28px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: bold;">${displayNumber}</div>`,
-    className: "custom-box-marker",
-    iconSize: [28, 28],
-    iconAnchor: [14, 28],
+    html: `
+      <div class="box-marker-container">
+        <div class="box-qr-label">${shortQr}</div>
+        <div class="box-circle" style="background-color: ${color}">
+          <span class="box-display-number">${displayNumber}</span>
+        </div>
+      </div>
+    `,
+    className: "box-marker-wrapper",
+    iconSize: [40, 50],
+    iconAnchor: [20, 45],
   });
 };
 
 /* ============================================================
-   BOX MARKER
+   BOX MARKER - Mit display_number und shortQr
    ============================================================ */
 function BoxMarker({ box, onClick }) {
-  const displayNum = getBoxDisplayNumber(box);
+  const displayNum = box.display_number || '?';
+  const shortQr = getShortQr(box);
+  
   return (
     <Marker
       position={[box.lat, box.lng]}
-      icon={createBoxIcon(displayNum, box.current_status || box.status)}
+      icon={createBoxIcon(displayNum, shortQr, box.current_status || box.status)}
       eventHandlers={{ click: () => onClick(box) }}
     />
   );
@@ -178,9 +193,9 @@ function CollapsibleBoxSection({ title, icon, count, variant = "default", defaul
 }
 
 /* ============================================================
-   BOX LIST ITEM
+   BOX LIST ITEM - Mit display_number, QR-Badge und FlyTo
    ============================================================ */
-function BoxListItem({ box, onClick, showLocation = false, isFloorplan = false }) {
+function BoxListItem({ box, onClick, onFlyTo, showFlyTo = false, isFloorplan = false }) {
   const formatLastScan = (lastScan) => {
     if (!lastScan) return "Nie";
     const date = new Date(lastScan);
@@ -195,35 +210,45 @@ function BoxListItem({ box, onClick, showLocation = false, isFloorplan = false }
     return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
   };
 
-  const displayNum = getBoxDisplayNumber(box);
+  const displayNum = box.display_number || '?';
+  const shortQr = getShortQr(box);
   const statusColor = getStatusColor(box.current_status || box.status);
+  const canFlyTo = showFlyTo && isGpsBox(box) && onFlyTo;
 
   return (
-    <div className={`box-item-detailed ${isFloorplan ? 'floorplan' : ''}`} onClick={onClick}>
+    <div className={`box-item-detailed ${isFloorplan ? 'floorplan' : ''} group`} onClick={onClick}>
       <div className="box-item-main">
         <div className={`box-number-badge ${statusColor}`}>
           {displayNum}
         </div>
         <div className="box-item-info">
           <div className="box-item-name">
-            {box.box_type_name || 'Kein Typ'}
+            <span>Box #{displayNum}</span>
+            <span className="qr-badge">{shortQr}</span>
             {isFloorplan && <LayoutGrid size={12} className="floorplan-badge" />}
           </div>
           <div className="box-item-meta">
+            <span className="box-type">{box.box_type_name || 'Kein Typ'}</span>
             <span className="last-scan">
               <Clock size={11} />
               {formatLastScan(box.last_scan)}
             </span>
-            {box.last_scan_by && (
-              <span className="technician">
-                <User size={11} />
-                {box.last_scan_by}
-              </span>
-            )}
           </div>
         </div>
       </div>
       <div className="box-item-right">
+        {canFlyTo && (
+          <button 
+            className="flyto-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onFlyTo(box);
+            }}
+            title="Zur Box fliegen"
+          >
+            <Navigation size={14} />
+          </button>
+        )}
         <span className={`status-indicator ${statusColor}`} />
         <ChevronRight size={14} className="item-chevron" />
       </div>
@@ -268,7 +293,7 @@ export default function Maps() {
 
   // Mobile Bottom Sheet State
   const [isMobile, setIsMobile] = useState(isMobileDevice());
-  const [sheetState, setSheetState] = useState('peek'); // 'closed', 'peek', 'half', 'full'
+  const [sheetState, setSheetState] = useState('peek');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   
   // Sheet drag state
@@ -346,14 +371,11 @@ export default function Maps() {
     const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
     const deltaY = dragStartY.current - clientY;
     
-    // Swipe up = positive delta, swipe down = negative
     if (Math.abs(deltaY) > 50) {
       if (deltaY > 0) {
-        // Swipe up
         if (sheetState === 'peek') setSheetState('half');
         else if (sheetState === 'half') setSheetState('full');
       } else {
-        // Swipe down
         if (sheetState === 'full') setSheetState('half');
         else if (sheetState === 'half') setSheetState('peek');
         else if (sheetState === 'peek') setSheetState('closed');
@@ -366,7 +388,6 @@ export default function Maps() {
     isDragging.current = false;
   }, []);
 
-  // Toggle sheet on handle tap
   const handleSheetToggle = useCallback(() => {
     if (!isMobile) return;
     
@@ -400,7 +421,10 @@ export default function Maps() {
       });
       const json = await res.json();
       let boxesData = Array.isArray(json) ? json : json.data || [];
-      setBoxes(boxesData);
+      
+      // display_number berechnen
+      const boxesWithNumbers = calculateDisplayNumbers(boxesData);
+      setBoxes(boxesWithNumbers);
     } catch (e) {
       console.error("❌ Fehler beim Laden der Boxen:", e);
       setBoxes([]);
@@ -466,7 +490,6 @@ export default function Maps() {
         setSkipNextBoxLoad(true);
         setSelectedObject(targetObject);
         
-        // On mobile, expand sheet when object is selected
         if (isMobile) {
           setSheetState('half');
         }
@@ -477,7 +500,10 @@ export default function Maps() {
               headers: { Authorization: `Bearer ${token}` },
             });
             const json = await res.json();
-            const boxesData = Array.isArray(json) ? json : json.data || [];
+            let boxesData = Array.isArray(json) ? json : json.data || [];
+            
+            // display_number berechnen
+            boxesData = calculateDisplayNumbers(boxesData);
             setBoxes(boxesData);
             
             if (urlFlyTo && targetObject.lat && targetObject.lng) {
@@ -536,6 +562,20 @@ export default function Maps() {
       setBoxes([]);
     }
   }, [selectedObject, loadBoxes, skipNextBoxLoad]);
+
+  /* ============================================================
+     FLYTO HANDLER
+     ============================================================ */
+  const handleFlyToBox = useCallback((box) => {
+    if (!box.lat || !box.lng || !mapRef.current) return;
+    
+    // Auf Mobile: Sheet minimieren
+    if (isMobile) {
+      setSheetState('peek');
+    }
+    
+    mapRef.current.flyTo([box.lat, box.lng], 19, { duration: 1.2 });
+  }, [isMobile]);
 
   /* ============================================================
      REQUEST BOXES FROM POOL
@@ -657,7 +697,7 @@ export default function Maps() {
   };
 
   /* ============================================================
-     SORTED & FILTERED DATA
+     SORTED & FILTERED DATA - Mit display_number
      ============================================================ */
   const filteredObjects = useMemo(() => {
     if (!objectSearchQuery.trim()) return objects;
@@ -672,28 +712,20 @@ export default function Maps() {
   const sortedBoxes = useMemo(() => {
     if (!boxes.length) return { mapBoxes: [], floorplanBoxes: [], unplacedBoxes: [] };
 
-    const getNumber = (box) => {
-      if (box.qr_code) {
-        const match = box.qr_code.match(/(\d+)$/);
-        if (match) return parseInt(match[1], 10);
-      }
-      if (box.number) return parseInt(box.number, 10);
-      return box.id || 9999;
-    };
-
-    const sortByNumber = (a, b) => getNumber(a) - getNumber(b);
+    // Sortieren nach display_number
+    const sortByDisplayNumber = (a, b) => (a.display_number || 999) - (b.display_number || 999);
 
     const mapBoxes = boxes
-      .filter(b => (b.position_type === 'gps' || b.position_type === 'map') && b.lat && b.lng)
-      .sort(sortByNumber);
+      .filter(b => isGpsBox(b))
+      .sort(sortByDisplayNumber);
 
     const floorplanBoxes = boxes
-      .filter(b => b.position_type === 'floorplan')
-      .sort(sortByNumber);
+      .filter(b => isFloorplanBox(b))
+      .sort(sortByDisplayNumber);
 
     const unplacedBoxes = boxes
-      .filter(b => !b.position_type || b.position_type === 'none' || b.position_type === 'pool')
-      .sort(sortByNumber);
+      .filter(b => !isGpsBox(b) && !isFloorplanBox(b))
+      .sort(sortByDisplayNumber);
 
     return { mapBoxes, floorplanBoxes, unplacedBoxes };
   }, [boxes]);
@@ -706,7 +738,6 @@ export default function Maps() {
     setRequestMessage(null);
     setRequestCount("");
     
-    // On mobile, expand sheet
     if (isMobile) {
       setSheetState('half');
     }
@@ -717,12 +748,12 @@ export default function Maps() {
   };
 
   const handleBoxClick = (box) => {
-    // Close sheet on mobile when opening dialog
     if (isMobile) {
       setSheetState('peek');
     }
     
-    if (box.position_type === 'floorplan') {
+    // WICHTIG: Lageplan-Boxen → zum Lageplan navigieren
+    if (isFloorplanBox(box)) {
       setPendingFloorplanBox(box);
       setFloorplanDialogOpen(true);
       return;
@@ -907,6 +938,14 @@ export default function Maps() {
 
   const handleRepositionBox = async (latlng) => {
     if (!repositionBox) return;
+    
+    // WICHTIG: Prüfen ob Box auf Lageplan ist
+    if (isFloorplanBox(repositionBox)) {
+      alert("Diese Box ist auf einem Lageplan. GPS kann nicht gesetzt werden!");
+      setRepositionBox(null);
+      return;
+    }
+    
     try {
       const res = await fetch(`${API}/boxes/${repositionBox.id}/location`, {
         method: 'PATCH',
@@ -925,7 +964,6 @@ export default function Maps() {
     return MAPBOX_STREETS;
   };
 
-  // Get sidebar/sheet classes
   const getSidebarClasses = () => {
     if (isMobile) {
       return `maps-sidebar sheet-${sheetState}`;
@@ -1014,7 +1052,6 @@ export default function Maps() {
             )}
           </div>
 
-          {/* Desktop only: Sidebar toggle */}
           {!isMobile && (
             <button 
               className="sidebar-toggle-btn"
@@ -1041,7 +1078,7 @@ export default function Maps() {
       {repositionBox && (
         <div className="placing-hint reposition">
           <Navigation size={18} />
-          <span>Klicke auf die Karte um Box #{getBoxDisplayNumber(repositionBox)} zu verschieben</span>
+          <span>Klicke auf die Karte um Box #{repositionBox.display_number || '?'} zu verschieben</span>
           <button onClick={() => setRepositionBox(null)}>
             <X size={16} /> Abbrechen
           </button>
@@ -1051,7 +1088,7 @@ export default function Maps() {
       {boxToPlace && (
         <div className="placing-hint" style={{ borderColor: "#10b981", color: "#10b981" }}>
           <MapPin size={18} />
-          <span>Tippe auf die Karte um Box #{getBoxDisplayNumber(boxToPlace)} zu platzieren</span>
+          <span>Tippe auf die Karte um Box #{boxToPlace.display_number || getShortQr(boxToPlace)} zu platzieren</span>
           <button onClick={() => setBoxToPlace(null)} style={{ background: "rgba(16, 185, 129, 0.15)" }}>
             <X size={16} /> Abbrechen
           </button>
@@ -1120,7 +1157,7 @@ export default function Maps() {
           </div>
         </div>
 
-        {/* Mobile FAB - Show list */}
+        {/* Mobile FAB */}
         {isMobile && sheetState === 'closed' && (
           <button 
             className="mobile-fab"
@@ -1138,7 +1175,6 @@ export default function Maps() {
           ref={sheetRef}
           className={getSidebarClasses()}
         >
-          {/* Mobile Drag Handle */}
           {isMobile && (
             <div 
               className="sheet-drag-handle"
@@ -1366,7 +1402,7 @@ export default function Maps() {
                         >
                           <span className="box-icon">{getBoxIcon(box)}</span>
                           <div className="box-info">
-                            <h4>{getBoxDisplayNumber(box)}</h4>
+                            <h4>#{box.display_number || '?'} <span className="qr-badge-small">{getShortQr(box)}</span></h4>
                             <p>{box.box_type_name || 'Kein Typ'}</p>
                           </div>
                           <span className="drag-hint" style={{ color: boxToPlace?.id === box.id ? '#10b981' : undefined }}>
@@ -1379,7 +1415,7 @@ export default function Maps() {
                     )}
                   </CollapsibleBoxSection>
 
-                  {/* Karten-Boxen */}
+                  {/* Karten-Boxen - MIT FlyTo! */}
                   <CollapsibleBoxSection
                     title="Karte"
                     icon={<Map size={16} />}
@@ -1395,12 +1431,14 @@ export default function Maps() {
                           key={box.id} 
                           box={box} 
                           onClick={() => handleBoxClick(box)}
+                          onFlyTo={handleFlyToBox}
+                          showFlyTo={true}
                         />
                       ))
                     )}
                   </CollapsibleBoxSection>
 
-                  {/* Lageplan-Boxen */}
+                  {/* Lageplan-Boxen - KEIN FlyTo! */}
                   <CollapsibleBoxSection
                     title="Lageplan"
                     icon={<LayoutGrid size={16} />}
@@ -1417,6 +1455,7 @@ export default function Maps() {
                           box={box} 
                           onClick={() => handleBoxClick(box)}
                           isFloorplan={true}
+                          showFlyTo={false}
                         />
                       ))
                     )}
@@ -1466,17 +1505,29 @@ export default function Maps() {
           onClose={() => { setControlDialogOpen(false); setSelectedBox(null); }}
           onEdit={() => { setIsFirstSetup(false); setBoxEditDialogOpen(true); setControlDialogOpen(false); }}
           onSave={() => { setControlDialogOpen(false); setSelectedBox(null); if (selectedObject) loadBoxes(selectedObject.id); }}
-          onAdjustPosition={(box) => { setControlDialogOpen(false); setRepositionBox(box); setSelectedBox(null); }}
-          onSetGPS={(box) => {
+          onAdjustPosition={(box) => { 
+            setControlDialogOpen(false); 
+            // NUR für GPS-Boxen!
+            if (!isFloorplanBox(box)) {
+              setRepositionBox(box); 
+            }
+            setSelectedBox(null); 
+          }}
+          // GPS-Funktionen NUR wenn NICHT Lageplan-Box
+          onSetGPS={isFloorplanBox(selectedBox) ? undefined : (box) => {
             setControlDialogOpen(false);
             if (navigator.geolocation) {
               navigator.geolocation.getCurrentPosition(
                 async (pos) => {
                   try {
-                    await fetch(`${API}/boxes/${box.id}/location`, {
-                      method: 'PATCH',
+                    await fetch(`${API}/boxes/${box.id}/place-map`, {
+                      method: 'POST',
                       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                      body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+                      body: JSON.stringify({ 
+                        lat: pos.coords.latitude, 
+                        lng: pos.coords.longitude,
+                        object_id: selectedObject?.id
+                      })
                     });
                     if (selectedObject) loadBoxes(selectedObject.id);
                   } catch (err) { console.error(err); }
@@ -1497,17 +1548,26 @@ export default function Maps() {
           isFirstSetup={isFirstSetup}
           onClose={() => { setBoxEditDialogOpen(false); setSelectedBox(null); setIsFirstSetup(false); }}
           onSave={() => { setBoxEditDialogOpen(false); setSelectedBox(null); setIsFirstSetup(false); if (selectedObject) loadBoxes(selectedObject.id); }}
-          onAdjustPosition={() => { setBoxEditDialogOpen(false); setRepositionBox(selectedBox); setIsFirstSetup(false); setSelectedBox(null); }}
-          onSetGPS={() => {
+          onAdjustPosition={isFloorplanBox(selectedBox) ? undefined : () => { 
+            setBoxEditDialogOpen(false); 
+            setRepositionBox(selectedBox); 
+            setIsFirstSetup(false); 
+            setSelectedBox(null); 
+          }}
+          onSetGPS={isFloorplanBox(selectedBox) ? undefined : () => {
             setBoxEditDialogOpen(false);
             if (navigator.geolocation) {
               navigator.geolocation.getCurrentPosition(
                 async (pos) => {
                   try {
-                    await fetch(`${API}/boxes/${selectedBox.id}/location`, {
-                      method: 'PATCH',
+                    await fetch(`${API}/boxes/${selectedBox.id}/place-map`, {
+                      method: 'POST',
                       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                      body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+                      body: JSON.stringify({ 
+                        lat: pos.coords.latitude, 
+                        lng: pos.coords.longitude,
+                        object_id: selectedObject?.id
+                      })
                     });
                     if (selectedObject) loadBoxes(selectedObject.id);
                   } catch (err) { console.error(err); }

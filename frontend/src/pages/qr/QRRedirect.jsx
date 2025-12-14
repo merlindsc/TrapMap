@@ -1,7 +1,10 @@
 /* ============================================================
    TRAPMAP - QR REDIRECT PAGE
    Verarbeitet direkte QR-Code URLs: /s/:code
-   Leitet zum richtigen Flow weiter
+   Leitet zum richtigen Flow weiter:
+   - GPS-Box → Maps
+   - Lageplan-Box → Object Page mit Lageplan-Tab
+   - Pool-Box → Objekt-Zuweisung
    ============================================================ */
 
 import { useEffect, useState } from "react";
@@ -53,8 +56,14 @@ export default function QRRedirect() {
       const boxData = res.data.boxes;
       const boxId = res.data.box_id;
       const objectId = boxData?.object_id;
-      const hasPosition = boxData?.lat && boxData?.lng;
       const positionType = boxData?.position_type;
+      const floorPlanId = boxData?.floor_plan_id;
+      const hasGPS = boxData?.lat && boxData?.lng;
+      const hasFloorplan = floorPlanId && (positionType === 'floorplan');
+
+      // ============================================
+      // ROUTING LOGIK
+      // ============================================
 
       // Fall 1: Box im Pool (nicht zugewiesen)
       if (!objectId) {
@@ -62,14 +71,22 @@ export default function QRRedirect() {
         return;
       }
 
-      // Fall 2: Zugewiesen aber nicht platziert
-      if (!hasPosition || positionType === 'none') {
-        navigate(`/maps?object_id=${objectId}&openBox=${boxId}&firstSetup=true&flyTo=true`, { replace: true });
+      // Fall 2: Box auf LAGEPLAN
+      if (hasFloorplan) {
+        // Zur Object-Seite mit Lageplan-Tab und Box-ID
+        navigate(`/objects/${objectId}?tab=floorplan&openBox=${boxId}`, { replace: true });
         return;
       }
 
-      // Fall 3: Platziert → Kontrolle-Dialog
-      navigate(`/maps?object_id=${objectId}&openBox=${boxId}&flyTo=true`, { replace: true });
+      // Fall 3: Box mit GPS
+      if (hasGPS || positionType === 'gps' || positionType === 'map') {
+        navigate(`/maps?object_id=${objectId}&openBox=${boxId}&flyTo=true`, { replace: true });
+        return;
+      }
+
+      // Fall 4: Zugewiesen aber NICHT platziert → Maps für Ersteinrichtung
+      // (User kann dort entscheiden: GPS oder Lageplan)
+      navigate(`/maps?object_id=${objectId}&openBox=${boxId}&firstSetup=true`, { replace: true });
 
     } catch (err) {
       console.error("QR check error:", err);

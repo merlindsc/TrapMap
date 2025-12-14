@@ -1,6 +1,9 @@
 /* ============================================================
    TRAPMAP - BOX SCAN DIALOG  
    Kontrolle + Verlauf + Position-Optionen
+   
+   WICHTIG: GPS-Buttons nur wenn onAdjustPosition/onSetGPS übergeben!
+   Für Lageplan-Boxen diese Props NICHT übergeben!
    ============================================================ */
 
 import { useState, useEffect } from "react";
@@ -15,13 +18,22 @@ const STATUS = {
   red: { label: "Stark", color: "#da3633" }
 };
 
+// Helper: QR-Nummer extrahieren (ohne führende Null)
+const getShortQr = (box) => {
+  if (box?.qr_code) {
+    const match = box.qr_code.match(/(\d+)/);
+    if (match) return parseInt(match[1], 10).toString();
+  }
+  return null;
+};
+
 export default function BoxScanDialog({ 
   box, 
   onClose, 
   onSave, 
   onEdit,
-  onAdjustPosition,  // Position auf Karte anpassen
-  onSetGPS           // GPS-Position setzen
+  onAdjustPosition,  // Position auf Karte/Plan anpassen - OPTIONAL
+  onSetGPS           // GPS-Position setzen - OPTIONAL (NUR für GPS-Boxen!)
 }) {
   const token = localStorage.getItem("trapmap_token");
   
@@ -40,16 +52,14 @@ export default function BoxScanDialog({
   const [history, setHistory] = useState([]);
   const [histLoading, setHistLoading] = useState(false);
 
-  // Box-Nummer
-  const boxNum = (() => {
-    if (box?.qr_code) {
-      const m = box.qr_code.match(/(\d+)$/);
-      if (m) return parseInt(m[1], 10);
-    }
-    return box?.id || "?";
-  })();
+  // Box-Nummer aus QR-Code (ohne führende Null)
+  const shortQr = getShortQr(box);
+  const boxNum = shortQr || box?.id || "?";
 
   const typeName = box?.box_types?.name || box?.box_type_name || "Unbekannt";
+  
+  // Ist das eine Lageplan-Box?
+  const isFloorplanBox = box?.position_type === 'floorplan' || box?.floor_plan_id;
 
   // Status auto
   useEffect(() => {
@@ -131,6 +141,9 @@ export default function BoxScanDialog({
     return scan.user_name || scan.technician_name || "Unbekannt";
   };
 
+  // Position-Buttons nur anzeigen wenn Props übergeben wurden
+  const showPositionButtons = onAdjustPosition || onSetGPS;
+
   return (
     <>
       {/* Toast */}
@@ -198,6 +211,7 @@ export default function BoxScanDialog({
                 <div style={{ fontSize: 11, color: "#8b949e" }}>
                   {typeName}
                   {box?.bait && <span style={{ color: "#58a6ff" }}> • {box.bait}</span>}
+                  {isFloorplanBox && <span style={{ color: "#8b5cf6" }}> • Lageplan</span>}
                 </div>
               </div>
             </div>
@@ -309,60 +323,84 @@ export default function BoxScanDialog({
                   )}
                 </div>
 
-                {/* Position Buttons */}
-                <div style={{ 
-                  display: "flex", 
-                  gap: 8,
-                  paddingTop: 10,
-                  borderTop: "1px solid #21262d"
-                }}>
-                  <button
-                    onClick={() => { onAdjustPosition && onAdjustPosition(box); }}
-                    style={{
-                      flex: 1,
-                      padding: "10px",
-                      background: "#1f6feb20",
-                      border: "1px solid #1f6feb",
-                      borderRadius: 6,
-                      color: "#58a6ff",
-                      fontSize: 11,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 6
-                    }}
-                  >
-                    <MapPin size={14} /> Position verschieben
-                  </button>
-                  <button
-                    onClick={() => { 
-                      // Prüfen ob Mobile
-                      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-                      if (!isMobile) {
-                        alert("⚠️ GPS setzen funktioniert nur auf Mobilgeräten!\n\nAm PC bitte 'Position verschieben' nutzen und auf die Karte klicken.");
-                        return;
-                      }
-                      onSetGPS && onSetGPS(box); 
-                    }}
-                    style={{
-                      flex: 1,
-                      padding: "10px",
-                      background: "#161b22",
-                      border: "1px solid #30363d",
-                      borderRadius: 6,
-                      color: "#8b949e",
-                      fontSize: 11,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 6
-                    }}
-                  >
-                    <Navigation size={14} /> GPS (Mobil)
-                  </button>
-                </div>
+                {/* Position Buttons - NUR wenn Props übergeben wurden! */}
+                {showPositionButtons && (
+                  <div style={{ 
+                    display: "flex", 
+                    gap: 8,
+                    paddingTop: 10,
+                    borderTop: "1px solid #21262d"
+                  }}>
+                    {/* Position verschieben - nur wenn onAdjustPosition übergeben */}
+                    {onAdjustPosition && (
+                      <button
+                        onClick={() => { onAdjustPosition(box); }}
+                        style={{
+                          flex: 1,
+                          padding: "10px",
+                          background: "#1f6feb20",
+                          border: "1px solid #1f6feb",
+                          borderRadius: 6,
+                          color: "#58a6ff",
+                          fontSize: 11,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 6
+                        }}
+                      >
+                        <MapPin size={14} /> 
+                        {isFloorplanBox ? "Position auf Plan" : "Position verschieben"}
+                      </button>
+                    )}
+                    
+                    {/* GPS setzen - NUR wenn onSetGPS übergeben UND KEINE Lageplan-Box! */}
+                    {onSetGPS && !isFloorplanBox && (
+                      <button
+                        onClick={() => { 
+                          const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                          if (!isMobile) {
+                            alert("⚠️ GPS setzen funktioniert nur auf Mobilgeräten!\n\nAm PC bitte 'Position verschieben' nutzen und auf die Karte klicken.");
+                            return;
+                          }
+                          onSetGPS(box); 
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: "10px",
+                          background: "#161b22",
+                          border: "1px solid #30363d",
+                          borderRadius: 6,
+                          color: "#8b949e",
+                          fontSize: 11,
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 6
+                        }}
+                      >
+                        <Navigation size={14} /> GPS (Mobil)
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Warnung für Lageplan-Boxen */}
+                {isFloorplanBox && (
+                  <div style={{
+                    marginTop: 10,
+                    padding: "8px 12px",
+                    background: "#8b5cf620",
+                    border: "1px solid #8b5cf650",
+                    borderRadius: 6,
+                    color: "#a78bfa",
+                    fontSize: 11
+                  }}>
+                    📍 Diese Box ist auf einem Lageplan platziert. Position nur über den Lageplan-Editor ändern.
+                  </div>
+                )}
               </>
             ) : (
               /* History */
@@ -393,13 +431,11 @@ export default function BoxScanDialog({
                       
                       {/* Details */}
                       <div style={{ fontSize: 11, color: "#8b949e", display: "flex", flexDirection: "column", gap: 3 }}>
-                        {/* Techniker */}
                         <div style={{ display: "flex", gap: 6 }}>
                           <span style={{ color: "#6e7681" }}>Kontrolleur:</span>
                           <span style={{ color: "#e6edf3" }}>{getUserName(s)}</span>
                         </div>
                         
-                        {/* Köder - wenn vorhanden */}
                         {(s.bait || s.notes?.includes("Köder:")) && (
                           <div style={{ display: "flex", gap: 6 }}>
                             <span style={{ color: "#6e7681" }}>Köder:</span>
@@ -409,7 +445,6 @@ export default function BoxScanDialog({
                           </div>
                         )}
                         
-                        {/* Notizen - wenn vorhanden und nicht nur Köder-Info */}
                         {s.notes && !s.notes.startsWith("Ersteinrichtung") && (
                           <div style={{ display: "flex", gap: 6 }}>
                             <span style={{ color: "#6e7681" }}>Notiz:</span>
@@ -417,7 +452,6 @@ export default function BoxScanDialog({
                           </div>
                         )}
                         
-                        {/* Scan-Typ */}
                         {s.scan_type === "setup" && (
                           <div style={{ 
                             marginTop: 4, 
