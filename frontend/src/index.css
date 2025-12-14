@@ -224,3 +224,30 @@ body,
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* ============================================================
+   THEME UTILS - helper classes that map to CSS variables
+   Use these in components to make colors respond to data-theme
+   ============================================================ */
+.bg-primary { background: var(--bg-primary); }
+.bg-secondary { background: var(--bg-secondary); }
+.bg-card { background: var(--bg-card); }
+.bg-hover { background: var(--bg-hover); }
+
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-muted { color: var(--text-muted); }
+
+.border-theme { border-color: var(--border-color); }
+
+.sidebar-bg { background: var(--sidebar-bg); }
+.sidebar-text { color: var(--sidebar-text); }
+.sidebar-text-hover { color: var(--sidebar-text-hover); }
+
+.bg-status-green { background: rgba(16, 185, 129, 0.15); }
+.bg-status-yellow { background: rgba(234, 179, 8, 0.15); }
+.bg-status-orange { background: rgba(249, 115, 22, 0.15); }
+.bg-status-red { background: rgba(239, 68, 68, 0.15); }
+
+/* Small helper to invert text on dark backgrounds if needed */
+.text-on-dark { color: var(--text-primary); }

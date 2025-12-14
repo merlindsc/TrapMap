@@ -179,8 +179,8 @@ export default function Settings() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <h1 className="text-3xl font-bold text-white mb-2">Einstellungen</h1>
-      <p className="text-gray-400 mb-8">Verwalten Sie Ihr Profil und Ihre Organisation</p>
+      <h1 className="text-3xl font-bold text-primary mb-2">Einstellungen</h1>
+      <p className="text-muted mb-8">Verwalten Sie Ihr Profil und Ihre Organisation</p>
 
       {/* Message */}
       {message && (
@@ -195,16 +195,16 @@ export default function Settings() {
       )}
 
       {/* User Info Card */}
-      <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-6 mb-6">
-        <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+      <div className="bg-card border border-theme rounded-xl p-6 mb-6">
+        <h2 className="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
           <User size={20} className="text-indigo-400" />
           Benutzer-Information
         </h2>
         
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <span className="text-gray-400">Name:</span>
-            <p className="text-white">{user?.first_name} {user?.last_name}</p>
+            <span className="text-muted">Name:</span>
+            <p className="text-primary">{user?.first_name} {user?.last_name}</p>
           </div>
           <div>
             <span className="text-gray-400">E-Mail:</span>
@@ -222,8 +222,8 @@ export default function Settings() {
       </div>
 
       {/* Passwort ändern Card */}
-      <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-6 mb-6">
-        <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+      <div className="bg-card border border-theme rounded-xl p-6 mb-6">
+        <h2 className="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
           <Key size={20} className="text-indigo-400" />
           Passwort ändern
         </h2>
@@ -231,13 +231,13 @@ export default function Settings() {
         <form onSubmit={handleChangePassword} className="space-y-4">
           {/* Aktuelles Passwort */}
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Aktuelles Passwort</label>
+            <label className="block text-sm text-muted mb-1">Aktuelles Passwort</label>
             <div className="relative">
               <input
                 type={showPasswords.current ? "text" : "password"}
                 value={passwords.current}
                 onChange={(e) => setPasswords(prev => ({ ...prev, current: e.target.value }))}
-                className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg px-4 py-2 text-white pr-10"
+                className="w-full bg-card border border-theme rounded-lg px-4 py-2 text-primary pr-10"
                 placeholder="••••••••"
                 required
               />
@@ -253,13 +253,13 @@ export default function Settings() {
 
           {/* Neues Passwort */}
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Neues Passwort</label>
+            <label className="block text-sm text-muted mb-1">Neues Passwort</label>
             <div className="relative">
               <input
                 type={showPasswords.new ? "text" : "password"}
                 value={passwords.new}
                 onChange={(e) => setPasswords(prev => ({ ...prev, new: e.target.value }))}
-                className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg px-4 py-2 text-white pr-10"
+                className="w-full bg-card border border-theme rounded-lg px-4 py-2 text-primary pr-10"
                 placeholder="Mindestens 8 Zeichen"
                 minLength={8}
                 required
@@ -276,13 +276,13 @@ export default function Settings() {
 
           {/* Passwort bestätigen */}
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Neues Passwort bestätigen</label>
+            <label className="block text-sm text-muted mb-1">Neues Passwort bestätigen</label>
             <div className="relative">
               <input
                 type={showPasswords.confirm ? "text" : "password"}
                 value={passwords.confirm}
                 onChange={(e) => setPasswords(prev => ({ ...prev, confirm: e.target.value }))}
-                className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg px-4 py-2 text-white pr-10"
+                className="w-full bg-card border border-theme rounded-lg px-4 py-2 text-primary pr-10"
                 placeholder="Passwort wiederholen"
                 minLength={8}
                 required
@@ -318,25 +318,25 @@ export default function Settings() {
       </div>
 
       {/* Organisationsdaten Card */}
-      <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-6 mb-6">
-        <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+      <div className="bg-card border border-theme rounded-xl p-6 mb-6">
+        <h2 className="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
           <Building2 size={20} className="text-indigo-400" />
           Organisationsdaten
         </h2>
-        <p className="text-gray-400 text-sm mb-4">
+        <p className="text-muted text-sm mb-4">
           Diese Daten werden als "Dienstleister" in Reports verwendet.
         </p>
         
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Firmenname</label>
-            <input
-              type="text"
-              value={orgData.name}
-              onChange={(e) => setOrgData(prev => ({ ...prev, name: e.target.value }))}
-              className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg px-4 py-2 text-white"
-              placeholder="Ihre Firma GmbH"
-            />
+            <label className="block text-sm text-muted mb-1">Firmenname</label>
+              <input
+                type="text"
+                value={orgData.name}
+                onChange={(e) => setOrgData(prev => ({ ...prev, name: e.target.value }))}
+                className="w-full bg-card border border-theme rounded-lg px-4 py-2 text-primary"
+                placeholder="Ihre Firma GmbH"
+              />
           </div>
 
           <div className="grid md:grid-cols-3 gap-4">
@@ -349,7 +349,7 @@ export default function Settings() {
                 type="text"
                 value={orgData.address}
                 onChange={(e) => setOrgData(prev => ({ ...prev, address: e.target.value }))}
-                className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg px-4 py-2 text-white"
+                className="w-full bg-card border border-theme rounded-lg px-4 py-2 text-primary"
                 placeholder="Musterstraße 1"
               />
             </div>
@@ -359,7 +359,7 @@ export default function Settings() {
                 type="text"
                 value={orgData.zip}
                 onChange={(e) => setOrgData(prev => ({ ...prev, zip: e.target.value }))}
-                className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg px-4 py-2 text-white"
+                className="w-full bg-card border border-theme rounded-lg px-4 py-2 text-primary"
                 placeholder="12345"
               />
             </div>
@@ -386,7 +386,7 @@ export default function Settings() {
                 type="text"
                 value={orgData.phone}
                 onChange={(e) => setOrgData(prev => ({ ...prev, phone: e.target.value }))}
-                className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg px-4 py-2 text-white"
+                className="w-full bg-card border border-theme rounded-lg px-4 py-2 text-primary"
                 placeholder="040 123456"
               />
             </div>
@@ -419,7 +419,7 @@ export default function Settings() {
           <button
             onClick={handleSaveOrg}
             disabled={saving}
-            className="flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50"
           >
             {saving ? (
               <>
@@ -437,18 +437,18 @@ export default function Settings() {
       </div>
 
       {/* Logo Upload Card */}
-      <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+      <div className="bg-card border border-theme rounded-xl p-6">
+        <h2 className="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
           <Image size={20} className="text-indigo-400" />
           Firmenlogo
         </h2>
         
-        <p className="text-gray-400 text-sm mb-4">
+        <p className="text-muted text-sm mb-4">
           Das Logo erscheint auf allen Reports oben rechts.
         </p>
 
         {logoUrl && (
-          <div className="mb-4 p-4 bg-[#0d0d1a] rounded-lg border border-white/10">
+          <div className="mb-4 p-4 bg-card rounded-lg border border-theme">
             <p className="text-xs text-gray-500 mb-2">Aktuelles Logo:</p>
             <img 
               src={logoUrl} 

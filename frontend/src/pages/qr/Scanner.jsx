@@ -73,10 +73,10 @@ export default function Scanner() {
   const [boxLoading, setBoxLoading] = useState(false);
   const [processingCode, setProcessingCode] = useState(false); // Lock gegen Flackern
   
-  // COOLDOWN: Verhindert dass gleicher Code sofort wieder erkannt wird
+  // COOLDOWN: Gleicher Code wird KOMPLETT geblockt bis anderer Code kommt!
   const lastScannedCodeRef = useRef(null);
-  const lastScanTimeRef = useRef(0);
-  const SCAN_COOLDOWN_MS = 5000; // 5 Sekunden Cooldown für gleichen Code
+  const scanCountRef = useRef(0); // Zählt wie oft gleicher Code ignoriert wurde
+  const [blockedCode, setBlockedCode] = useState(null); // Für UI-Anzeige
   
   // Mobile Detection (einmal berechnen)
   const isMobile = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
@@ -273,27 +273,29 @@ export default function Scanner() {
       code = decodedText.split("/s/")[1];
     }
     
-    // COOLDOWN CHECK: Gleicher Code innerhalb von 5 Sekunden?
-    const now = Date.now();
-    const timeSinceLastScan = now - lastScanTimeRef.current;
-    const issamecode = code === lastScannedCodeRef.current;
-    
-    // STRENGER CHECK: Gleicher Code wird 5 Sekunden ignoriert
-    if (issamecode && timeSinceLastScan < SCAN_COOLDOWN_MS) {
-      // Nur alle 2 Sekunden loggen um Console nicht zu spammen
-      if (timeSinceLastScan % 2000 < 100) {
-        console.log(`⏳ Cooldown: ${code} (noch ${Math.round((SCAN_COOLDOWN_MS - timeSinceLastScan) / 1000)}s)`);
+    // ========================================
+    // KRITISCH: Gleicher Code wird KOMPLETT GEBLOCKT!
+    // Erst wenn ein ANDERER Code gescannt wird, wird der alte freigegeben
+    // ========================================
+    if (code === lastScannedCodeRef.current) {
+      scanCountRef.current += 1;
+      // Nur alle 50 Scans loggen um Console nicht zu spammen
+      if (scanCountRef.current % 50 === 1) {
+        console.log(`🚫 Code ${code} geblockt (${scanCountRef.current}x) - scanne anderen Code!`);
       }
-      return; // Gleicher Code zu schnell - ignorieren!
+      return; // IMMER ignorieren bis anderer Code kommt!
     }
+    
+    // NEUER CODE! Reset counter und alten Block aufheben
+    scanCountRef.current = 0;
     
     // Lock setzen SOFORT
     setProcessingCode(true);
     setScannedCode(decodedText);
     
-    // Letzten Code und Zeit speichern
+    // Letzten Code speichern - dieser wird jetzt geblockt bis anderer kommt
     lastScannedCodeRef.current = code;
-    lastScanTimeRef.current = now;
+    setBlockedCode(code); // Für UI-Anzeige
     
     console.log(`📱 Neuer Scan: ${code} (isMobile: ${isMobile})`);
     
@@ -720,8 +722,9 @@ export default function Scanner() {
   // Scanner zurücksetzen und neu starten
   const resetScanner = async () => {
     console.log("🔄 resetScanner called");
+    console.log(`🔒 Code "${lastScannedCodeRef.current}" bleibt geblockt bis anderer Code gescannt wird`);
     
-    // Erst alle States zurücksetzen
+    // States zurücksetzen
     setScannedCode(null);
     setCurrentBox(null);
     setGpsDistance(0);
@@ -734,29 +737,29 @@ export default function Scanner() {
     setError("");
     setProcessingCode(false); // Lock zurücksetzen!
     
-    // WICHTIG: Scanner NICHT automatisch starten!
-    // User muss aktiv "Weiter scannen" klicken
-    // Das verhindert dass gleicher Code sofort wieder erkannt wird
-    console.log("⏸️ Scanner pausiert - warte auf User-Aktion");
+    // WICHTIG: lastScannedCodeRef NICHT zurücksetzen!
+    // Der Code bleibt geblockt bis ein ANDERER Code gescannt wird
+    
+    // Scanner nach kurzem Delay neu starten
+    setTimeout(async () => {
+      if (currentCamera) {
+        console.log("🎥 Scanner neu starten - gleicher Code wird ignoriert");
+        try {
+          await startScanner(currentCamera.id);
+          console.log("✅ Scanner läuft wieder");
+        } catch (err) {
+          console.error("❌ Scanner start error:", err);
+        }
+      }
+    }, 200);
   };
   
-  // Manueller Scanner-Start nach User-Klick
-  const startScanningAgain = async () => {
-    console.log("▶️ Manueller Scanner-Start");
-    
-    // Cooldown zurücksetzen für neuen Scan
+  // Manuelles Entsperren des letzten Codes (falls User wirklich nochmal scannen will)
+  const unlockLastCode = () => {
+    console.log(`🔓 Code "${lastScannedCodeRef.current}" entsperrt`);
     lastScannedCodeRef.current = null;
-    lastScanTimeRef.current = 0;
-    
-    if (currentCamera) {
-      try {
-        await startScanner(currentCamera.id);
-        console.log("✅ Scanner gestartet");
-      } catch (err) {
-        console.error("❌ Scanner start error:", err);
-        setError("Scanner konnte nicht gestartet werden");
-      }
-    }
+    scanCountRef.current = 0;
+    setBlockedCode(null); // UI aktualisieren
   };
 
   // Kamera wechseln
@@ -1118,26 +1121,6 @@ export default function Scanner() {
         </div>
       )}
 
-      {/* Scanner pausiert - Weiter scannen Button */}
-      {permissionState === "granted" && !isScanning && !boxLoading && !error && (
-        <div className="flex flex-col items-center justify-center py-20 px-6">
-          <div className="w-20 h-20 bg-indigo-600/20 rounded-full flex items-center justify-center mb-6">
-            <Camera size={40} className="text-indigo-400" />
-          </div>
-          <h2 className="text-xl font-semibold mb-2">Scanner bereit</h2>
-          <p className="text-gray-400 text-center mb-6">
-            Tippe auf den Button um den nächsten QR-Code zu scannen
-          </p>
-          <button
-            onClick={startScanningAgain}
-            className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center gap-3 text-lg font-semibold transition-all active:scale-95"
-          >
-            <Camera size={24} />
-            Weiter scannen
-          </button>
-        </div>
-      )}
-
       {/* Scanner */}
       <div className="relative">
         <div 
@@ -1145,9 +1128,29 @@ export default function Scanner() {
           ref={scannerRef}
           className="w-full"
           style={{ 
-            display: permissionState === "granted" && isScanning && !boxLoading ? "block" : "none",
+            display: permissionState === "granted" && !boxLoading ? "block" : "none",
           }}
         />
+        
+        {/* Hinweis: Letzter Code ist geblockt */}
+        {permissionState === "granted" && isScanning && blockedCode && (
+          <div className="absolute bottom-4 left-4 right-4 bg-yellow-900/90 border border-yellow-600/50 rounded-xl p-3 backdrop-blur-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <AlertTriangle size={18} className="text-yellow-400 flex-shrink-0" />
+                <p className="text-yellow-200 text-sm truncate">
+                  <strong>{blockedCode}</strong> wird ignoriert
+                </p>
+              </div>
+              <button
+                onClick={unlockLastCode}
+                className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-500 text-white text-xs font-medium rounded-lg flex-shrink-0 transition-colors"
+              >
+                Entsperren
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Custom Overlay */}
         {isScanning && !scannedCode && !boxLoading && (
