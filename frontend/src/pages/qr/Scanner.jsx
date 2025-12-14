@@ -73,10 +73,7 @@ export default function Scanner() {
   const [boxLoading, setBoxLoading] = useState(false);
   const [processingCode, setProcessingCode] = useState(false); // Lock gegen Flackern
   
-  // COOLDOWN: Gleicher Code wird KOMPLETT geblockt bis anderer Code kommt!
-  const lastScannedCodeRef = useRef(null);
-  const scanCountRef = useRef(0); // Zählt wie oft gleicher Code ignoriert wurde
-  const [blockedCode, setBlockedCode] = useState(null); // Für UI-Anzeige
+  // NOTE: removed persistent same-code blockade — rely on processing lock only
   
   // Mobile Detection (einmal berechnen)
   const isMobile = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
@@ -314,30 +311,9 @@ export default function Scanner() {
       code = decodedText.split("/s/")[1];
     }
     
-    // ========================================
-    // KRITISCH: Gleicher Code wird KOMPLETT GEBLOCKT!
-    // Erst wenn ein ANDERER Code gescannt wird, wird der alte freigegeben
-    // ========================================
-    if (code === lastScannedCodeRef.current) {
-      scanCountRef.current += 1;
-      // Nur alle 50 Scans loggen um Console nicht zu spammen
-      if (scanCountRef.current % 50 === 1) {
-        console.log(`🚫 Code ${code} geblockt (${scanCountRef.current}x) - scanne anderen Code!`);
-      }
-      return; // IMMER ignorieren bis anderer Code kommt!
-    }
-    
-    // NEUER CODE! Reset counter und alten Block aufheben
-    scanCountRef.current = 0;
-    
-    // Lock setzen SOFORT
+    // Lock setzen SOFORT (prevents rapid duplicate processing)
     setProcessingCode(true);
     setScannedCode(decodedText);
-    
-    // Letzten Code speichern - dieser wird jetzt geblockt bis anderer kommt
-    lastScannedCodeRef.current = code;
-    setBlockedCode(code); // Für UI-Anzeige
-    
     console.log(`📱 Neuer Scan: ${code} (isMobile: ${isMobile})`);
     
     // Scanner SOFORT stoppen
@@ -710,7 +686,7 @@ export default function Scanner() {
     
     // Reset mit kleinem Delay für DOM-Update
     setTimeout(() => {
-      resetScanner();
+      refreshScannerOnce();
     }, 100);
   };
 
@@ -734,7 +710,9 @@ export default function Scanner() {
     
     // Jetzt Scan-Dialog für erste Kontrolle öffnen
     // WICHTIG: processingCode bleibt true bis Kontrolle gespeichert
-    setTimeout(() => {
+    setTimeout(async () => {
+      // Scanner einmal neu starten, dann Scan-Dialog öffnen
+      await refreshScannerOnce();
       setShowScanDialog(true);
     }, 100);
   };
@@ -763,7 +741,6 @@ export default function Scanner() {
   // Scanner zurücksetzen und neu starten
   const resetScanner = async () => {
     console.log("🔄 resetScanner called");
-    console.log(`🔒 Code "${lastScannedCodeRef.current}" bleibt geblockt bis anderer Code gescannt wird`);
     
     // States zurücksetzen
     setScannedCode(null);
@@ -792,13 +769,31 @@ export default function Scanner() {
       }
     }, 300);
   };
+
+  // Einmaliger Refresh: Scanner kurz stoppen und wieder starten, ohne alle Zustände zurückzusetzen
+  const refreshScannerOnce = async () => {
+    try {
+      console.log("🔁 refreshScannerOnce - restart video stream");
+      // Stoppe nur den Stream, aber behalte UI‑Zustände
+      await stopScanner(false);
+      // Kleiner Delay damit die Kamera freigegeben wird
+      await new Promise(r => setTimeout(r, 200));
+      if (currentCamera) {
+        await startScanner(currentCamera.id);
+      } else {
+        await initScanner();
+      }
+      // Aufräumen lokaler Scan-Zustände damit neuer Scan möglich ist
+      setScannedCode(null);
+      setProcessingCode(false);
+    } catch (err) {
+      console.error("refreshScannerOnce error:", err);
+    }
+  };
   
   // Manuelles Entsperren des letzten Codes (falls User wirklich nochmal scannen will)
   const unlockLastCode = () => {
-    console.log(`🔓 Code "${lastScannedCodeRef.current}" entsperrt`);
-    lastScannedCodeRef.current = null;
-    scanCountRef.current = 0;
-    setBlockedCode(null); // UI aktualisieren
+    // previously allowed manual unblock — no-op now that blockade removed
   };
 
   // Kamera wechseln
@@ -1171,25 +1166,7 @@ export default function Scanner() {
           }}
         />
         
-        {/* Hinweis: Letzter Code ist geblockt */}
-        {permissionState === "granted" && isScanning && blockedCode && (
-          <div className="absolute bottom-4 left-4 right-4 bg-yellow-900/90 border border-yellow-600/50 rounded-xl p-3 backdrop-blur-sm">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <AlertTriangle size={18} className="text-yellow-400 flex-shrink-0" />
-                <p className="text-yellow-200 text-sm truncate">
-                  <strong>{blockedCode}</strong> wird ignoriert
-                </p>
-              </div>
-              <button
-                onClick={unlockLastCode}
-                className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-500 text-white text-xs font-medium rounded-lg flex-shrink-0 transition-colors"
-              >
-                Entsperren
-              </button>
-            </div>
-          </div>
-        )}
+            {/* no persistent blocked-code banner (we rely on processing lock) */}
 
         {/* Custom Overlay */}
         {isScanning && !scannedCode && !boxLoading && (
