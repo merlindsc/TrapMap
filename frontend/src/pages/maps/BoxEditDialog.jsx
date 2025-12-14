@@ -6,7 +6,40 @@
    ============================================================ */
 
 import { useState, useEffect } from "react";
-import { X, Save, CheckCircle, MapPin, Navigation, Clock, Bug, Hash, Tag } from "lucide-react";
+import { X, Save, CheckCircle, MapPin, Navigation, Clock, Bug, Hash, Tag, Maximize2 } from "lucide-react";
+import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+
+// Mini-Karte Icon
+const gpsMarkerIcon = L.divIcon({
+  className: 'custom-marker',
+  html: `<div style="
+    width: 28px; height: 28px;
+    background: #22c55e;
+    border: 3px solid white;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    display: flex; align-items: center; justify-content: center;
+  ">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+    </svg>
+  </div>`,
+  iconSize: [28, 28],
+  iconAnchor: [14, 14]
+});
+
+// Map Centerer Component
+function MapCenterer({ position }) {
+  const map = useMap();
+  useEffect(() => {
+    if (position) {
+      map.setView(position, 17);
+    }
+  }, [position, map]);
+  return null;
+}
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -440,6 +473,34 @@ export default function BoxEditDialog({
                   <span>GPS-Position ausstehend</span>
                 </>
               )}
+            </div>
+          )}
+
+          {/* Mini-Karte bei Ersteinrichtung wenn GPS gespeichert */}
+          {isFirstSetup && gpsSaved && gpsPosition && (
+            <div className="rounded-xl overflow-hidden border border-white/10">
+              <div style={{ height: "140px", position: "relative" }}>
+                <MapContainer
+                  center={[gpsPosition.lat, gpsPosition.lng]}
+                  zoom={17}
+                  style={{ height: "100%", width: "100%" }}
+                  zoomControl={false}
+                  dragging={false}
+                  touchZoom={false}
+                  doubleClickZoom={false}
+                  scrollWheelZoom={false}
+                  attributionControl={false}
+                >
+                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  <Marker position={[gpsPosition.lat, gpsPosition.lng]} icon={gpsMarkerIcon} />
+                  <MapCenterer position={[gpsPosition.lat, gpsPosition.lng]} />
+                </MapContainer>
+                {/* Label */}
+                <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-sm px-2 py-1 rounded text-xs text-green-400 flex items-center gap-1">
+                  <CheckCircle size={12} />
+                  Position gesetzt
+                </div>
+              </div>
             </div>
           )}
 
