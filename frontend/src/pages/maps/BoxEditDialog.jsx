@@ -1,14 +1,23 @@
 /* ============================================================
-   TRAPMAP - BOX EDIT DIALOG
-   Bearbeiten einer Box - Mit flexiblem Intervall (Fix/Range)
+   TRAPMAP - BOX EDIT DIALOG V2
+   Bearbeiten einer Box - Mit Box-Name/Nummer Anzeige
+   + QR-Code Info wenn unterschiedlich
    + Insektentyp-Auswahl für Insektenmonitore
-   Modernes Design passend zum Dashboard
    ============================================================ */
 
 import { useState, useEffect } from "react";
-import { X, Save, CheckCircle, MapPin, Navigation, Clock, Bug } from "lucide-react";
+import { X, Save, CheckCircle, MapPin, Navigation, Clock, Bug, Hash, Tag } from "lucide-react";
 
 const API = import.meta.env.VITE_API_URL;
+
+// QR-Nummer extrahieren
+const getShortQr = (box) => {
+  if (box?.qr_code) {
+    const match = box.qr_code.match(/(\d+)/);
+    if (match) return parseInt(match[1], 10).toString();
+  }
+  return null;
+};
 
 export default function BoxEditDialog({
   box,
@@ -21,7 +30,7 @@ export default function BoxEditDialog({
 }) {
   const token = localStorage.getItem("trapmap_token");
 
-  // Required Fields von Organisation (aus Login-Daten)
+  // Required Fields
   const [requiredFields, setRequiredFields] = useState({
     bait: false,
     insect_type: false,
@@ -30,7 +39,6 @@ export default function BoxEditDialog({
     gps: false
   });
 
-  // Lade Organisation Settings aus localStorage (beim Login gespeichert)
   useEffect(() => {
     try {
       const userStr = localStorage.getItem("trapmap_user");
@@ -41,21 +49,23 @@ export default function BoxEditDialog({
         }
       }
     } catch (err) {
-      console.error("Error loading org settings from localStorage:", err);
+      console.error("Error loading org settings:", err);
     }
   }, []);
 
-  // Form State
+  // Form State - NEU: Box-Name und Display-Number editierbar
+  const [boxName, setBoxName] = useState(box?.name || box?.box_name || "");
+  const [displayNumber, setDisplayNumber] = useState(box?.display_number || box?.number || "");
   const [boxTypeId, setBoxTypeId] = useState(box?.box_type_id || "");
   const [bait, setBait] = useState(box?.bait || "");
   const [customBait, setCustomBait] = useState("");
   const [notes, setNotes] = useState(box?.notes || "");
   
-  // Insektentyp State
+  // Insektentyp
   const [insectType, setInsectType] = useState("");
   const [customInsectType, setCustomInsectType] = useState("");
   
-  // Intervall State - Fix oder Range
+  // Intervall
   const [intervalType, setIntervalType] = useState("fixed");
   const [intervalFixed, setIntervalFixed] = useState(box?.control_interval_days || 30);
   const [intervalRangeStart, setIntervalRangeStart] = useState(20);
@@ -64,7 +74,11 @@ export default function BoxEditDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  // Köder-Optionen für Nager
+  // QR-Info
+  const qrNumber = getShortQr(box);
+  const hasCustomNumber = displayNumber && displayNumber.toString() !== qrNumber;
+
+  // Köder-Optionen
   const COMMON_BAITS = [
     "Brodifacoum Block",
     "Bromadiolon Paste",
@@ -78,19 +92,11 @@ export default function BoxEditDialog({
     "Difenacoum Paste"
   ];
 
-  // Insektentypen für Insektenmonitore
   const INSECT_TYPES = [
-    "Schaben",
-    "Motten",
-    "Käfer",
-    "Bettwanzen",
-    "Ameisen",
-    "Silberfische",
-    "Fliegen",
-    "Wespen"
+    "Schaben", "Motten", "Käfer", "Bettwanzen",
+    "Ameisen", "Silberfische", "Fliegen", "Wespen"
   ];
 
-  // Schnellauswahl Intervalle
   const QUICK_INTERVALS = [
     { value: 7, label: "7 Tage", sub: "wöchentlich" },
     { value: 14, label: "14 Tage", sub: "2 Wochen" },
@@ -102,12 +108,12 @@ export default function BoxEditDialog({
 
   useEffect(() => {
     if (box?.box_type_id) setBoxTypeId(box.box_type_id);
+    if (box?.name || box?.box_name) setBoxName(box.name || box.box_name);
+    if (box?.display_number || box?.number) setDisplayNumber(box.display_number || box.number);
     if (box?.notes) {
-      // Prüfen ob Notizen einen Insektentyp enthalten
       const foundInsect = INSECT_TYPES.find(t => box.notes.includes(t));
       if (foundInsect) {
         setInsectType(foundInsect);
-        // Rest der Notizen ohne Insektentyp
         setNotes(box.notes.replace(`Ziel: ${foundInsect}`, "").replace(foundInsect, "").trim());
       } else {
         setNotes(box.notes);
@@ -132,67 +138,50 @@ export default function BoxEditDialog({
     }
   }, [box]);
 
-  // Box-Typ Erkennung - basiert auf category aus Datenbank
+  // Box-Typ Erkennung
   const selectedType = boxTypes.find(t => t.id === parseInt(boxTypeId));
   const typeCategory = selectedType?.category?.toLowerCase() || "";
-
-  // Köder-Auswahl nur bei Köderstationen
   const isRodentStation = typeCategory === "bait_box";
-
-  // Insektentyp bei Insektenmonitoren und Gelstationen
   const isInsectMonitor = typeCategory === "insect_monitor" || typeCategory === "uv_trap";
 
-  // Berechne finales Intervall
   const getFinalInterval = () => {
-    if (intervalType === "fixed") {
-      return intervalFixed;
-    }
+    if (intervalType === "fixed") return intervalFixed;
     return Math.floor((intervalRangeStart + intervalRangeEnd) / 2);
   };
 
-  // Kombiniere Notizen mit Insektentyp
   const buildFinalNotes = () => {
     let finalNotes = notes.trim();
-    
     if (isInsectMonitor && insectType) {
       const insectInfo = insectType === "custom" ? customInsectType : insectType;
       if (insectInfo) {
         finalNotes = `Ziel: ${insectInfo}${finalNotes ? ` | ${finalNotes}` : ""}`;
       }
     }
-    
     return finalNotes;
   };
 
   const handleSave = async () => {
-    // Box-Typ ist IMMER Pflicht
     if (!boxTypeId) {
       setError("Bitte Box-Typ auswählen");
       return;
     }
 
-    // Köder Pflicht? (nur wenn bait_box)
     const finalBait = bait === "custom" ? customBait : bait;
     if (requiredFields.bait && isRodentStation && !finalBait) {
       setError("Köder ist ein Pflichtfeld");
       return;
     }
 
-    // Insektentyp Pflicht? (nur wenn insect_monitor)
     const finalInsectType = insectType === "custom" ? customInsectType : insectType;
     if (requiredFields.insect_type && isInsectMonitor && !finalInsectType) {
       setError("Insektentyp ist ein Pflichtfeld");
       return;
     }
 
-    // Notizen Pflicht?
     if (requiredFields.notes && !notes.trim()) {
       setError("Notizen sind ein Pflichtfeld");
       return;
     }
-
-    // Foto Pflicht? (wird später bei Scan geprüft)
-    // GPS Pflicht? (wird später geprüft)
 
     setSaving(true);
     setError(null);
@@ -205,6 +194,11 @@ export default function BoxEditDialog({
         notes: finalNotes,
         control_interval_days: finalInterval
       };
+      
+      // NEU: Box-Name und Nummer speichern
+      if (boxName.trim()) updateData.name = boxName.trim();
+      if (displayNumber) updateData.number = displayNumber.toString();
+      
       if (isRodentStation && finalBait) updateData.bait = finalBait;
 
       const updateRes = await fetch(`${API}/boxes/${box.id}`, {
@@ -245,11 +239,9 @@ export default function BoxEditDialog({
     }
   };
 
-  const getBoxNumber = () => {
-    if (box?.qr_code) {
-      const match = box.qr_code.match(/(\d+)$/);
-      if (match) return parseInt(match[1], 10).toString();
-    }
+  const getBoxHeaderNumber = () => {
+    if (displayNumber) return displayNumber;
+    if (qrNumber) return qrNumber;
     return box?.id || "?";
   };
 
@@ -262,28 +254,39 @@ export default function BoxEditDialog({
         onClick={(e) => e.stopPropagation()}
         className="bg-[#111827] rounded-xl w-full max-w-md max-h-[90vh] border border-white/10 shadow-2xl overflow-hidden flex flex-col"
       >
-        {/* Header */}
+        {/* Header - MIT QR-INFO */}
         <div className="flex items-center justify-between p-4 border-b border-white/10 bg-[#0d1117]">
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 ${isFirstSetup ? 'bg-green-500/20 text-green-400' : 'bg-indigo-500/20 text-indigo-400'} rounded-lg flex items-center justify-center font-bold text-sm`}>
-              {getBoxNumber()}
+              {getBoxHeaderNumber()}
             </div>
             <div>
               <h2 className="font-semibold text-white">
                 {isFirstSetup ? "Ersteinrichtung" : "Box bearbeiten"}
               </h2>
-              <p className="text-xs text-gray-500">{box?.qr_code}</p>
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                {/* QR-Code Badge */}
+                {qrNumber && (
+                  <span className="bg-gray-700 px-2 py-0.5 rounded flex items-center gap-1 font-mono">
+                    <Hash size={10} />
+                    QR {qrNumber}
+                  </span>
+                )}
+                {/* Hinweis wenn Nummer anders */}
+                {hasCustomNumber && (
+                  <span className="text-yellow-400">
+                    (Nr. {displayNumber})
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-          <button 
-            onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors p-1"
-          >
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors p-1">
             <X size={20} />
           </button>
         </div>
 
-        {/* Body - scrollbar */}
+        {/* Body */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           
           {/* Ersteinrichtung Info */}
@@ -301,6 +304,54 @@ export default function BoxEditDialog({
             </div>
           )}
 
+          {/* ========== NEU: BOX-NAME ========== */}
+          <div>
+            <label className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2">
+              <Tag size={12} />
+              Box-Name (optional)
+            </label>
+            <input
+              type="text"
+              value={boxName}
+              onChange={(e) => setBoxName(e.target.value)}
+              placeholder="z.B. Eingang Lager, Küche links..."
+              className="w-full px-3 py-2.5 bg-[#0d1117] border border-white/10 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors"
+            />
+            <p className="text-xs text-gray-600 mt-1">Eigener Name zur leichteren Identifikation</p>
+          </div>
+
+          {/* ========== NEU: DISPLAY-NUMMER ========== */}
+          <div>
+            <label className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2">
+              <Hash size={12} />
+              Box-Nummer
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={displayNumber}
+                onChange={(e) => setDisplayNumber(e.target.value)}
+                placeholder={qrNumber || "Auto"}
+                className="flex-1 px-3 py-2.5 bg-[#0d1117] border border-white/10 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors"
+              />
+              {qrNumber && displayNumber !== qrNumber && (
+                <button
+                  onClick={() => setDisplayNumber(qrNumber)}
+                  className="px-3 py-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs text-gray-300"
+                  title="Auf QR-Nummer zurücksetzen"
+                >
+                  = QR {qrNumber}
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-gray-600 mt-1">
+              QR-Code: {qrNumber || "nicht verfügbar"}
+              {displayNumber && displayNumber !== qrNumber && (
+                <span className="text-yellow-500 ml-2">→ Eigene Nummer: {displayNumber}</span>
+              )}
+            </p>
+          </div>
+
           {/* Box-Typ */}
           <div>
             <label className="block text-xs font-medium text-gray-400 mb-2">
@@ -313,7 +364,6 @@ export default function BoxEditDialog({
             >
               <option value="">Bitte auswählen...</option>
               
-              {/* Nager - Köder zuerst */}
               <optgroup label="🐀 Nager - Köder">
                 {boxTypes
                   .filter(t => t.category === 'bait_box')
@@ -323,7 +373,6 @@ export default function BoxEditDialog({
                   ))}
               </optgroup>
               
-              {/* Nager - Schlagfallen */}
               <optgroup label="🐀 Nager - Schlagfallen">
                 {boxTypes
                   .filter(t => t.category === 'snap_trap')
@@ -333,7 +382,6 @@ export default function BoxEditDialog({
                   ))}
               </optgroup>
               
-              {/* Insekten */}
               <optgroup label="🪲 Insekten">
                 {boxTypes
                   .filter(t => t.category === 'insect_monitor' || t.category === 'uv_trap')
@@ -343,7 +391,6 @@ export default function BoxEditDialog({
                   ))}
               </optgroup>
               
-              {/* Sonstige (falls vorhanden) */}
               {boxTypes.filter(t => 
                 !['bait_box', 'snap_trap', 'insect_monitor', 'uv_trap'].includes(t.category)
               ).length > 0 && (
@@ -359,7 +406,7 @@ export default function BoxEditDialog({
             </select>
           </div>
 
-          {/* Köder - nur bei Rodent Stations */}
+          {/* Köder */}
           {isRodentStation && (
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-2">
@@ -389,7 +436,7 @@ export default function BoxEditDialog({
             </div>
           )}
 
-          {/* Zielinsekt - nur bei Insektenmonitoren */}
+          {/* Zielinsekt */}
           {isInsectMonitor && (
             <div>
               <label className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2">
@@ -412,7 +459,6 @@ export default function BoxEditDialog({
                   </button>
                 ))}
               </div>
-              {/* Anderer Insektentyp */}
               <button
                 type="button"
                 onClick={() => setInsectType(insectType === "custom" ? "" : "custom")}
@@ -433,11 +479,6 @@ export default function BoxEditDialog({
                   className="w-full mt-2 px-3 py-2.5 bg-[#0d1117] border border-white/10 rounded-lg text-white text-sm focus:border-purple-500 focus:outline-none transition-colors"
                 />
               )}
-              {!insectType && !requiredFields.insect_type && (
-                <p className="text-xs text-gray-500 mt-2">
-                  Optional - Spezifiziert welche Insekten überwacht werden
-                </p>
-              )}
             </div>
           )}
 
@@ -448,7 +489,6 @@ export default function BoxEditDialog({
               Kontrollintervall
             </label>
 
-            {/* Fix / Range Toggle */}
             <div className="grid grid-cols-2 gap-2 mb-3">
               <button
                 type="button"
@@ -474,7 +514,6 @@ export default function BoxEditDialog({
               </button>
             </div>
 
-            {/* Fix: Schnellauswahl */}
             {intervalType === "fixed" && (
               <div className="grid grid-cols-3 gap-2">
                 {QUICK_INTERVALS.map((q) => (
@@ -497,7 +536,6 @@ export default function BoxEditDialog({
               </div>
             )}
 
-            {/* Range: Start - Ende */}
             {intervalType === "range" && (
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
@@ -527,7 +565,6 @@ export default function BoxEditDialog({
                   <span className="text-gray-400 pt-5 text-sm">Tage</span>
                 </div>
                 
-                {/* Range Info */}
                 <div className="bg-[#0d1117] rounded-lg p-3 text-center">
                   <span className="text-gray-400 text-sm">Kontrolle alle </span>
                   <span className="text-indigo-400 font-semibold">{intervalRangeStart}–{intervalRangeEnd}</span>
@@ -560,19 +597,16 @@ export default function BoxEditDialog({
               >
                 <MapPin size={14} /> Position verschieben
               </button>
-              <button
-                onClick={() => { 
-                  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-                  if (!isMobile) {
-                    alert("⚠️ GPS setzen funktioniert nur auf Mobilgeräten!\n\nAm PC bitte 'Position verschieben' nutzen.");
-                    return;
-                  }
-                  onSetGPS && onSetGPS(); 
-                }}
-                className="flex items-center justify-center gap-2 py-2.5 px-3 bg-[#0d1117] border border-white/10 rounded-lg text-gray-400 text-sm hover:border-white/20 transition-colors"
-              >
-                <Navigation size={14} /> GPS (Mobil)
-              </button>
+              
+              {/* GPS Button NUR auf Mobile */}
+              {/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) && (
+                <button
+                  onClick={() => { onSetGPS && onSetGPS(); }}
+                  className="flex items-center justify-center gap-2 py-2.5 px-3 bg-[#0d1117] border border-white/10 rounded-lg text-gray-400 text-sm hover:border-white/20 transition-colors"
+                >
+                  <Navigation size={14} /> GPS aktualisieren
+                </button>
+              )}
             </div>
           )}
         </div>

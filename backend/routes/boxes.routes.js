@@ -2,6 +2,7 @@
 // BOXES ROUTES - KOMPLETT
 // Inkl. Pool-Funktionen für Box-Lager
 // Inkl. Re-Nummerierung
+// Inkl. PUT /:id/position für GPS
 // ============================================
 
 const express = require("express");
@@ -36,13 +37,13 @@ router.get("/:id", authenticate, asyncHandler(boxesController.getOne));
 // WRITE ROUTES (erfordern Editor-Rolle)
 // ============================================
 
-// ENTFERNT: Box erstellen - NUR über Super-Admin QR-Order System!
-// router.post("/", authenticate, requireEditor, asyncHandler(boxesController.create));
-
-// Box aktualisieren
+// Box aktualisieren (PATCH - partielle Updates)
 router.patch("/:id", authenticate, requireEditor, asyncHandler(boxesController.update));
 
-// GPS Position ändern
+// GPS Position setzen (PUT - NEU!)
+router.put("/:id/position", authenticate, requireEditor, asyncHandler(boxesController.updatePosition));
+
+// GPS Position ändern (alter Endpunkt - Kompatibilität)
 router.patch("/:id/location", authenticate, requireEditor, asyncHandler(boxesController.updateLocation));
 
 // GPS zurücksetzen auf Object-Position
@@ -71,7 +72,7 @@ router.post("/:id/place-floorplan", authenticate, requireEditor, asyncHandler(bo
 router.put("/:id/move", authenticate, requireEditor, asyncHandler(boxesController.moveToObject));
 
 // ============================================
-// RE-NUMMERIERUNG ROUTES (NEU!)
+// RE-NUMMERIERUNG ROUTES
 // ============================================
 
 // Boxen eines einzelnen Objekts neu nummerieren

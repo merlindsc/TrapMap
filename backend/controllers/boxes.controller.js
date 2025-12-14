@@ -2,6 +2,7 @@
 // BOXES CONTROLLER
 // Mit Audit-Support für alle Änderungen
 // Mit Re-Nummerierung
+// Mit updatePosition für GPS-Setzen vom Scanner
 // ============================================
 
 const boxesService = require("../services/boxes.service");
@@ -112,6 +113,107 @@ exports.delete = async (req, res) => {
 
 // Alias für Routes die remove erwarten
 exports.remove = exports.delete;
+
+// ============================================
+// PUT /api/boxes/:id/position - GPS Position setzen (NEU!)
+// Wird vom Scanner auf Mobile verwendet
+// WICHTIG: Löscht Lageplan-Daten wenn GPS gesetzt wird!
+// ============================================
+exports.updatePosition = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { lat, lng, position_type = 'gps' } = req.body;
+    const orgId = req.user.organisation_id;
+
+    // Validierung
+    if (lat === undefined || lng === undefined) {
+      return res.status(400).json({ 
+        error: "lat und lng sind erforderlich" 
+      });
+    }
+
+    const latNum = parseFloat(lat);
+    const lngNum = parseFloat(lng);
+
+    if (isNaN(latNum) || isNaN(lngNum)) {
+      return res.status(400).json({ 
+        error: "lat und lng müssen gültige Zahlen sein" 
+      });
+    }
+
+    // Koordinaten-Bereich prüfen
+    if (latNum < -90 || latNum > 90) {
+      return res.status(400).json({ error: "lat muss zwischen -90 und 90 liegen" });
+    }
+    if (lngNum < -180 || lngNum > 180) {
+      return res.status(400).json({ error: "lng muss zwischen -180 und 180 liegen" });
+    }
+
+    // Box prüfen
+    const { data: box, error: boxError } = await supabase
+      .from("boxes")
+      .select("id, organisation_id, position_type, floor_plan_id")
+      .eq("id", parseInt(id))
+      .single();
+
+    if (boxError || !box) {
+      return res.status(404).json({ error: "Box nicht gefunden" });
+    }
+
+    if (box.organisation_id !== orgId) {
+      return res.status(403).json({ error: "Keine Berechtigung" });
+    }
+
+    // Update-Daten zusammenstellen
+    const updateData = {
+      lat: latNum,
+      lng: lngNum,
+      position_type: position_type,
+      updated_at: new Date().toISOString()
+    };
+
+    // WICHTIG: Wenn GPS gesetzt wird, Lageplan-Daten löschen!
+    // Eine Box kann ENTWEDER GPS ODER Lageplan haben, nie beides!
+    if (position_type === 'gps' || position_type === 'map') {
+      updateData.floor_plan_id = null;
+      updateData.pos_x = null;
+      updateData.pos_y = null;
+      updateData.grid_position = null;
+    }
+
+    // Update durchführen
+    const { data: updated, error: updateError } = await supabase
+      .from("boxes")
+      .update(updateData)
+      .eq("id", parseInt(id))
+      .eq("organisation_id", orgId)
+      .select(`
+        *,
+        box_types (id, name, category),
+        objects (id, name)
+      `)
+      .single();
+
+    if (updateError) {
+      console.error("❌ Box position update error:", updateError);
+      return res.status(500).json({ 
+        error: "Position konnte nicht aktualisiert werden",
+        details: updateError.message
+      });
+    }
+
+    console.log(`✅ Box ${id} Position aktualisiert: ${latNum}, ${lngNum} (${position_type})`);
+
+    res.json({
+      success: true,
+      box: updated
+    });
+
+  } catch (err) {
+    console.error("❌ updatePosition error:", err);
+    res.status(500).json({ error: "Server error", details: err.message });
+  }
+};
 
 // PATCH /api/boxes/:id/location - GPS Position ändern
 exports.updateLocation = async (req, res) => {

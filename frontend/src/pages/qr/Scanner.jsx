@@ -337,10 +337,20 @@ export default function Scanner() {
 
       // ============================================
       // FALL 3: Mit GPS platziert
-      // → GPS-Distanz prüfen, dann BoxScanDialog
+      // → Nur auf MOBILE: GPS-Distanz prüfen
+      // → Auf DESKTOP: Direkt BoxScanDialog öffnen
       // ============================================
       if ((positionType === 'gps' || positionType === 'map') && hasGPS) {
-        await checkGPSDistance(boxData);
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        
+        if (isMobile) {
+          // MOBILE: GPS-Distanz prüfen
+          await checkGPSDistance(boxData);
+        } else {
+          // DESKTOP: Kein GPS-Check, direkt zum Dialog
+          setBoxLoading(false);
+          setShowScanDialog(true);
+        }
         return;
       }
 
@@ -482,25 +492,56 @@ export default function Scanner() {
     if (isMobile) {
       // MOBILE: GPS automatisch holen und Box platzieren
       setGpsLoading(true);
+      console.log("📍 GPS Platzierung gestartet für Box:", pendingPlacement.boxId);
       
       try {
         // GPS Position holen
         const position = await getCurrentPosition();
+        console.log("📍 GPS Position erhalten:", position);
         
-        // Box auf GPS platzieren
-        await axios.put(`${API}/boxes/${pendingPlacement.boxId}/position`, {
-          lat: position.lat,
-          lng: position.lng,
-          position_type: 'gps'
-        }, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        // Box auf GPS platzieren - Versuche zuerst /position, dann /place-map
+        let placeSuccess = false;
+        
+        try {
+          // Versuch 1: PUT /boxes/:id/position
+          await axios.put(`${API}/boxes/${pendingPlacement.boxId}/position`, {
+            lat: position.lat,
+            lng: position.lng,
+            position_type: 'gps'
+          }, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          placeSuccess = true;
+          console.log("✅ Box platziert via /position");
+        } catch (posErr) {
+          console.log("⚠️ /position failed, trying /place-map:", posErr.message);
+          
+          // Versuch 2: POST /boxes/:id/place-map
+          try {
+            await axios.post(`${API}/boxes/${pendingPlacement.boxId}/place-map`, {
+              lat: position.lat,
+              lng: position.lng,
+              object_id: pendingPlacement.objectId
+            }, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            placeSuccess = true;
+            console.log("✅ Box platziert via /place-map");
+          } catch (mapErr) {
+            console.error("❌ Beide Endpunkte fehlgeschlagen:", mapErr);
+            throw mapErr;
+          }
+        }
+        
+        if (!placeSuccess) {
+          throw new Error("GPS konnte nicht gespeichert werden");
+        }
         
         // Box-Daten aktualisieren für Dialog
         setCurrentBox({
           ...pendingPlacement.boxData,
           id: pendingPlacement.boxId,
-          object_id: pendingPlacement.objectId, // WICHTIG!
+          object_id: pendingPlacement.objectId,
           lat: position.lat,
           lng: position.lng,
           position_type: 'gps',
@@ -512,6 +553,7 @@ export default function Scanner() {
         
         // Prüfen ob Ersteinrichtung nötig
         const needsSetup = !pendingPlacement.boxData?.box_type_id;
+        console.log("📦 needsSetup:", needsSetup, "box_type_id:", pendingPlacement.boxData?.box_type_id);
         
         if (needsSetup) {
           // Ersteinrichtung öffnen
@@ -522,10 +564,14 @@ export default function Scanner() {
         }
         
       } catch (err) {
-        console.error("GPS placement error:", err);
+        console.error("❌ GPS placement error:", err);
         setGpsLoading(false);
-        // Fallback: Zur Maps navigieren
-        navigate(`/maps?object_id=${pendingPlacement.objectId}&openBox=${pendingPlacement.boxId}&firstSetup=true`);
+        setError("GPS-Platzierung fehlgeschlagen: " + (err.message || err));
+        
+        // Nach 3s zur Maps navigieren als Fallback
+        setTimeout(() => {
+          navigate(`/maps?object_id=${pendingPlacement.objectId}&openBox=${pendingPlacement.boxId}&firstSetup=true`);
+        }, 3000);
       }
     } else {
       // DESKTOP: Zur Maps navigieren (User klickt auf Karte)
@@ -548,32 +594,52 @@ export default function Scanner() {
 
   // Scan abgeschlossen → Scanner wieder aktivieren
   const handleScanCompleted = () => {
+    console.log("✅ handleScanCompleted - Kontrolle gespeichert");
     setShowScanDialog(false);
-    setProcessingCode(false); // Lock zurücksetzen!
+    setProcessingCode(false);
     showSuccessToast("✓ Kontrolle gespeichert");
-    resetScanner();
+    
+    // Reset mit kleinem Delay für DOM-Update
+    setTimeout(() => {
+      resetScanner();
+    }, 100);
   };
 
   // ScanDialog schließen ohne Speichern
   const handleScanDialogClose = () => {
+    console.log("❌ handleScanDialogClose - Dialog geschlossen ohne Speichern");
     setShowScanDialog(false);
-    setProcessingCode(false); // Lock zurücksetzen!
-    resetScanner();
+    setProcessingCode(false);
+    
+    // Reset mit kleinem Delay
+    setTimeout(() => {
+      resetScanner();
+    }, 100);
   };
 
   // Ersteinrichtung abgeschlossen → Scan-Dialog öffnen
   const handleFirstSetupCompleted = () => {
+    console.log("✅ handleFirstSetupCompleted - Box eingerichtet");
     setShowFirstSetup(false);
     showSuccessToast("✓ Box eingerichtet");
-    // Jetzt Scan-Dialog für erste Kontrolle
-    setShowScanDialog(true);
+    
+    // Jetzt Scan-Dialog für erste Kontrolle öffnen
+    // WICHTIG: processingCode bleibt true bis Kontrolle gespeichert
+    setTimeout(() => {
+      setShowScanDialog(true);
+    }, 100);
   };
 
   // Ersteinrichtung schließen ohne Speichern
   const handleFirstSetupClose = () => {
+    console.log("❌ handleFirstSetupClose - Ersteinrichtung abgebrochen");
     setShowFirstSetup(false);
     setProcessingCode(false);
-    resetScanner();
+    
+    // Reset mit kleinem Delay
+    setTimeout(() => {
+      resetScanner();
+    }, 100);
   };
 
   // Success Toast anzeigen
@@ -587,20 +653,36 @@ export default function Scanner() {
 
   // Scanner zurücksetzen und neu starten
   const resetScanner = async () => {
+    console.log("🔄 resetScanner called");
+    
+    // Erst alle States zurücksetzen
     setScannedCode(null);
     setCurrentBox(null);
     setGpsDistance(0);
     setCurrentGPS(null);
     setShowGPSWarning(false);
     setShowPlacementChoice(false);
-    setShowFirstSetup(false); // NEU
+    setShowScanDialog(false);
+    setShowFirstSetup(false);
     setPendingPlacement(null);
     setError("");
     setProcessingCode(false); // Lock zurücksetzen!
     
-    if (currentCamera) {
-      await startScanner(currentCamera.id);
-    }
+    // WICHTIG: Kurzer Timeout damit DOM sich aktualisieren kann
+    // bevor wir den Scanner wieder starten
+    setTimeout(async () => {
+      if (currentCamera) {
+        console.log("🎥 Restarting scanner with camera:", currentCamera.id);
+        try {
+          await startScanner(currentCamera.id);
+          console.log("✅ Scanner restarted");
+        } catch (err) {
+          console.error("❌ Scanner restart error:", err);
+        }
+      } else {
+        console.warn("⚠️ No camera selected for restart");
+      }
+    }, 100);
   };
 
   // Kamera wechseln
@@ -761,32 +843,44 @@ export default function Scanner() {
           {/* Auswahl */}
           <div className="space-y-3">
             {/* GPS Option */}
-            <button
-              onClick={handleChooseGPS}
-              disabled={gpsLoading}
-              className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-green-500/50 rounded-xl p-5 text-left transition-all disabled:opacity-70"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                  {gpsLoading ? (
-                    <div className="w-6 h-6 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <Navigation size={28} className="text-green-400" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-lg text-white">
-                    {gpsLoading ? "GPS wird ermittelt..." : "GPS-Karte"}
-                  </h3>
-                  <p className="text-sm text-gray-400 mt-1">
-                    {gpsLoading 
-                      ? "Box wird an deiner aktuellen Position platziert"
-                      : "Auf der Karte platzieren mit GPS-Koordinaten. Ideal für Außenbereiche."
-                    }
-                  </p>
-                </div>
-              </div>
-            </button>
+            {(() => {
+              const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+              return (
+                <button
+                  onClick={handleChooseGPS}
+                  disabled={gpsLoading}
+                  className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-green-500/50 rounded-xl p-5 text-left transition-all disabled:opacity-70"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                      {gpsLoading ? (
+                        <div className="w-6 h-6 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Navigation size={28} className="text-green-400" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg text-white">
+                        {gpsLoading 
+                          ? "GPS wird ermittelt..." 
+                          : isMobileDevice 
+                            ? "GPS-Position" 
+                            : "Karte öffnen"
+                        }
+                      </h3>
+                      <p className="text-sm text-gray-400 mt-1">
+                        {gpsLoading 
+                          ? "Box wird an deiner aktuellen Position platziert"
+                          : isMobileDevice
+                            ? "Automatisch an deiner aktuellen GPS-Position platzieren"
+                            : "Zur Karte navigieren und Position manuell wählen"
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              );
+            })()}
 
             {/* Lageplan Option */}
             {hasFloorplans ? (

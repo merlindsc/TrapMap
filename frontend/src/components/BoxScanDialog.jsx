@@ -1,13 +1,15 @@
 /* ============================================================
-   TRAPMAP - BOX SCAN DIALOG V2
-   Kontrolle + Verlauf + Mini-Karte für GPS-Boxen
+   TRAPMAP - BOX SCAN DIALOG V3
+   Kontrolle + Verlauf + Mini-Karte + Box-Name/Nummer Anzeige
    
-   NEU: Mini-Karte zeigt Box-Position und aktuelle Position
-   WICHTIG: GPS-Buttons nur wenn onAdjustPosition/onSetGPS übergeben!
+   FEATURES:
+   - Mini-Karte für GPS-Boxen mit Live-Distanz
+   - Zeigt Box-Name/Nummer wenn anders als QR-Code
+   - Nach Speichern → Scanner wieder aktiv (via onScanCreated)
    ============================================================ */
 
 import { useState, useEffect } from "react";
-import { X, Save, Camera, Clock, CheckCircle, AlertCircle, Edit3, MapPin, Navigation, Maximize2 } from "lucide-react";
+import { X, Save, Camera, Clock, CheckCircle, AlertCircle, Edit3, MapPin, Navigation, Maximize2, Hash } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -21,13 +23,34 @@ const STATUS = {
   red: { label: "Stark", color: "#da3633" }
 };
 
-// Helper: QR-Nummer extrahieren (ohne führende Null)
+// QR-Nummer extrahieren (ohne führende Null, ohne Prefix)
 const getShortQr = (box) => {
   if (box?.qr_code) {
     const match = box.qr_code.match(/(\d+)/);
     if (match) return parseInt(match[1], 10).toString();
   }
   return null;
+};
+
+// Prüfen ob Box einen eigenen Namen/Nummer hat (anders als QR)
+const getBoxDisplayInfo = (box) => {
+  const qrNumber = getShortQr(box);
+  const displayNumber = box?.display_number || box?.number;
+  const boxName = box?.name || box?.box_name;
+  
+  // Hat die Box eine eigene Nummer die anders ist als QR?
+  const hasCustomNumber = displayNumber && displayNumber.toString() !== qrNumber;
+  
+  // Hat die Box einen Namen?
+  const hasName = boxName && boxName.trim().length > 0;
+  
+  return {
+    qrNumber,
+    displayNumber: displayNumber || qrNumber,
+    boxName: hasName ? boxName : null,
+    hasCustomNumber,
+    hasName
+  };
 };
 
 // Distanz berechnen (Haversine)
@@ -99,12 +122,12 @@ function MapFitter({ boxPos, userPos }) {
 export default function BoxScanDialog({ 
   box, 
   onClose, 
-  onSave, 
-  onScanCreated,      // Alternative zu onSave (Scanner nutzt das)
+  onSave,
+  onScanCreated,      // WICHTIG: Scanner nutzt das zum Neustarten!
   onEdit,
-  onAdjustPosition,   // Position auf Karte/Plan anpassen - OPTIONAL
-  onSetGPS,           // GPS-Position setzen - OPTIONAL (NUR für GPS-Boxen!)
-  onShowDetails       // Zur Vollbild-Karte navigieren - OPTIONAL
+  onAdjustPosition,
+  onSetGPS,
+  onShowDetails
 }) {
   const token = localStorage.getItem("trapmap_token");
   
@@ -128,19 +151,27 @@ export default function BoxScanDialog({
   const [gpsError, setGpsError] = useState(null);
   const [distance, setDistance] = useState(null);
 
-  // Box-Daten
-  const shortQr = getShortQr(box);
-  const boxNum = shortQr || box?.display_number || box?.number || box?.id || "?";
+  // Box-Info extrahieren
+  const boxInfo = getBoxDisplayInfo(box);
   const typeName = box?.box_types?.name || box?.box_type_name || "Unbekannt";
   
-  // Ist das eine Lageplan-Box?
+  // Position Type
   const isFloorplanBox = box?.position_type === 'floorplan' || box?.floor_plan_id;
   const hasGPS = box?.lat && box?.lng && !isFloorplanBox;
   const boxPosition = hasGPS ? [parseFloat(box.lat), parseFloat(box.lng)] : null;
 
-  // GPS Position für Mini-Karte holen
+  // Mobile Detection
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  // GPS Position für Mini-Karte - NUR AUF MOBILE!
   useEffect(() => {
     if (!hasGPS) return;
+    
+    // DESKTOP: Kein GPS-Tracking, nur Box-Position zeigen
+    if (!isMobile) {
+      setDistance(null); // Keine Distanz auf Desktop
+      return;
+    }
     
     if (!navigator.geolocation) {
       setGpsError("GPS nicht verfügbar");
@@ -163,15 +194,17 @@ export default function BoxScanDialog({
       },
       (err) => {
         console.error("GPS error:", err);
-        setGpsError("GPS-Fehler");
+        // Auf Mobile: Fehler zeigen, aber nicht blockieren
+        setGpsError("GPS nicht verfügbar");
+        setDistance(null);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 }
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [hasGPS, box?.lat, box?.lng]);
+  }, [hasGPS, box?.lat, box?.lng, isMobile]);
 
-  // Status auto basierend auf Verbrauch
+  // Status auto
   useEffect(() => {
     const c = parseInt(consumption);
     if (c === 0) setStatus("green");
@@ -229,17 +262,23 @@ export default function BoxScanDialog({
 
       if (r.ok) {
         setToast({ type: "success", msg: "Kontrolle gespeichert!" });
+        
+        // WICHTIG: Kurze Verzögerung, dann Callback aufrufen
         setTimeout(() => { 
-          if (onSave) onSave();
-          if (onScanCreated) onScanCreated();
-        }, 800);
+          // onScanCreated ist der primäre Callback für Scanner
+          if (onScanCreated) {
+            onScanCreated();
+          } else if (onSave) {
+            onSave();
+          }
+        }, 600);
       } else {
         throw new Error("Fehler beim Speichern");
       }
     } catch (e) {
       setToast({ type: "error", msg: e.message });
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const getUserName = (scan) => {
@@ -282,24 +321,27 @@ export default function BoxScanDialog({
           display: "flex", flexDirection: "column"
         }}>
           
-          {/* Header */}
+          {/* Header - MIT BOX-NAME/NUMMER ANZEIGE */}
           <div style={{
             padding: "10px 14px", background: "#161b22",
             borderBottom: "1px solid #21262d",
             display: "flex", alignItems: "center", justifyContent: "space-between"
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {/* Box-Nummer Badge */}
               <div style={{
                 width: 30, height: 30, borderRadius: 6,
                 background: STATUS[box?.current_status]?.color || "#1f6feb",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontWeight: 700, fontSize: 12, color: "#fff"
               }}>
-                {boxNum}
+                {boxInfo.displayNumber}
               </div>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3", display: "flex", alignItems: "center", gap: 8 }}>
-                  Kontrolle
+                  {/* Zeige Box-Name wenn vorhanden */}
+                  {boxInfo.hasName ? boxInfo.boxName : `Box #${boxInfo.displayNumber}`}
+                  
                   {onEdit && (
                     <button
                       onClick={() => onEdit()}
@@ -313,11 +355,38 @@ export default function BoxScanDialog({
                     </button>
                   )}
                 </div>
-                <div style={{ fontSize: 11, color: "#8b949e" }}>
-                  {typeName}
-                  {box?.bait && <span style={{ color: "#58a6ff" }}> • {box.bait}</span>}
+                
+                {/* Subtitle: Typ + QR-Info wenn anders als Display */}
+                <div style={{ fontSize: 11, color: "#8b949e", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <span>{typeName}</span>
+                  
+                  {/* QR-Code Badge - IMMER zeigen wenn vorhanden */}
+                  {boxInfo.qrNumber && (
+                    <span style={{ 
+                      background: "#30363d", 
+                      padding: "1px 6px", 
+                      borderRadius: 4, 
+                      fontSize: 10,
+                      fontFamily: "monospace",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 3
+                    }}>
+                      <Hash size={9} />
+                      QR {boxInfo.qrNumber}
+                    </span>
+                  )}
+                  
+                  {/* Hinweis wenn Nummer anders als QR */}
+                  {boxInfo.hasCustomNumber && (
+                    <span style={{ color: "#f0b429", fontSize: 10 }}>
+                      (Nr. {boxInfo.displayNumber})
+                    </span>
+                  )}
+                  
+                  {/* Lageplan-Position */}
                   {isFloorplanBox && box?.grid_position && (
-                    <span style={{ color: "#8b5cf6" }}> • {box.grid_position}</span>
+                    <span style={{ color: "#8b5cf6" }}>• {box.grid_position}</span>
                   )}
                 </div>
               </div>
@@ -337,7 +406,7 @@ export default function BoxScanDialog({
               borderBottom: tab === "scan" ? "2px solid #58a6ff" : "2px solid transparent",
               fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6
             }}>
-              <CheckCircle size={13}/> Neue Kontrolle
+              <CheckCircle size={13}/> Kontrolle
             </button>
             <button onClick={() => setTab("history")} style={{
               flex: 1, padding: "10px", background: "none", border: "none",
@@ -356,7 +425,6 @@ export default function BoxScanDialog({
                 {/* ========== MINI-KARTE FÜR GPS-BOXEN ========== */}
                 {hasGPS && boxPosition && (
                   <div style={{ marginBottom: 14 }}>
-                    {/* Karte */}
                     <div style={{ 
                       height: 120, 
                       borderRadius: 8, 
@@ -376,23 +444,17 @@ export default function BoxScanDialog({
                         doubleClickZoom={false}
                       >
                         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                        
-                        {/* Box Marker */}
                         <Marker position={boxPosition} icon={boxIcon}>
-                          <Popup>Box #{boxNum}</Popup>
+                          <Popup>Box #{boxInfo.displayNumber}</Popup>
                         </Marker>
-                        
-                        {/* User Position Marker */}
                         {userPosition && (
                           <Marker position={userPosition} icon={userIcon}>
                             <Popup>Dein Standort</Popup>
                           </Marker>
                         )}
-                        
                         <MapFitter boxPos={boxPosition} userPos={userPosition} />
                       </MapContainer>
 
-                      {/* Vollbild Button */}
                       {onShowDetails && (
                         <button
                           onClick={onShowDetails}
@@ -408,54 +470,68 @@ export default function BoxScanDialog({
                       )}
                     </div>
 
-                    {/* Distanz-Anzeige */}
-                    <div style={{
-                      marginTop: 6, padding: "6px 10px", borderRadius: 6,
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      background: distance !== null 
-                        ? (distance <= 10 ? "rgba(35,134,54,0.15)" : "rgba(234,179,8,0.15)")
-                        : "#161b22",
-                      border: distance !== null
-                        ? (distance <= 10 ? "1px solid rgba(35,134,54,0.3)" : "1px solid rgba(234,179,8,0.3)")
-                        : "1px solid #30363d"
-                    }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        {distance !== null ? (
-                          distance <= 10 ? (
-                            <CheckCircle size={14} style={{ color: "#3fb950" }} />
+                    {/* Distanz-Anzeige - NUR auf Mobile sinnvoll */}
+                    {isMobile ? (
+                      <div style={{
+                        marginTop: 6, padding: "6px 10px", borderRadius: 6,
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        background: distance !== null 
+                          ? (distance <= 10 ? "rgba(35,134,54,0.15)" : "rgba(234,179,8,0.15)")
+                          : "#161b22",
+                        border: distance !== null
+                          ? (distance <= 10 ? "1px solid rgba(35,134,54,0.3)" : "1px solid rgba(234,179,8,0.3)")
+                          : "1px solid #30363d"
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          {distance !== null ? (
+                            distance <= 10 ? (
+                              <CheckCircle size={14} style={{ color: "#3fb950" }} />
+                            ) : (
+                              <AlertCircle size={14} style={{ color: "#f0b429" }} />
+                            )
                           ) : (
-                            <AlertCircle size={14} style={{ color: "#f0b429" }} />
-                          )
-                        ) : (
-                          <div style={{ 
-                            width: 12, height: 12, 
-                            border: "2px solid #8b949e", borderTopColor: "transparent",
-                            borderRadius: "50%", animation: "spin 1s linear infinite"
-                          }} />
+                            <div style={{ 
+                              width: 12, height: 12, 
+                              border: "2px solid #8b949e", borderTopColor: "transparent",
+                              borderRadius: "50%", animation: "spin 1s linear infinite"
+                            }} />
+                          )}
+                          <span style={{ 
+                            fontSize: 11, 
+                            color: distance !== null 
+                              ? (distance <= 10 ? "#3fb950" : "#f0b429")
+                              : "#8b949e"
+                          }}>
+                            {distance !== null 
+                              ? (distance <= 10 ? "Position OK" : `Entfernung: ${formatDistance(distance)}`)
+                              : (gpsError || "GPS wird ermittelt...")
+                            }
+                          </span>
+                        </div>
+                        
+                        {distance !== null && distance > 10 && (
+                          <span style={{ fontSize: 11, fontWeight: 600, color: "#f0b429" }}>
+                            {formatDistance(distance)}
+                          </span>
                         )}
-                        <span style={{ 
-                          fontSize: 11, 
-                          color: distance !== null 
-                            ? (distance <= 10 ? "#3fb950" : "#f0b429")
-                            : "#8b949e"
-                        }}>
-                          {distance !== null 
-                            ? (distance <= 10 ? "Position OK" : `Entfernung: ${formatDistance(distance)}`)
-                            : (gpsError || "GPS wird ermittelt...")
-                          }
+                      </div>
+                    ) : (
+                      /* DESKTOP: Keine GPS-Distanz, nur Info */
+                      <div style={{
+                        marginTop: 6, padding: "6px 10px", borderRadius: 6,
+                        background: "#161b22", border: "1px solid #30363d",
+                        display: "flex", alignItems: "center", gap: 6
+                      }}>
+                        <MapPin size={14} style={{ color: "#64748b" }} />
+                        <span style={{ fontSize: 11, color: "#8b949e" }}>
+                          Box-Position auf Karte
                         </span>
                       </div>
-                      
-                      {distance !== null && distance > 10 && (
-                        <span style={{ fontSize: 11, fontWeight: 600, color: "#f0b429" }}>
-                          {formatDistance(distance)}
-                        </span>
-                      )}
-                    </div>
+                    )}
                   </div>
                 )}
 
-                {/* Lageplan-Info (statt Karte) */}
+                {/* Lageplan-Info */}
                 {isFloorplanBox && box?.grid_position && (
                   <div style={{
                     marginBottom: 14, padding: "10px 12px",
@@ -549,7 +625,7 @@ export default function BoxScanDialog({
                   )}
                 </div>
 
-                {/* Position Buttons - NUR wenn Props übergeben wurden! */}
+                {/* Position Buttons */}
                 {showPositionButtons && (
                   <div style={{ display: "flex", gap: 8, paddingTop: 10, borderTop: "1px solid #21262d" }}>
                     {onAdjustPosition && (
@@ -567,16 +643,10 @@ export default function BoxScanDialog({
                       </button>
                     )}
                     
-                    {onSetGPS && !isFloorplanBox && (
+                    {/* GPS Button NUR auf Mobile und NUR für GPS-Boxen */}
+                    {onSetGPS && !isFloorplanBox && isMobile && (
                       <button
-                        onClick={() => { 
-                          const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-                          if (!isMobile) {
-                            alert("⚠️ GPS setzen funktioniert nur auf Mobilgeräten!\n\nAm PC bitte 'Position verschieben' nutzen.");
-                            return;
-                          }
-                          onSetGPS(box); 
-                        }}
+                        onClick={() => onSetGPS(box)}
                         style={{
                           flex: 1, padding: "10px", background: "#161b22",
                           border: "1px solid #30363d", borderRadius: 6, color: "#8b949e",
@@ -584,20 +654,9 @@ export default function BoxScanDialog({
                           alignItems: "center", justifyContent: "center", gap: 6
                         }}
                       >
-                        <Navigation size={14} /> GPS (Mobil)
+                        <Navigation size={14} /> GPS aktualisieren
                       </button>
                     )}
-                  </div>
-                )}
-
-                {/* Warnung für Lageplan-Boxen ohne Position-Buttons */}
-                {isFloorplanBox && !showPositionButtons && (
-                  <div style={{
-                    marginTop: 10, padding: "8px 12px",
-                    background: "#8b5cf620", border: "1px solid #8b5cf650",
-                    borderRadius: 6, color: "#a78bfa", fontSize: 11
-                  }}>
-                    📍 Lageplan-Box. Position nur über Lageplan-Editor ändern.
                   </div>
                 )}
               </>
@@ -666,7 +725,7 @@ export default function BoxScanDialog({
                 fontSize: 13, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 6
               }}>
-                <Save size={14}/> {loading ? "..." : "Kontrolle speichern"}
+                <Save size={14}/> {loading ? "Speichern..." : "Kontrolle speichern"}
               </button>
             </div>
           )}
