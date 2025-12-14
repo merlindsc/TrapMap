@@ -45,6 +45,14 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
+// Distanz formatieren: >500m in km, sonst in m
+function formatDistance(meters) {
+  if (meters >= 500) {
+    return `${(meters / 1000).toFixed(1)} km`;
+  }
+  return `${Math.round(meters)}m`;
+}
+
 export default function Scanner() {
   const scannerRef = useRef(null);
   const html5QrCodeRef = useRef(null);
@@ -62,6 +70,7 @@ export default function Scanner() {
   // Box State
   const [currentBox, setCurrentBox] = useState(null);
   const [boxLoading, setBoxLoading] = useState(false);
+  const [processingCode, setProcessingCode] = useState(false); // NEU: Lock gegen Flackern
 
   // View States
   const [showScanDialog, setShowScanDialog] = useState(false);
@@ -230,15 +239,20 @@ export default function Scanner() {
   // SCAN SUCCESS - HAUPTLOGIK
   // ============================================
   const onScanSuccess = async (decodedText, decodedResult) => {
-    if (!decodedText || scannedCode === decodedText) return;
+    // WICHTIG: Lock prüfen - verhindert Flackern!
+    if (!decodedText || processingCode) return;
+    
+    // Lock setzen SOFORT
+    setProcessingCode(true);
+    setScannedCode(decodedText);
+    
+    // Scanner SOFORT stoppen
+    await stopScanner();
 
     // Vibration Feedback
     if (navigator.vibrate) {
       navigator.vibrate([100, 50, 100]);
     }
-
-    setScannedCode(decodedText);
-    await stopScanner();
 
     // URL-Format prüfen
     let code = decodedText;
@@ -324,6 +338,7 @@ export default function Scanner() {
       console.error("QR check error:", err);
       setError("Fehler beim Prüfen des QR-Codes");
       setBoxLoading(false);
+      setProcessingCode(false); // Lock zurücksetzen!
       resetScanner();
     }
   };
@@ -463,6 +478,7 @@ export default function Scanner() {
   // Scan abgeschlossen → Scanner wieder aktivieren
   const handleScanCompleted = () => {
     setShowScanDialog(false);
+    setProcessingCode(false); // Lock zurücksetzen!
     showSuccessToast("✓ Kontrolle gespeichert");
     resetScanner();
   };
@@ -470,6 +486,7 @@ export default function Scanner() {
   // ScanDialog schließen ohne Speichern
   const handleScanDialogClose = () => {
     setShowScanDialog(false);
+    setProcessingCode(false); // Lock zurücksetzen!
     resetScanner();
   };
 
@@ -492,6 +509,7 @@ export default function Scanner() {
     setShowPlacementChoice(false);
     setPendingPlacement(null);
     setError("");
+    setProcessingCode(false); // Lock zurücksetzen!
     
     if (currentCamera) {
       await startScanner(currentCamera.id);
@@ -551,7 +569,7 @@ export default function Scanner() {
               <div>
                 <h3 className="font-semibold text-yellow-300">Position stimmt nicht überein</h3>
                 <p className="text-yellow-200/80 text-sm mt-1">
-                  Du bist <strong>{gpsDistance}m</strong> von der gespeicherten Position entfernt.
+                  Du bist <strong>{formatDistance(gpsDistance)}</strong> von der gespeicherten Position entfernt.
                 </p>
               </div>
             </div>
