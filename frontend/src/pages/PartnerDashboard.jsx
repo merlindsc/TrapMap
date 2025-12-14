@@ -4,7 +4,7 @@
    
    Features:
    - Passwort-Ändern Dialog beim ersten Login
-   - QR-Scanner Integration
+   - QR-Scanner Integration (mit @zxing/browser)
    - Objekt/Box-Übersicht
    - Scan durchführen
    ============================================================ */
@@ -16,7 +16,7 @@ import {
   Loader, AlertCircle, CheckCircle, Clock, MapPin,
   ChevronRight, Camera, X, Eye, EyeOff, Lock, Save
 } from "lucide-react";
-import { Html5QrcodeScanner } from "html5-qrcode";
+import { BrowserMultiFormatReader } from "@zxing/browser";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -56,7 +56,9 @@ export default function PartnerDashboard() {
   const [scanNotes, setScanNotes] = useState("");
   const [scanLoading, setScanLoading] = useState(false);
   
-  const scannerRef = useRef(null);
+  // ZXing Scanner Refs
+  const videoRef = useRef(null);
+  const codeReaderRef = useRef(null);
 
   // ============================================
   // INITIALE DATEN LADEN
@@ -184,49 +186,70 @@ export default function PartnerDashboard() {
   };
 
   // ============================================
-  // QR SCANNER
+  // QR SCANNER MIT ZXING
   // ============================================
   useEffect(() => {
-    if (showScanner && !scannerRef.current) {
-      setTimeout(() => {
-        try {
-          scannerRef.current = new Html5QrcodeScanner(
-            "partner-qr-reader",
-            { 
-              fps: 10, 
-              qrbox: { width: 250, height: 250 },
-              aspectRatio: 1.0
-            },
-            false
-          );
-          
-          scannerRef.current.render(onScanSuccess, onScanError);
-        } catch (err) {
-          console.error("Scanner init error:", err);
-        }
-      }, 100);
+    if (showScanner && !scanResult) {
+      startScanner();
     }
     
     return () => {
-      if (scannerRef.current) {
-        try {
-          scannerRef.current.clear();
-        } catch (err) {
-          // Ignore
-        }
-        scannerRef.current = null;
-      }
+      stopScanner();
     };
-  }, [showScanner]);
+  }, [showScanner, scanResult]);
 
-  const onScanSuccess = async (decodedText) => {
-    // Scanner stoppen
-    if (scannerRef.current) {
-      try {
-        scannerRef.current.clear();
-      } catch (err) {}
-      scannerRef.current = null;
+  const startScanner = async () => {
+    try {
+      // Warten bis Video-Element bereit ist
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      if (!videoRef.current) return;
+      
+      codeReaderRef.current = new BrowserMultiFormatReader();
+      
+      // Kameras auflisten
+      const devices = await BrowserMultiFormatReader.listVideoInputDevices();
+      
+      if (devices.length === 0) {
+        console.error("Keine Kamera gefunden");
+        return;
+      }
+      
+      // Bevorzuge Rückkamera
+      let deviceId = devices[devices.length - 1].deviceId;
+      const backCamera = devices.find(d => 
+        d.label.toLowerCase().includes("back") || 
+        d.label.toLowerCase().includes("environment")
+      );
+      if (backCamera) deviceId = backCamera.deviceId;
+      
+      await codeReaderRef.current.decodeFromVideoDevice(
+        deviceId,
+        videoRef.current,
+        (result, error) => {
+          if (result) {
+            onScanSuccess(result.getText());
+          }
+        }
+      );
+      
+    } catch (err) {
+      console.error("Scanner init error:", err);
     }
+  };
+
+  const stopScanner = () => {
+    if (codeReaderRef.current) {
+      try {
+        codeReaderRef.current.reset();
+      } catch (err) {}
+      codeReaderRef.current = null;
+    }
+  };
+
+  const onScanSuccess = (decodedText) => {
+    // Scanner stoppen
+    stopScanner();
     
     setScanResult(decodedText);
     
@@ -251,17 +274,8 @@ export default function PartnerDashboard() {
     }
   };
 
-  const onScanError = (error) => {
-    // Ignore scan errors (happens continuously while scanning)
-  };
-
   const closeScanner = () => {
-    if (scannerRef.current) {
-      try {
-        scannerRef.current.clear();
-      } catch (err) {}
-      scannerRef.current = null;
-    }
+    stopScanner();
     setShowScanner(false);
     setScanResult(null);
     setScannedBox(null);
@@ -587,7 +601,7 @@ export default function PartnerDashboard() {
       )}
 
       {/* ============================================ */}
-      {/* SCANNER DIALOG */}
+      {/* SCANNER DIALOG MIT ZXING */}
       {/* ============================================ */}
       {showScanner && (
         <div style={styles.overlay}>
@@ -600,7 +614,15 @@ export default function PartnerDashboard() {
             </div>
             
             {!scanResult ? (
-              <div id="partner-qr-reader" style={styles.scannerArea}></div>
+              <div style={styles.scannerArea}>
+                <video 
+                  ref={videoRef} 
+                  style={{ width: "100%", borderRadius: 8, background: "#000" }}
+                />
+                <p style={{ textAlign: "center", color: "#94a3b8", marginTop: 12, fontSize: 14 }}>
+                  Halte den QR-Code vor die Kamera
+                </p>
+              </div>
             ) : (
               <div style={styles.scanResultArea}>
                 {scannedBox?.unknown ? (
