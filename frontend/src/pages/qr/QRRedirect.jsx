@@ -31,7 +31,6 @@ export default function QRRedirect() {
 
     // Wenn nicht eingeloggt → Login mit Redirect
     if (!token || !user) {
-      // Code in localStorage speichern für nach dem Login
       localStorage.setItem("trapmap_pending_qr", code);
       navigate("/login");
       return;
@@ -47,18 +46,18 @@ export default function QRRedirect() {
       });
 
       // Code nicht gefunden
-      if (!res.data || !res.data.box_id) {
+      if (!res.data || !res.data.found || !res.data.box_id) {
         setError("QR-Code nicht gefunden oder nicht für Ihre Organisation");
         setChecking(false);
         return;
       }
 
-      const boxData = res.data.boxes;
+      // FLACHE Datenstruktur vom Controller!
       const boxId = res.data.box_id;
-      const objectId = boxData?.object_id;
-      const positionType = boxData?.position_type;
-      const floorPlanId = boxData?.floor_plan_id;
-      const hasGPS = boxData?.lat && boxData?.lng;
+      const objectId = res.data.object_id;
+      const positionType = res.data.position_type;
+      const floorPlanId = res.data.floor_plan_id;
+      const hasGPS = res.data.lat && res.data.lng;
       const hasFloorplan = floorPlanId && (positionType === 'floorplan');
 
       // ============================================
@@ -67,13 +66,12 @@ export default function QRRedirect() {
 
       // Fall 1: Box im Pool (nicht zugewiesen)
       if (!objectId) {
-        navigate(`/qr/assign-object/${code}?box_id=${boxId}`, { replace: true });
+        navigate(`/qr/assign-object?code=${code}&box_id=${boxId}`, { replace: true });
         return;
       }
 
       // Fall 2: Box auf LAGEPLAN
       if (hasFloorplan) {
-        // Zur Object-Seite mit Lageplan-Tab und Box-ID
         navigate(`/objects/${objectId}?tab=floorplan&openBox=${boxId}`, { replace: true });
         return;
       }
@@ -85,7 +83,6 @@ export default function QRRedirect() {
       }
 
       // Fall 4: Zugewiesen aber NICHT platziert → Maps für Ersteinrichtung
-      // (User kann dort entscheiden: GPS oder Lageplan)
       navigate(`/maps?object_id=${objectId}&openBox=${boxId}&firstSetup=true`, { replace: true });
 
     } catch (err) {

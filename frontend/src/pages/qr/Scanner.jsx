@@ -50,13 +50,17 @@ export default function Scanner() {
   const lastScannedCodeRef = useRef(null);
   const isPausedRef = useRef(false);
   const processingRef = useRef(false);
+  const autoSwitchTimerRef = useRef(null);
+  const cameraTriesRef = useRef(0);
+  const dialogOpenRef = useRef(false);
+  const camerasRef = useRef([]);
   
   // Scanner State
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState("");
   const [cameras, setCameras] = useState([]);
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
-  const [scannedCode, setScannedCode] = useState(null); // DEBUG: Zeigt gescannten Code
+  const [scannedCode, setScannedCode] = useState(null);
   
   // Torch State
   const [torchOn, setTorchOn] = useState(false);
@@ -85,21 +89,22 @@ export default function Scanner() {
   // Success Toast
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
-  
-  // DEBUG State
-  const [debugLog, setDebugLog] = useState([]);
-  
-  // Debug Logger
-  const debug = (msg) => {
-    console.log(msg);
-    setDebugLog(prev => [...prev.slice(-5), `${new Date().toLocaleTimeString()}: ${msg}`]);
-  };
 
   // Mobile Detection
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   // Helper
   const hasActiveDialog = showScanDialog || showGPSWarning || showPlacementChoice || showFirstSetup;
+  
+  // dialogOpenRef mit State synchronisieren
+  useEffect(() => {
+    dialogOpenRef.current = hasActiveDialog;
+  }, [hasActiveDialog]);
+
+  // camerasRef synchronisieren
+  useEffect(() => {
+    camerasRef.current = cameras;
+  }, [cameras]);
 
   // ============================================
   // INIT
@@ -130,35 +135,121 @@ export default function Scanner() {
   const initScanner = async () => {
     try {
       setError("");
-      debug("🚀 Init Scanner...");
       
       codeReaderRef.current = new BrowserMultiFormatReader();
       
       const devices = await BrowserMultiFormatReader.listVideoInputDevices();
-      debug(`📷 ${devices.length} Kamera(s) gefunden`);
+      console.log("📷 Kameras gefunden:", devices.length, devices.map(d => d.label));
       
       if (!devices || devices.length === 0) {
         setError("Keine Kamera gefunden");
         return;
       }
 
-      setCameras(devices);
+      // Kameras sortieren: Beste zuerst
+      const sortedCameras = sortCamerasByQuality(devices);
+      console.log("📷 Sortiert:", sortedCameras.map(d => d.label));
       
-      // Rückkamera bevorzugen
-      let cameraIndex = devices.length - 1;
-      const backIndex = devices.findIndex(d => 
-        d.label.toLowerCase().includes("back") || 
-        d.label.toLowerCase().includes("environment")
-      );
-      if (backIndex !== -1) cameraIndex = backIndex;
+      setCameras(sortedCameras);
+      setCurrentCameraIndex(0);
+      cameraTriesRef.current = 0;
       
-      setCurrentCameraIndex(cameraIndex);
-      await startScanning(devices[cameraIndex].deviceId);
+      await startScanning(sortedCameras[0].deviceId);
+      
+      // Auto-Switch Timer starten (wechselt nach 6 Sek ohne Scan)
+      startAutoSwitchTimer();
       
     } catch (err) {
-      debug(`❌ Init Error: ${err.message}`);
+      console.error("Init error:", err);
       setError("Kamera konnte nicht gestartet werden");
     }
+  };
+
+  // Kameras nach Qualität sortieren (beste für QR-Scanning zuerst)
+  const sortCamerasByQuality = (devices) => {
+    // Scoring-System: höher = besser
+    const getScore = (device) => {
+      const label = device.label.toLowerCase();
+      
+      // Frontkamera = -100 (nie verwenden)
+      if (label.includes("front") || label.includes("user") || label.includes("selfie") || label.includes("facetime")) {
+        return -100;
+      }
+      
+      let score = 0;
+      
+      // Hauptkamera / Wide = beste Wahl
+      if (label.includes("wide") && !label.includes("ultra")) score += 50;
+      if (label.includes("back camera") || label.includes("rear camera")) score += 40;
+      if (label.includes("0") && label.includes("back")) score += 30; // "Back Camera 0" ist oft die Hauptkamera
+      
+      // Ultra-Wide = schlecht für QR (zu viel Verzerrung)
+      if (label.includes("ultra")) score -= 30;
+      
+      // Telephoto = schlecht für QR (zu nah)
+      if (label.includes("tele") || label.includes("zoom")) score -= 20;
+      
+      // Macro = sehr schlecht
+      if (label.includes("macro")) score -= 40;
+      
+      // Generische Rückkamera = okay
+      if (label.includes("back") || label.includes("rear") || label.includes("environment")) score += 10;
+      
+      return score;
+    };
+
+    return [...devices]
+      .map(d => ({ device: d, score: getScore(d) }))
+      .filter(d => d.score > -100) // Frontkameras rausfiltern
+      .sort((a, b) => b.score - a.score) // Höchster Score zuerst
+      .map(d => d.device);
+  };
+
+  // Auto-Switch: Wechselt Kamera wenn nach 6 Sekunden kein QR erkannt
+  const startAutoSwitchTimer = () => {
+    // Alten Timer löschen
+    if (autoSwitchTimerRef.current) {
+      clearTimeout(autoSwitchTimerRef.current);
+    }
+    
+    autoSwitchTimerRef.current = setTimeout(() => {
+      // Nur wechseln wenn noch am scannen und kein Dialog offen
+      const cams = camerasRef.current;
+      if (!dialogOpenRef.current && !processingRef.current && cams.length > 1) {
+        const nextTry = cameraTriesRef.current + 1;
+        
+        // Maximal 3 Versuche
+        if (nextTry < cams.length && nextTry < 3) {
+          console.log(`📷 Auto-Switch: Kamera ${nextTry + 1}/${cams.length}`);
+          cameraTriesRef.current = nextTry;
+          switchToCamera(nextTry);
+        }
+      }
+    }, 6000); // 6 Sekunden
+  };
+
+  // Zu bestimmter Kamera wechseln
+  const switchToCamera = async (index) => {
+    const cams = camerasRef.current;
+    if (index >= cams.length) return;
+    
+    setCurrentCameraIndex(index);
+    setTorchOn(false);
+    
+    // Aktuellen Stream stoppen
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
+    
+    if (codeReaderRef.current) {
+      try { codeReaderRef.current.reset(); } catch (e) {}
+    }
+    
+    // Neuen Stream starten
+    await startScanning(cams[index].deviceId);
+    
+    // Timer neu starten
+    startAutoSwitchTimer();
   };
 
   // ============================================
@@ -168,19 +259,18 @@ export default function Scanner() {
     if (!codeReaderRef.current || !videoRef.current) return;
     
     try {
-      debug("🎥 Starte Kamera...");
+      console.log("🎥 Starte Scanner...");
       isPausedRef.current = false;
       processingRef.current = false;
       
-      // ZXing macht alles selbst - einfacher und zuverlässiger
-      const controls = await codeReaderRef.current.decodeFromVideoDevice(
+      await codeReaderRef.current.decodeFromVideoDevice(
         deviceId,
         videoRef.current,
         (result, error) => {
           if (isPausedRef.current) return;
           if (processingRef.current) return;
           if (result) {
-            debug(`📸 QR: ${result.getText()}`);
+            console.log("📸 QR erkannt:", result.getText());
             handleScan(result.getText());
           }
         }
@@ -194,15 +284,21 @@ export default function Scanner() {
       
       setIsScanning(true);
       setError("");
-      debug("✅ Scanner bereit!");
+      console.log("✅ Scanner läuft");
       
     } catch (err) {
-      debug(`❌ Start Error: ${err.message}`);
+      console.error("Start error:", err);
       setError("Scanner konnte nicht gestartet werden: " + err.message);
     }
   };
 
   const stopScanner = () => {
+    // Auto-Switch Timer stoppen
+    if (autoSwitchTimerRef.current) {
+      clearTimeout(autoSwitchTimerRef.current);
+      autoSwitchTimerRef.current = null;
+    }
+    
     if (codeReaderRef.current) {
       try { codeReaderRef.current.reset(); } catch (e) {}
       codeReaderRef.current = null;
@@ -256,13 +352,18 @@ export default function Scanner() {
       return;
     }
     
-    debug(`📱 Scan: ${code}`);
+    console.log("📱 Scan:", code);
+    
+    // Auto-Switch Timer stoppen (erfolgreicher Scan!)
+    if (autoSwitchTimerRef.current) {
+      clearTimeout(autoSwitchTimerRef.current);
+    }
     
     // Lock setzen
     isPausedRef.current = true;
     processingRef.current = true;
     lastScannedCodeRef.current = code;
-    setScannedCode(code); // Für Debug-Anzeige
+    setScannedCode(code);
     
     // Vibration
     if (navigator.vibrate) {
@@ -272,26 +373,22 @@ export default function Scanner() {
     // Code prüfen
     setBoxLoading(true);
     setError("");
-    debug("🔍 Prüfe Code bei API...");
 
     try {
       const res = await axios.get(`${API}/qr/check/${code}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      debug(`📦 API OK: box_id=${res.data?.box_id || 'null'}`);
       console.log("📦 Response:", res.data);
 
       // Code nicht in DB
       if (!res.data || !res.data.box_id) {
-        debug("→ Code nicht in DB, weiter zu assign-code");
         navigate(`/qr/assign-code?code=${code}`);
         return;
       }
 
       // Box im Pool (kein Objekt)
       if (!res.data.object_id) {
-        debug(`→ Box ${res.data.box_id} ohne Objekt, weiter zu assign-object`);
         navigate(`/qr/assign-object?code=${code}&box_id=${res.data.box_id}`);
         return;
       }
@@ -371,12 +468,11 @@ export default function Scanner() {
       }
 
       // Direkt zum Dialog
-      debug("✅ Öffne BoxScanDialog");
       setBoxLoading(false);
       setShowScanDialog(true);
 
     } catch (err) {
-      debug(`❌ API Error: ${err.response?.status || err.message}`);
+      console.error("❌ API Error:", err.response?.status || err.message);
       console.error("Response:", err.response?.data);
       
       setBoxLoading(false);
@@ -396,7 +492,6 @@ export default function Scanner() {
         processingRef.current = false;
         isPausedRef.current = false;
         setError("");
-        debug("🔄 Scanner wieder frei");
       }, 3000);
     }
   };
@@ -419,11 +514,18 @@ export default function Scanner() {
     setBoxLoading(false);
     setScannedCode(null);
     
+    // Camera-Tries zurücksetzen
+    cameraTriesRef.current = 0;
+    
     // Cooldown dann entsperren
     setTimeout(() => {
       lastScannedCodeRef.current = null;
       processingRef.current = false;
       isPausedRef.current = false;
+      
+      // Auto-Switch Timer neu starten
+      startAutoSwitchTimer();
+      
       console.log("✅ Scanner bereit");
     }, 800);
   };
@@ -536,24 +638,17 @@ export default function Scanner() {
   // ============================================
   // KAMERA WECHSELN
   // ============================================
+  // Manueller Kamera-Wechsel (Button)
   const switchCamera = async () => {
-    if (cameras.length < 2) return;
+    const cams = camerasRef.current;
+    if (cams.length < 2) return;
     
-    const nextIndex = (currentCameraIndex + 1) % cameras.length;
-    setCurrentCameraIndex(nextIndex);
-    setTorchOn(false);
+    const nextIndex = (currentCameraIndex + 1) % cams.length;
     
-    // Aktuellen Stream stoppen
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-    }
+    // Bei manuellem Wechsel: Tries zurücksetzen
+    cameraTriesRef.current = 0;
     
-    if (codeReaderRef.current) {
-      try { codeReaderRef.current.reset(); } catch (e) {}
-    }
-    
-    // Neuen Stream starten
-    await startScanning(cameras[nextIndex].deviceId);
+    await switchToCamera(nextIndex);
   };
 
   // ============================================
@@ -561,30 +656,6 @@ export default function Scanner() {
   // ============================================
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
-      {/* DEBUG PANEL - Immer sichtbar */}
-      <div className="fixed bottom-0 left-0 right-0 z-[300] bg-black/95 border-t-2 border-yellow-500 p-2 text-xs font-mono max-h-40 overflow-auto">
-        <div className="text-yellow-400 font-bold mb-1">🔧 DEBUG (Route: /qr/scanner)</div>
-        <div className="grid grid-cols-2 gap-1 mb-2">
-          <div className={isScanning ? "text-green-400" : "text-red-400"}>
-            Scanner: {isScanning ? '✓ läuft' : '✗ aus'}
-          </div>
-          <div className="text-gray-400">Kameras: {cameras.length}</div>
-          <div className="text-blue-400">Code: {scannedCode || '-'}</div>
-          <div className="text-blue-400">Box: {currentBox?.id || '-'}</div>
-          <div className={showScanDialog ? "text-green-400" : "text-gray-400"}>
-            Dialog: {showScanDialog ? 'OFFEN' : 'zu'}
-          </div>
-          <div className={boxLoading ? "text-yellow-400" : "text-gray-400"}>
-            Loading: {boxLoading ? 'JA' : 'nein'}
-          </div>
-        </div>
-        {error && <div className="text-red-400 mb-1">⚠️ {error}</div>}
-        <div className="border-t border-gray-700 pt-1 mt-1">
-          {debugLog.map((log, i) => (
-            <div key={i} className="text-gray-300 truncate">{log}</div>
-          ))}
-        </div>
-      </div>
 
       {/* Success Toast */}
       {showSuccess && (
@@ -765,6 +836,7 @@ export default function Scanner() {
             QR-Scanner
           </h1>
           <div className="flex gap-2">
+            {/* Kamera-Wechsel nur bei mehreren Rückkameras */}
             {cameras.length > 1 && (
               <button onClick={switchCamera} className="p-2 text-gray-400 hover:text-white">
                 <SwitchCamera size={20} />
@@ -806,17 +878,6 @@ export default function Scanner() {
           </div>
         )}
 
-        {/* DEBUG INFO */}
-        {!boxLoading && scannedCode && !hasActiveDialog && (
-          <div className="m-4 p-3 bg-yellow-900/30 border border-yellow-500/50 rounded-lg text-xs">
-            <p className="text-yellow-400 font-semibold mb-1">🔍 Debug Info:</p>
-            <p className="text-yellow-300 font-mono">Gescannt: {scannedCode}</p>
-            <p className="text-yellow-300">currentBox: {currentBox ? `ID ${currentBox.id}` : 'null'}</p>
-            <p className="text-yellow-300">showScanDialog: {showScanDialog ? 'true' : 'false'}</p>
-            <p className="text-yellow-300">error: {error || 'none'}</p>
-          </div>
-        )}
-
         {/* Video */}
         <div className="relative bg-black">
           <video 
@@ -838,13 +899,6 @@ export default function Scanner() {
             </div>
           )}
         </div>
-
-        {/* Hint */}
-        {isScanning && !boxLoading && !error && !hasActiveDialog && (
-          <p className="text-center text-gray-500 text-sm py-4">
-            Halte den QR-Code in den grünen Rahmen
-          </p>
-        )}
       </div>
 
       {/* Styles */}
