@@ -24,8 +24,9 @@ import {
   MapPin, CheckCircle, ArrowRight
 } from "lucide-react";
 
-// BoxScanDialog importieren
+// BoxScanDialog und BoxEditDialog importieren
 import BoxScanDialog from "../../components/BoxScanDialog";
+import BoxEditDialog from "../maps/BoxEditDialog";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -76,6 +77,7 @@ export default function Scanner() {
   const [showScanDialog, setShowScanDialog] = useState(false);
   const [showPlacementChoice, setShowPlacementChoice] = useState(false);
   const [showGPSWarning, setShowGPSWarning] = useState(false);
+  const [showFirstSetup, setShowFirstSetup] = useState(false); // NEU: Ersteinrichtung
   
   // GPS State
   const [currentGPS, setCurrentGPS] = useState(null);
@@ -85,6 +87,7 @@ export default function Scanner() {
   // Platzierungsauswahl State
   const [pendingPlacement, setPendingPlacement] = useState(null);
   const [objectFloorplans, setObjectFloorplans] = useState([]);
+  const [boxTypes, setBoxTypes] = useState([]); // NEU: Für Ersteinrichtung
 
   // Success Toast
   const [showSuccess, setShowSuccess] = useState(false);
@@ -98,8 +101,21 @@ export default function Scanner() {
   // ============================================
   useEffect(() => {
     initScanner();
+    loadBoxTypes(); // BoxTypes für Ersteinrichtung laden
     return () => stopScanner();
   }, []);
+
+  // BoxTypes laden
+  const loadBoxTypes = async () => {
+    try {
+      const res = await axios.get(`${API}/boxtypes`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setBoxTypes(Array.isArray(res.data) ? res.data : res.data?.data || []);
+    } catch (err) {
+      console.error("Load box types error:", err);
+    }
+  };
 
   const initScanner = async () => {
     try {
@@ -457,9 +473,64 @@ export default function Scanner() {
   };
 
   // Platzierungsauswahl: GPS
-  const handleChooseGPS = () => {
+  const handleChooseGPS = async () => {
     if (!pendingPlacement) return;
-    navigate(`/maps?object_id=${pendingPlacement.objectId}&openBox=${pendingPlacement.boxId}&firstSetup=true`);
+    
+    // Prüfen ob Mobile
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    if (isMobile) {
+      // MOBILE: GPS automatisch holen und Box platzieren
+      setGpsLoading(true);
+      
+      try {
+        // GPS Position holen
+        const position = await getCurrentPosition();
+        
+        // Box auf GPS platzieren
+        await axios.put(`${API}/boxes/${pendingPlacement.boxId}/position`, {
+          lat: position.lat,
+          lng: position.lng,
+          position_type: 'gps'
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        // Box-Daten aktualisieren für Dialog
+        setCurrentBox({
+          ...pendingPlacement.boxData,
+          id: pendingPlacement.boxId,
+          object_id: pendingPlacement.objectId, // WICHTIG!
+          lat: position.lat,
+          lng: position.lng,
+          position_type: 'gps',
+          qr_code: pendingPlacement.code
+        });
+        
+        setGpsLoading(false);
+        setShowPlacementChoice(false);
+        
+        // Prüfen ob Ersteinrichtung nötig
+        const needsSetup = !pendingPlacement.boxData?.box_type_id;
+        
+        if (needsSetup) {
+          // Ersteinrichtung öffnen
+          setShowFirstSetup(true);
+        } else {
+          // Scan-Dialog öffnen
+          setShowScanDialog(true);
+        }
+        
+      } catch (err) {
+        console.error("GPS placement error:", err);
+        setGpsLoading(false);
+        // Fallback: Zur Maps navigieren
+        navigate(`/maps?object_id=${pendingPlacement.objectId}&openBox=${pendingPlacement.boxId}&firstSetup=true`);
+      }
+    } else {
+      // DESKTOP: Zur Maps navigieren (User klickt auf Karte)
+      navigate(`/maps?object_id=${pendingPlacement.objectId}&openBox=${pendingPlacement.boxId}&firstSetup=true`);
+    }
   };
 
   // Platzierungsauswahl: Lageplan
@@ -490,6 +561,21 @@ export default function Scanner() {
     resetScanner();
   };
 
+  // Ersteinrichtung abgeschlossen → Scan-Dialog öffnen
+  const handleFirstSetupCompleted = () => {
+    setShowFirstSetup(false);
+    showSuccessToast("✓ Box eingerichtet");
+    // Jetzt Scan-Dialog für erste Kontrolle
+    setShowScanDialog(true);
+  };
+
+  // Ersteinrichtung schließen ohne Speichern
+  const handleFirstSetupClose = () => {
+    setShowFirstSetup(false);
+    setProcessingCode(false);
+    resetScanner();
+  };
+
   // Success Toast anzeigen
   const showSuccessToast = (message) => {
     setSuccessMessage(message);
@@ -507,6 +593,7 @@ export default function Scanner() {
     setCurrentGPS(null);
     setShowGPSWarning(false);
     setShowPlacementChoice(false);
+    setShowFirstSetup(false); // NEU
     setPendingPlacement(null);
     setError("");
     setProcessingCode(false); // Lock zurücksetzen!
@@ -676,17 +763,26 @@ export default function Scanner() {
             {/* GPS Option */}
             <button
               onClick={handleChooseGPS}
-              className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-green-500/50 rounded-xl p-5 text-left transition-all"
+              disabled={gpsLoading}
+              className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-green-500/50 rounded-xl p-5 text-left transition-all disabled:opacity-70"
             >
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <Navigation size={28} className="text-green-400" />
+                  {gpsLoading ? (
+                    <div className="w-6 h-6 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Navigation size={28} className="text-green-400" />
+                  )}
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-lg text-white">GPS-Karte</h3>
+                  <h3 className="font-semibold text-lg text-white">
+                    {gpsLoading ? "GPS wird ermittelt..." : "GPS-Karte"}
+                  </h3>
                   <p className="text-sm text-gray-400 mt-1">
-                    Auf der Karte platzieren mit GPS-Koordinaten.
-                    Ideal für Außenbereiche.
+                    {gpsLoading 
+                      ? "Box wird an deiner aktuellen Position platziert"
+                      : "Auf der Karte platzieren mit GPS-Koordinaten. Ideal für Außenbereiche."
+                    }
                   </p>
                 </div>
               </div>
@@ -763,6 +859,23 @@ export default function Scanner() {
               navigate(`/maps?object_id=${currentBox.object_id}&openBox=${currentBox.id}&flyTo=true`);
             }
           }}
+        />
+      </div>
+    );
+  }
+
+  // ============================================
+  // RENDER: ERSTEINRICHTUNG (BoxEditDialog)
+  // ============================================
+  if (showFirstSetup && currentBox) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a]">
+        <BoxEditDialog
+          box={currentBox}
+          boxTypes={boxTypes}
+          isFirstSetup={true}
+          onClose={handleFirstSetupClose}
+          onSave={handleFirstSetupCompleted}
         />
       </div>
     );
