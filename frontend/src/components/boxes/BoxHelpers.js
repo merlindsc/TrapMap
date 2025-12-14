@@ -71,21 +71,37 @@ export function getShortQr(box) {
 
 /**
  * Prüft ob Box auf GPS platziert ist
+ * GEÄNDERT: GPS-Koordinaten sind das Hauptkriterium
  */
 export function isGpsBox(box) {
-  // position_type === 'gps' ODER 'map' (alte Bezeichnung)
-  const isGpsType = box?.position_type === 'gps' || box?.position_type === 'map';
+  // Box ist GPS-Box wenn:
+  // 1. lat/lng gesetzt sind UND
+  // 2. NICHT auf Lageplan (floor_plan_id nicht gesetzt ODER keine pos_x/pos_y)
   const hasCoords = box?.lat != null && box?.lng != null;
+  const isOnFloorplan = box?.floor_plan_id != null && box?.pos_x != null;
   
-  return isGpsType && hasCoords;
+  // Auch position_type berücksichtigen
+  const isGpsType = box?.position_type === 'gps' || box?.position_type === 'map';
+  
+  // GPS wenn Koordinaten vorhanden UND nicht auf Lageplan
+  return hasCoords && !isOnFloorplan;
 }
 
 /**
  * Prüft ob Box auf Lageplan platziert ist
+ * GEÄNDERT: Prüft floor_plan_id UND pos_x/pos_y statt nur position_type
  */
 export function isFloorplanBox(box) {
-  return box?.position_type === 'floorplan' && 
-         box?.floor_plan_id != null;
+  // Box ist auf Lageplan wenn:
+  // 1. floor_plan_id existiert UND
+  // 2. pos_x/pos_y gesetzt sind (tatsächlich platziert)
+  const hasFloorplanId = box?.floor_plan_id != null;
+  const hasPosition = box?.pos_x != null && box?.pos_y != null;
+  
+  // Auch position_type berücksichtigen für Rückwärtskompatibilität
+  const isFloorplanType = box?.position_type === 'floorplan';
+  
+  return hasFloorplanId && (hasPosition || isFloorplanType);
 }
 
 /**
@@ -136,32 +152,18 @@ export function getStatusHex(status) {
 }
 
 /**
- * Box-Icon basierend auf Typ
+ * Box-Icon - Einzelner Buchstabe basierend auf Typ (wie Maps)
+ * T = Trap/Schlagfalle
+ * R = Rodent/Nager/Köder
+ * I = Insekt
+ * L = Licht/UV
+ * B = Box (Standard)
  */
 export function getBoxIcon(box) {
-  const icons = {
-    'Mausbox': '🐭',
-    'Rattenbox': '🐀',
-    'Nagerbox': '🐀',
-    'Insektenfalle': '🪲',
-    'Pheromonfalle': '🦋',
-    'UV-Falle': '💡',
-    'Klebestreifen': '📋',
-    'Schlagfalle': '⚡'
-  };
-  
-  const typeName = box?.box_type_name || '';
-  
-  // Exakten Match suchen
-  if (icons[typeName]) return icons[typeName];
-  
-  // Teilmatch suchen
-  const lowerName = typeName.toLowerCase();
-  if (lowerName.includes('maus')) return '🐭';
-  if (lowerName.includes('ratte') || lowerName.includes('nager')) return '🐀';
-  if (lowerName.includes('insekt') || lowerName.includes('käfer')) return '🪲';
-  if (lowerName.includes('uv') || lowerName.includes('licht')) return '💡';
-  if (lowerName.includes('schlag')) return '⚡';
-  
-  return '📦';
+  const typeName = (box?.box_type_name || "").toLowerCase();
+  if (typeName.includes("schlag") || typeName.includes("trap")) return "T";
+  if (typeName.includes("gift") || typeName.includes("bait") || typeName.includes("rodent") || typeName.includes("nager") || typeName.includes("köder") || typeName.includes("ratte") || typeName.includes("maus")) return "R";
+  if (typeName.includes("insekt") || typeName.includes("insect") || typeName.includes("käfer")) return "I";
+  if (typeName.includes("uv") || typeName.includes("licht")) return "L";
+  return "B";
 }

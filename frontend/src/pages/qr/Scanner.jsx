@@ -744,7 +744,8 @@ export default function Scanner() {
             onSave={handleScanCompleted}
             onScanCreated={handleScanCompleted}
             onShowDetails={() => {
-              const isFloorplan = currentBox.position_type === 'floorplan' && currentBox.floor_plan_id;
+              // GEÄNDERT: Bessere Lageplan-Erkennung
+              const isFloorplan = currentBox.floor_plan_id && (currentBox.pos_x !== null && currentBox.pos_x !== undefined);
               if (isFloorplan) {
                 // GEÄNDERT: Direkt zum Lageplan-Editor
                 navigate(`/layouts/${currentBox.object_id}?fp=${currentBox.floor_plan_id}&openBox=${currentBox.id}`);
