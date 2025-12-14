@@ -76,7 +76,11 @@ export default function Scanner() {
   // COOLDOWN: Verhindert dass gleicher Code sofort wieder erkannt wird
   const lastScannedCodeRef = useRef(null);
   const lastScanTimeRef = useRef(0);
-  const SCAN_COOLDOWN_MS = 3000; // 3 Sekunden Cooldown für gleichen Code
+  const SCAN_COOLDOWN_MS = 5000; // 5 Sekunden Cooldown für gleichen Code
+  
+  // Mobile Detection (einmal berechnen)
+  const isMobile = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+    || (navigator.maxTouchPoints > 0 && window.innerWidth < 1024);
 
   // View States
   const [showScanDialog, setShowScanDialog] = useState(false);
@@ -269,12 +273,17 @@ export default function Scanner() {
       code = decodedText.split("/s/")[1];
     }
     
-    // COOLDOWN CHECK: Gleicher Code innerhalb von 3 Sekunden?
+    // COOLDOWN CHECK: Gleicher Code innerhalb von 5 Sekunden?
     const now = Date.now();
     const timeSinceLastScan = now - lastScanTimeRef.current;
+    const issamecode = code === lastScannedCodeRef.current;
     
-    if (code === lastScannedCodeRef.current && timeSinceLastScan < SCAN_COOLDOWN_MS) {
-      console.log(`⏳ Cooldown aktiv: ${code} (noch ${Math.round((SCAN_COOLDOWN_MS - timeSinceLastScan) / 1000)}s)`);
+    // STRENGER CHECK: Gleicher Code wird 5 Sekunden ignoriert
+    if (issamecode && timeSinceLastScan < SCAN_COOLDOWN_MS) {
+      // Nur alle 2 Sekunden loggen um Console nicht zu spammen
+      if (timeSinceLastScan % 2000 < 100) {
+        console.log(`⏳ Cooldown: ${code} (noch ${Math.round((SCAN_COOLDOWN_MS - timeSinceLastScan) / 1000)}s)`);
+      }
       return; // Gleicher Code zu schnell - ignorieren!
     }
     
@@ -286,7 +295,7 @@ export default function Scanner() {
     lastScannedCodeRef.current = code;
     lastScanTimeRef.current = now;
     
-    console.log(`📱 Neuer Scan: ${code}`);
+    console.log(`📱 Neuer Scan: ${code} (isMobile: ${isMobile})`);
     
     // Scanner SOFORT stoppen
     await stopScanner();
@@ -311,12 +320,16 @@ export default function Scanner() {
     setError("");
 
     try {
+      console.log(`🔍 Prüfe Code: ${code}`);
       const res = await axios.get(`${API}/qr/check/${code}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
+      console.log("📦 API Response:", JSON.stringify(res.data, null, 2));
+
       // Code nicht in DB → Zur Registrierung
       if (!res.data || !res.data.box_id) {
+        console.log("⚠️ Kein box_id - navigiere zur Registrierung");
         navigate(`/qr/assign/${code}`);
         return;
       }
@@ -328,6 +341,16 @@ export default function Scanner() {
       const floorPlanId = boxData?.floor_plan_id;
       const hasGPS = boxData?.lat && boxData?.lng;
       const hasFloorplanPosition = floorPlanId && boxData?.pos_x !== null && boxData?.pos_y !== null;
+
+      console.log("📊 Box-Status:", {
+        boxId,
+        objectId,
+        positionType,
+        hasGPS,
+        hasFloorplanPosition,
+        lat: boxData?.lat,
+        lng: boxData?.lng
+      });
 
       // Box-Daten speichern
       setCurrentBox({
@@ -359,19 +382,33 @@ export default function Scanner() {
       // FALL 3: Mit GPS platziert
       // → Nur auf MOBILE: GPS-Distanz prüfen
       // → Auf DESKTOP: Direkt BoxScanDialog öffnen
+      // Auch wenn position_type nicht gesetzt aber lat/lng vorhanden!
       // ============================================
-      if ((positionType === 'gps' || positionType === 'map') && hasGPS) {
-        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      const isGPSBox = (positionType === 'gps' || positionType === 'map') || 
+                       (hasGPS && !hasFloorplanPosition);
+      
+      if (isGPSBox && hasGPS) {
+        console.log(`📍 GPS-Box erkannt: positionType=${positionType}, hasGPS=${hasGPS}, isMobile=${isMobile}`);
         
         if (isMobile) {
           // MOBILE: GPS-Distanz prüfen
+          console.log("📍 Starte GPS-Distanz Check...");
           await checkGPSDistance(boxData);
         } else {
           // DESKTOP: Kein GPS-Check, direkt zum Dialog
+          console.log("🖥️ Desktop erkannt - überspringe GPS-Check");
           setBoxLoading(false);
           setShowScanDialog(true);
         }
         return;
+      }
+      
+      // Debug: Warum kein GPS-Check?
+      if (!hasGPS) {
+        console.log(`⚠️ Kein GPS-Check: hasGPS=${hasGPS}, lat=${boxData?.lat}, lng=${boxData?.lng}`);
+      }
+      if (!isGPSBox) {
+        console.log(`⚠️ Keine GPS-Box: positionType=${positionType}, hasFloorplanPosition=${hasFloorplanPosition}`);
       }
 
       // ============================================
@@ -393,26 +430,36 @@ export default function Scanner() {
   // GPS-DISTANZ PRÜFEN
   // ============================================
   const checkGPSDistance = async (boxData) => {
+    console.log("📍 checkGPSDistance gestartet für Box:", boxData.id);
     setGpsLoading(true);
     
     try {
+      console.log("📍 Hole aktuelle GPS-Position...");
       const currentPos = await getCurrentPosition();
+      console.log("📍 Aktuelle Position:", currentPos);
       setCurrentGPS(currentPos);
 
+      const boxLat = parseFloat(boxData.lat);
+      const boxLng = parseFloat(boxData.lng);
+      console.log("📍 Box-Position:", { lat: boxLat, lng: boxLng });
+      
       const distance = calculateDistance(
         currentPos.lat, currentPos.lng,
-        parseFloat(boxData.lat), parseFloat(boxData.lng)
+        boxLat, boxLng
       );
 
+      console.log(`📍 Berechnete Distanz: ${Math.round(distance)}m`);
       setGpsDistance(Math.round(distance));
       setBoxLoading(false);
       setGpsLoading(false);
 
       // Wenn > 10m Abweichung → Warnung zeigen
       if (distance > 10) {
+        console.log("⚠️ Distanz > 10m - zeige GPS-Warnung");
         setShowGPSWarning(true);
       } else {
         // Alles OK → BoxScanDialog öffnen
+        console.log("✅ Distanz OK - öffne BoxScanDialog");
         setShowScanDialog(true);
       }
 
@@ -506,8 +553,7 @@ export default function Scanner() {
   const handleChooseGPS = async () => {
     if (!pendingPlacement) return;
     
-    // Prüfen ob Mobile
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    // isMobile ist global definiert
     
     if (isMobile) {
       // MOBILE: GPS automatisch holen und Box platzieren
@@ -674,7 +720,6 @@ export default function Scanner() {
   // Scanner zurücksetzen und neu starten
   const resetScanner = async () => {
     console.log("🔄 resetScanner called");
-    console.log(`🔒 Cooldown aktiv für: ${lastScannedCodeRef.current} (${SCAN_COOLDOWN_MS}ms)`);
     
     // Erst alle States zurücksetzen
     setScannedCode(null);
@@ -689,24 +734,29 @@ export default function Scanner() {
     setError("");
     setProcessingCode(false); // Lock zurücksetzen!
     
-    // WICHTIG: lastScannedCodeRef und lastScanTimeRef NICHT zurücksetzen!
-    // Der Cooldown verhindert dass gleicher Code sofort wieder erkannt wird
+    // WICHTIG: Scanner NICHT automatisch starten!
+    // User muss aktiv "Weiter scannen" klicken
+    // Das verhindert dass gleicher Code sofort wieder erkannt wird
+    console.log("⏸️ Scanner pausiert - warte auf User-Aktion");
+  };
+  
+  // Manueller Scanner-Start nach User-Klick
+  const startScanningAgain = async () => {
+    console.log("▶️ Manueller Scanner-Start");
     
-    // WICHTIG: Kurzer Timeout damit DOM sich aktualisieren kann
-    // bevor wir den Scanner wieder starten
-    setTimeout(async () => {
-      if (currentCamera) {
-        console.log("🎥 Restarting scanner with camera:", currentCamera.id);
-        try {
-          await startScanner(currentCamera.id);
-          console.log("✅ Scanner restarted");
-        } catch (err) {
-          console.error("❌ Scanner restart error:", err);
-        }
-      } else {
-        console.warn("⚠️ No camera selected for restart");
+    // Cooldown zurücksetzen für neuen Scan
+    lastScannedCodeRef.current = null;
+    lastScanTimeRef.current = 0;
+    
+    if (currentCamera) {
+      try {
+        await startScanner(currentCamera.id);
+        console.log("✅ Scanner gestartet");
+      } catch (err) {
+        console.error("❌ Scanner start error:", err);
+        setError("Scanner konnte nicht gestartet werden");
       }
-    }, 100);
+    }
   };
 
   // Kamera wechseln
@@ -867,44 +917,39 @@ export default function Scanner() {
           {/* Auswahl */}
           <div className="space-y-3">
             {/* GPS Option */}
-            {(() => {
-              const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-              return (
-                <button
-                  onClick={handleChooseGPS}
-                  disabled={gpsLoading}
-                  className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-green-500/50 rounded-xl p-5 text-left transition-all disabled:opacity-70"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                      {gpsLoading ? (
-                        <div className="w-6 h-6 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <Navigation size={28} className="text-green-400" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-lg text-white">
-                        {gpsLoading 
-                          ? "GPS wird ermittelt..." 
-                          : isMobileDevice 
-                            ? "GPS-Position" 
-                            : "Karte öffnen"
-                        }
-                      </h3>
-                      <p className="text-sm text-gray-400 mt-1">
-                        {gpsLoading 
-                          ? "Box wird an deiner aktuellen Position platziert"
-                          : isMobileDevice
-                            ? "Automatisch an deiner aktuellen GPS-Position platzieren"
-                            : "Zur Karte navigieren und Position manuell wählen"
-                        }
-                      </p>
-                    </div>
-                  </div>
-                </button>
-              );
-            })()}
+            <button
+              onClick={handleChooseGPS}
+              disabled={gpsLoading}
+              className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-green-500/50 rounded-xl p-5 text-left transition-all disabled:opacity-70"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                  {gpsLoading ? (
+                    <div className="w-6 h-6 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Navigation size={28} className="text-green-400" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-lg text-white">
+                    {gpsLoading 
+                      ? "GPS wird ermittelt..." 
+                      : isMobile 
+                        ? "GPS-Position" 
+                        : "Karte öffnen"
+                    }
+                  </h3>
+                  <p className="text-sm text-gray-400 mt-1">
+                    {gpsLoading 
+                      ? "Box wird an deiner aktuellen Position platziert"
+                      : isMobile
+                        ? "Automatisch an deiner aktuellen GPS-Position platzieren"
+                        : "Zur Karte navigieren und Position manuell wählen"
+                    }
+                  </p>
+                </div>
+              </div>
+            </button>
 
             {/* Lageplan Option */}
             {hasFloorplans ? (
@@ -1073,6 +1118,26 @@ export default function Scanner() {
         </div>
       )}
 
+      {/* Scanner pausiert - Weiter scannen Button */}
+      {permissionState === "granted" && !isScanning && !boxLoading && !error && (
+        <div className="flex flex-col items-center justify-center py-20 px-6">
+          <div className="w-20 h-20 bg-indigo-600/20 rounded-full flex items-center justify-center mb-6">
+            <Camera size={40} className="text-indigo-400" />
+          </div>
+          <h2 className="text-xl font-semibold mb-2">Scanner bereit</h2>
+          <p className="text-gray-400 text-center mb-6">
+            Tippe auf den Button um den nächsten QR-Code zu scannen
+          </p>
+          <button
+            onClick={startScanningAgain}
+            className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 rounded-xl flex items-center gap-3 text-lg font-semibold transition-all active:scale-95"
+          >
+            <Camera size={24} />
+            Weiter scannen
+          </button>
+        </div>
+      )}
+
       {/* Scanner */}
       <div className="relative">
         <div 
@@ -1080,7 +1145,7 @@ export default function Scanner() {
           ref={scannerRef}
           className="w-full"
           style={{ 
-            display: permissionState === "granted" && !boxLoading ? "block" : "none",
+            display: permissionState === "granted" && isScanning && !boxLoading ? "block" : "none",
           }}
         />
 

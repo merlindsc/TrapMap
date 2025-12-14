@@ -1,6 +1,10 @@
 /* ============================================================
    TRAPMAP - DASHBOARD LAYOUT CSS (FIXED)
    Alle Farben nutzen CSS-Variablen für Theme-Support!
+   z-index Hierarchie für Mobile:
+   - Navigation Sidebar: 60
+   - Overlay: 55
+   - Maps Bottom Sheet: 30
    ============================================================ */
 
 /* ============================================================
@@ -9,6 +13,7 @@
 .dashboard-layout {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh; /* bevorzugt auf mobilen Browsern mit adressbar */
   background: var(--bg-primary);
   color: var(--text-primary);
 }
@@ -20,11 +25,18 @@
   z-index: 50;
 }
 
+/* Responsive Sidebar sizing */
+.sidebar-container {
+  width: 280px;
+  max-width: 90vw;
+}
+
 .sidebar-container.mobile {
   position: fixed;
   top: 0;
   left: 0;
   bottom: 0;
+  z-index: 60; /* HÖHER als alles in Maps (30)! */
   transform: translateX(-100%);
   transition: transform 0.3s ease-in-out;
 }
@@ -42,9 +54,15 @@
   bottom: 0;
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(4px);
-  z-index: 40;
+  z-index: 55; /* Zwischen Sidebar (60) und Maps Content */
   cursor: pointer;
   animation: fadeIn 0.2s ease;
+}
+
+/* Prevent background scroll when sidebar is open.
+   Toggle `body.sidebar-open` via JS when opening/closing the mobile sidebar. */
+body.sidebar-open {
+  overflow: hidden;
 }
 
 @keyframes fadeIn {
@@ -73,6 +91,7 @@
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
+  z-index: 40; /* Über Maps Content */
 }
 
 .hamburger-btn {
@@ -227,11 +246,29 @@
   background: var(--bg-primary);
   color: var(--text-primary);
   min-height: 0;
+  position: relative; /* Für absolute positioned children in Maps */
+}
+
+/* Maps Page: Kein Padding, volle Höhe */
+.page-content:has(.maps-page) {
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Fallback for browsers not supporting :has() - add `.maps-page` class to `.page-content` via JS */
+.page-content.maps-page {
+  padding: 0;
+  overflow: hidden;
 }
 
 @media (max-width: 768px) {
   .page-content {
     padding: 16px;
+  }
+  
+  /* Maps auf Mobile: Kein Padding */
+  .page-content:has(.maps-page) {
+    padding: 0;
   }
   
   .logout-btn span {
@@ -245,6 +282,12 @@
   .user-name-text {
     display: none;
   }
+}
+
+/* Very small screens adjustments */
+@media (max-width: 480px) {
+  .card { padding: 12px; border-radius: 10px; }
+  .btn { padding: 8px 12px; font-size: 13px; }
 }
 
 /* ============================================================
@@ -322,28 +365,37 @@
 .bg-status-red { background: rgba(239, 68, 68, 0.15); }
 
 /* ============================================================
-   SCROLLBAR (Theme-aware)
+   SCROLLBAR (Theme-aware) - scoped
    ============================================================ */
-::-webkit-scrollbar {
+/* Scoped to main scrollable areas to avoid global side-effects */
+html::-webkit-scrollbar, body::-webkit-scrollbar, .page-content::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
-::-webkit-scrollbar-track {
+html::-webkit-scrollbar-track, body::-webkit-scrollbar-track, .page-content::-webkit-scrollbar-track {
   background: transparent;
 }
 
-::-webkit-scrollbar-thumb {
+html::-webkit-scrollbar-thumb, body::-webkit-scrollbar-thumb, .page-content::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 4px;
 }
 
-::-webkit-scrollbar-thumb:hover {
+html::-webkit-scrollbar-thumb:hover, body::-webkit-scrollbar-thumb:hover, .page-content::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
 
 /* Firefox */
-* {
+html, body, .page-content {
   scrollbar-width: thin;
   scrollbar-color: var(--border-color) transparent;
+}
+
+/* Focus outlines for accessibility */
+.hamburger-btn:focus-visible,
+.btn:focus-visible,
+.logout-btn:focus-visible {
+  outline: 2px solid var(--accent-indigo);
+  outline-offset: 2px;
 }

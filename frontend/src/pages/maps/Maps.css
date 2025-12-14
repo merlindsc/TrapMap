@@ -32,10 +32,17 @@
   padding: 12px 16px;
   background: linear-gradient(180deg, #111827 0%, #0d1117 100%);
   border-bottom: 1px solid rgba(255,255,255,0.1);
-  z-index: 100;
+  z-index: 20;
   flex-shrink: 0;
   height: 57px;
   box-sizing: border-box;
+}
+
+/* Mobile: Maps-Header verstecken - DashboardLayout hat bereits einen! */
+@media (max-width: 768px) {
+  .maps-header-modern {
+    display: none;
+  }
 }
 
 .header-left {
@@ -334,7 +341,7 @@
    PLACING HINTS
    ============================================================ */
 .placing-hint {
-  position: fixed;
+  position: absolute; /* Nicht fixed - innerhalb maps-content */
   top: 70px;
   left: 50%;
   transform: translateX(-50%);
@@ -348,7 +355,7 @@
   color: #fff;
   font-size: 14px;
   font-weight: 500;
-  z-index: 300;
+  z-index: 25; /* Unter Navigation, über Karte */
   backdrop-filter: blur(8px);
   box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
@@ -1120,7 +1127,7 @@
 
 /* ============================================================
    MOBILE STYLES - BOTTOM SHEET ÜBER DER KARTE
-   z-index: 200 (höher als Karte!)
+   WICHTIG: z-index niedriger als DashboardLayout Navigation (50)!
    ============================================================ */
 @media (max-width: 768px) {
   .header-center {
@@ -1140,9 +1147,17 @@
     font-size: 14px;
   }
 
+  /* Maps Page - volle Höhe nutzen */
+  .maps-page {
+    height: 100%;
+    height: calc(100vh - 57px); /* Minus Mobile Header */
+    height: calc(100dvh - 57px);
+  }
+
   /* Map nimmt volle Höhe unter Header */
   .maps-content {
     position: relative;
+    height: 100%;
   }
 
   .map-container {
@@ -1157,24 +1172,25 @@
   .zoom-controls {
     bottom: 160px;
     right: 12px;
-    z-index: 50;
+    z-index: 10;
   }
 
   /* ========================================
      MOBILE SIDEBAR = BOTTOM SHEET
-     WICHTIG: z-index: 200 = ÜBER der Karte!
+     z-index: 30 = UNTER DashboardLayout Nav (50)
+     aber ÜBER der Karte (1)
      ======================================== */
   .maps-sidebar {
-    position: fixed;
+    position: absolute; /* NICHT fixed! Innerhalb maps-content */
     left: 0;
     right: 0;
     bottom: 0;
     width: 100%;
-    max-height: 85vh;
+    max-height: 70vh;
     border-left: none;
     border-top: 1px solid rgba(255,255,255,0.15);
     border-radius: 20px 20px 0 0;
-    z-index: 200;
+    z-index: 30; /* Unter DashboardLayout (50) */
     box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.5);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     background: #111827;
@@ -1238,7 +1254,7 @@
   /* Content scrollbar */
   .maps-sidebar .sidebar-content {
     padding: 12px;
-    max-height: calc(85vh - 120px);
+    max-height: calc(70vh - 100px);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
@@ -1263,7 +1279,7 @@
 
   /* FAB wenn Sheet geschlossen */
   .mobile-fab {
-    position: fixed;
+    position: absolute; /* Innerhalb maps-content */
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
@@ -1279,11 +1295,12 @@
     font-weight: 600;
     cursor: pointer;
     box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
-    z-index: 100;
+    z-index: 25; /* Unter Sheet und Nav */
   }
 
-  /* Placing hints Mobile - über Sheet */
+  /* Placing hints Mobile - über Sheet aber unter Nav */
   .placing-hint {
+    position: absolute;
     top: auto;
     bottom: 100px;
     left: 16px;
@@ -1291,7 +1308,7 @@
     transform: none;
     padding: 10px 14px;
     font-size: 13px;
-    z-index: 300;
+    z-index: 35; /* Über Sheet (30), unter Nav (50) */
   }
 
   /* Box items kompakter */
