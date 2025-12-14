@@ -85,6 +85,15 @@ export default function Scanner() {
   // Success Toast
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  
+  // DEBUG State
+  const [debugLog, setDebugLog] = useState([]);
+  
+  // Debug Logger
+  const debug = (msg) => {
+    console.log(msg);
+    setDebugLog(prev => [...prev.slice(-5), `${new Date().toLocaleTimeString()}: ${msg}`]);
+  };
 
   // Mobile Detection
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -121,11 +130,12 @@ export default function Scanner() {
   const initScanner = async () => {
     try {
       setError("");
+      debug("🚀 Init Scanner...");
       
       codeReaderRef.current = new BrowserMultiFormatReader();
       
       const devices = await BrowserMultiFormatReader.listVideoInputDevices();
-      console.log("📷 Kameras:", devices.length);
+      debug(`📷 ${devices.length} Kamera(s) gefunden`);
       
       if (!devices || devices.length === 0) {
         setError("Keine Kamera gefunden");
@@ -146,7 +156,7 @@ export default function Scanner() {
       await startScanning(devices[cameraIndex].deviceId);
       
     } catch (err) {
-      console.error("Init error:", err);
+      debug(`❌ Init Error: ${err.message}`);
       setError("Kamera konnte nicht gestartet werden");
     }
   };
@@ -158,7 +168,7 @@ export default function Scanner() {
     if (!codeReaderRef.current || !videoRef.current) return;
     
     try {
-      console.log("🎥 Starte Scanner mit Device:", deviceId);
+      debug("🎥 Starte Kamera...");
       isPausedRef.current = false;
       processingRef.current = false;
       
@@ -170,7 +180,7 @@ export default function Scanner() {
           if (isPausedRef.current) return;
           if (processingRef.current) return;
           if (result) {
-            console.log("📸 QR erkannt:", result.getText());
+            debug(`📸 QR: ${result.getText()}`);
             handleScan(result.getText());
           }
         }
@@ -184,10 +194,10 @@ export default function Scanner() {
       
       setIsScanning(true);
       setError("");
-      console.log("✅ Scanner läuft");
+      debug("✅ Scanner bereit!");
       
     } catch (err) {
-      console.error("Start error:", err);
+      debug(`❌ Start Error: ${err.message}`);
       setError("Scanner konnte nicht gestartet werden: " + err.message);
     }
   };
@@ -246,7 +256,7 @@ export default function Scanner() {
       return;
     }
     
-    console.log(`📱 Scan: ${code}`);
+    debug(`📱 Scan: ${code}`);
     
     // Lock setzen
     isPausedRef.current = true;
@@ -262,12 +272,14 @@ export default function Scanner() {
     // Code prüfen
     setBoxLoading(true);
     setError("");
+    debug("🔍 Prüfe Code bei API...");
 
     try {
       const res = await axios.get(`${API}/qr/check/${code}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
+      debug(`📦 API OK: box_id=${res.data?.box_id || 'null'}`);
       console.log("📦 Response:", res.data);
 
       // Code nicht in DB
@@ -357,11 +369,12 @@ export default function Scanner() {
       }
 
       // Direkt zum Dialog
+      debug("✅ Öffne BoxScanDialog");
       setBoxLoading(false);
       setShowScanDialog(true);
 
     } catch (err) {
-      console.error("❌ Check error:", err);
+      debug(`❌ API Error: ${err.response?.status || err.message}`);
       console.error("Response:", err.response?.data);
       
       setBoxLoading(false);
@@ -381,6 +394,7 @@ export default function Scanner() {
         processingRef.current = false;
         isPausedRef.current = false;
         setError("");
+        debug("🔄 Scanner wieder frei");
       }, 3000);
     }
   };
@@ -545,6 +559,31 @@ export default function Scanner() {
   // ============================================
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
+      {/* DEBUG PANEL - Immer sichtbar */}
+      <div className="fixed bottom-0 left-0 right-0 z-[300] bg-black/95 border-t-2 border-yellow-500 p-2 text-xs font-mono max-h-40 overflow-auto">
+        <div className="text-yellow-400 font-bold mb-1">🔧 DEBUG (Route: /qr/scanner)</div>
+        <div className="grid grid-cols-2 gap-1 mb-2">
+          <div className={isScanning ? "text-green-400" : "text-red-400"}>
+            Scanner: {isScanning ? '✓ läuft' : '✗ aus'}
+          </div>
+          <div className="text-gray-400">Kameras: {cameras.length}</div>
+          <div className="text-blue-400">Code: {scannedCode || '-'}</div>
+          <div className="text-blue-400">Box: {currentBox?.id || '-'}</div>
+          <div className={showScanDialog ? "text-green-400" : "text-gray-400"}>
+            Dialog: {showScanDialog ? 'OFFEN' : 'zu'}
+          </div>
+          <div className={boxLoading ? "text-yellow-400" : "text-gray-400"}>
+            Loading: {boxLoading ? 'JA' : 'nein'}
+          </div>
+        </div>
+        {error && <div className="text-red-400 mb-1">⚠️ {error}</div>}
+        <div className="border-t border-gray-700 pt-1 mt-1">
+          {debugLog.map((log, i) => (
+            <div key={i} className="text-gray-300 truncate">{log}</div>
+          ))}
+        </div>
+      </div>
+
       {/* Success Toast */}
       {showSuccess && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-green-600 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
