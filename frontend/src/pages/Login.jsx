@@ -215,8 +215,8 @@ export default function Login() {
             <p className="text-gray-400">Schädlingsüberwachung</p>
           </div>
 
-          <div className="bg-[#1a1a2e]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
-            <h2 className="text-2xl font-bold text-white mb-6 text-center">Anmelden</h2>
+          <div className="bg-[#1a1a2e]/80 dark:bg-gray-900/90 backdrop-blur-xl border border-white/10 dark:border-white/20 rounded-2xl p-8 shadow-2xl">
+            <h2 className="text-2xl font-bold text-white dark:text-gray-100 mb-6 text-center">Anmelden</h2>
 
             {error && (
               <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg flex items-center gap-2 text-red-400 text-sm">
@@ -227,14 +227,14 @@ export default function Login() {
 
             <form onSubmit={handleLogin} className="space-y-5">
               <div>
-                <label className="block text-sm text-gray-400 mb-1">E-Mail</label>
+                <label className="block text-sm text-gray-400 dark:text-gray-500 mb-1">E-Mail</label>
                 <div className="relative">
-                  <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-600" />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                    className="w-full bg-[#0d0d1a] dark:bg-gray-950 border border-white/10 dark:border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 dark:placeholder-gray-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
                     placeholder="ihre@email.de"
                     required
                   />

@@ -50,14 +50,14 @@ export default function LayoutCreate() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto text-white">
+    <div className="max-w-3xl mx-auto text-white dark:text-gray-100">
       <h1 className="text-3xl font-bold mb-6">Neuen Lageplan anlegen</h1>
 
-      <div className="space-y-4 bg-gray-800 p-6 rounded-lg border border-gray-700">
+      <div className="space-y-4 bg-gray-800 dark:bg-gray-900 p-6 rounded-lg border border-gray-700 dark:border-gray-800">
         <div>
-          <label className="block mb-1 text-gray-300">Name</label>
+          <label className="block mb-1 text-gray-300 dark:text-gray-400">Name</label>
           <input
-            className="w-full p-3 rounded bg-gray-900 border border-gray-700"
+            className="w-full p-3 rounded bg-gray-900 dark:bg-gray-950 border border-gray-700 dark:border-gray-800 text-white"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="z.B. EG Lager"
@@ -65,10 +65,10 @@ export default function LayoutCreate() {
         </div>
 
         <div>
-          <label className="block mb-1 text-gray-300">Lageplan-Bild</label>
+          <label className="block mb-1 text-gray-300 dark:text-gray-400">Lageplan-Bild</label>
           <input type="file" onChange={handleUpload} className="mb-3" />
           {preview && (
-            <img src={preview} className="rounded border border-gray-700" />
+            <img src={preview} className="rounded border border-gray-700 dark:border-gray-800" />
           )}
         </div>
 

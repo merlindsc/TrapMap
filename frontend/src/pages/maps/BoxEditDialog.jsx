@@ -429,22 +429,22 @@ export default function BoxEditDialog({
     >
       <div 
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#111827] rounded-xl w-full max-w-md max-h-[90vh] border border-white/10 shadow-2xl overflow-hidden flex flex-col"
+        className="bg-gray-900 dark:bg-gray-950 rounded-xl w-full max-w-md max-h-[90vh] border border-white/10 dark:border-white/20 shadow-2xl overflow-hidden flex flex-col"
       >
         {/* Header - MIT QR-INFO */}
-        <div className="flex items-center justify-between p-4 border-b border-white/10 bg-[#0d1117]">
+        <div className="flex items-center justify-between p-4 border-b border-white/10 dark:border-white/20 bg-gray-950 dark:bg-black">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 ${isFirstSetup ? 'bg-green-500/20 text-green-400' : 'bg-indigo-500/20 text-indigo-400'} rounded-lg flex items-center justify-center font-bold text-sm`}>
+            <div className={`w-10 h-10 ${isFirstSetup ? 'bg-green-500/20 dark:bg-green-500/30 text-green-400' : 'bg-indigo-500/20 dark:bg-indigo-500/30 text-indigo-400'} rounded-lg flex items-center justify-center font-bold text-sm`}>
               {getBoxHeaderNumber()}
             </div>
             <div>
-              <h2 className="font-semibold text-white">
+              <h2 className="font-semibold text-white dark:text-gray-100">
                 {isFirstSetup ? "Ersteinrichtung" : "Box bearbeiten"}
               </h2>
               <div className="flex items-center gap-2 text-xs text-gray-500">
                 {/* QR-Code Badge */}
                 {qrNumber && (
-                  <span className="bg-gray-700 px-2 py-0.5 rounded flex items-center gap-1 font-mono">
+                  <span className="bg-gray-700 dark:bg-gray-800 px-2 py-0.5 rounded flex items-center gap-1 font-mono">
                     <Hash size={10} />
                     QR {qrNumber}
                   </span>
@@ -458,7 +458,7 @@ export default function BoxEditDialog({
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors p-1">
+          <button onClick={onClose} className="text-gray-400 dark:text-gray-500 hover:text-white dark:hover:text-gray-100 transition-colors p-1">
             <X size={20} />
           </button>
         </div>
@@ -572,7 +572,7 @@ export default function BoxEditDialog({
               <select
                 value={boxTypeId}
                 onChange={(e) => setBoxTypeId(e.target.value)}
-                className="w-full px-3 py-2.5 bg-[#0d1117] border border-white/10 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors"
+                className="w-full px-3 py-2.5 bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg text-white dark:text-gray-100 text-sm focus:border-indigo-500 focus:outline-none transition-colors"
               >
                 <option value="">Bitte auswählen...</option>
                 
@@ -649,7 +649,7 @@ export default function BoxEditDialog({
               value={boxName}
               onChange={(e) => setBoxName(e.target.value)}
               placeholder="z.B. Eingang Lager, Küche links..."
-              className="w-full px-3 py-2.5 bg-[#0d1117] border border-white/10 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors"
+              className="w-full px-3 py-2.5 bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg text-white dark:text-gray-100 text-sm focus:border-indigo-500 focus:outline-none transition-colors"
             />
             <p className="text-xs text-gray-600 mt-1">Eigener Name zur leichteren Identifikation</p>
           </div>
@@ -666,12 +666,12 @@ export default function BoxEditDialog({
                 value={displayNumber}
                 onChange={(e) => setDisplayNumber(e.target.value)}
                 placeholder={qrNumber || "Auto"}
-                className="flex-1 px-3 py-2.5 bg-[#0d1117] border border-white/10 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors"
+                className="flex-1 px-3 py-2.5 bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg text-white dark:text-gray-100 text-sm focus:border-indigo-500 focus:outline-none transition-colors"
               />
               {qrNumber && displayNumber !== qrNumber && (
                 <button
                   onClick={() => setDisplayNumber(qrNumber)}
-                  className="px-3 py-2.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs text-gray-300"
+                  className="px-3 py-2.5 bg-gray-700 dark:bg-gray-800 hover:bg-gray-600 dark:hover:bg-gray-700 rounded-lg text-xs text-gray-300 dark:text-gray-400"
                   title="Auf QR-Nummer zurücksetzen"
                 >
                   = QR {qrNumber}
@@ -710,7 +710,7 @@ export default function BoxEditDialog({
                   value={customBait}
                   onChange={(e) => setCustomBait(e.target.value)}
                   placeholder="Köder eingeben..."
-                  className="w-full mt-2 px-3 py-2.5 bg-[#0d1117] border border-white/10 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors"
+                  className="w-full mt-2 px-3 py-2.5 bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg text-white dark:text-gray-100 text-sm focus:border-indigo-500 focus:outline-none transition-colors"
                 />
               )}
             </div>
@@ -731,8 +731,8 @@ export default function BoxEditDialog({
                     onClick={() => setInsectType(insectType === type ? "" : type)}
                     className={`py-2.5 px-3 rounded-lg text-sm text-left transition-all ${
                       insectType === type
-                        ? "bg-purple-500/20 text-purple-400 border border-purple-500/50"
-                        : "bg-[#0d1117] text-gray-300 border border-white/10 hover:border-purple-500/30"
+                        ? "bg-purple-500/20 dark:bg-purple-500/30 text-purple-400 border border-purple-500/50 dark:border-purple-500/60"
+                        : "bg-gray-950 dark:bg-black text-gray-300 dark:text-gray-400 border border-white/10 dark:border-white/20 hover:border-purple-500/30"
                     }`}
                   >
                     {type}
@@ -756,7 +756,7 @@ export default function BoxEditDialog({
                   value={customInsectType}
                   onChange={(e) => setCustomInsectType(e.target.value)}
                   placeholder="Insektenart eingeben..."
-                  className="w-full mt-2 px-3 py-2.5 bg-[#0d1117] border border-white/10 rounded-lg text-white text-sm focus:border-purple-500 focus:outline-none transition-colors"
+                  className="w-full mt-2 px-3 py-2.5 bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg text-white dark:text-gray-100 text-sm focus:border-purple-500 focus:outline-none transition-colors"
                 />
               )}
             </div>
@@ -775,8 +775,8 @@ export default function BoxEditDialog({
                 onClick={() => setIntervalType("fixed")}
                 className={`py-2 px-3 rounded-lg text-sm font-medium transition-all ${
                   intervalType === "fixed"
-                    ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/50"
-                    : "bg-[#0d1117] text-gray-400 border border-white/10 hover:border-white/20"
+                    ? "bg-indigo-500/20 dark:bg-indigo-500/30 text-indigo-400 border border-indigo-500/50 dark:border-indigo-500/60"
+                    : "bg-gray-950 dark:bg-black text-gray-400 dark:text-gray-500 border border-white/10 dark:border-white/20 hover:border-white/20"
                 }`}
               >
                 Fix
@@ -804,7 +804,7 @@ export default function BoxEditDialog({
                     className={`py-2.5 px-2 rounded-lg text-center transition-all ${
                       intervalFixed === q.value
                         ? "bg-indigo-500 text-white"
-                        : "bg-[#0d1117] text-gray-300 border border-white/10 hover:border-indigo-500/50"
+                        : "bg-gray-950 dark:bg-black text-gray-300 dark:text-gray-400 border border-white/10 dark:border-white/20 hover:border-indigo-500/50"
                     }`}
                   >
                     <div className="text-sm font-medium">{q.label}</div>
@@ -845,10 +845,10 @@ export default function BoxEditDialog({
                   <span className="text-gray-400 pt-5 text-sm">Tage</span>
                 </div>
                 
-                <div className="bg-[#0d1117] rounded-lg p-3 text-center">
-                  <span className="text-gray-400 text-sm">Kontrolle alle </span>
+                <div className="bg-gray-950 dark:bg-black rounded-lg p-3 text-center">
+                  <span className="text-gray-400 dark:text-gray-500 text-sm">Kontrolle alle </span>
                   <span className="text-indigo-400 font-semibold">{intervalRangeStart}–{intervalRangeEnd}</span>
-                  <span className="text-gray-400 text-sm"> Tage</span>
+                  <span className="text-gray-400 dark:text-gray-500 text-sm"> Tage</span>
                 </div>
               </div>
             )}
@@ -864,7 +864,7 @@ export default function BoxEditDialog({
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Hinweise zur Box, Standort-Details..."
               rows={2}
-              className="w-full px-3 py-2.5 bg-[#0d1117] border border-white/10 rounded-lg text-white text-sm resize-none focus:border-indigo-500 focus:outline-none transition-colors"
+              className="w-full px-3 py-2.5 bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg text-white dark:text-gray-100 text-sm resize-none focus:border-indigo-500 focus:outline-none transition-colors"
             />
           </div>
 
@@ -885,10 +885,10 @@ export default function BoxEditDialog({
                   disabled={gpsLoading}
                   className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm transition-colors ${
                     gpsSaved 
-                      ? "bg-green-500/10 border border-green-500/30 text-green-400"
+                      ? "bg-green-500/10 dark:bg-green-500/20 border border-green-500/30 dark:border-green-500/40 text-green-400"
                       : gpsLoading
-                        ? "bg-blue-500/10 border border-blue-500/30 text-blue-400"
-                        : "bg-[#0d1117] border border-white/10 text-gray-400 hover:border-white/20"
+                        ? "bg-blue-500/10 dark:bg-blue-500/20 border border-blue-500/30 dark:border-blue-500/40 text-blue-400"
+                        : "bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 text-gray-400 dark:text-gray-500 hover:border-white/20"
                   }`}
                 >
                   {gpsLoading ? (
@@ -912,10 +912,10 @@ export default function BoxEditDialog({
         </div>
 
         {/* Footer */}
-        <div className="flex gap-3 p-4 border-t border-white/10 bg-[#0d1117]">
+        <div className="flex gap-3 p-4 border-t border-white/10 dark:border-white/20 bg-gray-950 dark:bg-black">
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-gray-300 text-sm transition-colors"
+            className="flex-1 py-2.5 px-4 bg-white/5 dark:bg-white/10 hover:bg-white/10 dark:hover:bg-white/15 border border-white/10 dark:border-white/20 rounded-lg text-gray-300 dark:text-gray-400 text-sm transition-colors"
           >
             Abbrechen
           </button>

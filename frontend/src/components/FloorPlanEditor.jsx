@@ -775,11 +775,11 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
 
   return (
     <div 
-      className={`maps-wrapper bg-gray-900 flex flex-col ${isFullscreen ? "fixed inset-0 z-50" : "rounded-xl border border-gray-700"}`}
+      className={`maps-wrapper bg-gray-900 dark:bg-gray-950 flex flex-col ${isFullscreen ? "fixed inset-0 z-50" : "rounded-xl border border-gray-700 dark:border-gray-800"}`}
       style={{ height: containerHeight, minHeight: "600px" }}
     >
       {/* TOOLBAR */}
-      <div className="flex items-center justify-between p-2 bg-gray-800 border-b border-gray-700 flex-wrap gap-2 shrink-0">
+      <div className="flex items-center justify-between p-2 bg-gray-800 dark:bg-gray-900 border-b border-gray-700 dark:border-gray-800 flex-wrap gap-2 shrink-0">
         <div className="flex items-center gap-2">
           <select
             value={selectedPlan?.id || ""}
@@ -787,7 +787,7 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
               const plan = floorPlans.find(p => p.id === parseInt(e.target.value));
               setSelectedPlan(plan);
             }}
-            className="px-3 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm max-w-[140px]"
+            className="px-3 py-1.5 bg-gray-700 dark:bg-gray-800 border border-gray-600 dark:border-gray-700 rounded text-white text-sm max-w-[140px]"
           >
             {floorPlans.length === 0 && <option value="">Kein Lageplan</option>}
             {floorPlans.map(plan => (
@@ -795,18 +795,18 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
             ))}
           </select>
           
-          <button onClick={() => setShowUpload(true)} className="p-1.5 bg-gray-700 hover:bg-gray-600 rounded text-white" title="Neuer Lageplan">
+          <button onClick={() => setShowUpload(true)} className="p-1.5 bg-gray-700 dark:bg-gray-800 hover:bg-gray-600 dark:hover:bg-gray-700 rounded text-white" title="Neuer Lageplan">
             <Plus className="w-4 h-4" />
           </button>
           
           {selectedPlan && (
-            <button onClick={() => setShowGrid(!showGrid)} className={`p-1.5 rounded ${showGrid ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-400"}`}>
+            <button onClick={() => setShowGrid(!showGrid)} className={`p-1.5 rounded ${showGrid ? "bg-blue-600 text-white" : "bg-gray-700 dark:bg-gray-800 text-gray-400 dark:text-gray-500"}`}>
               <Grid3X3 className="w-4 h-4" />
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-1 bg-gray-700 p-1 rounded-lg">
+        <div className="flex items-center gap-1 bg-gray-700 dark:bg-gray-800 p-1 rounded-lg">
           <ModeButton icon={MousePointer} label="Ansehen" active={mode === "view"} onClick={() => { setMode("view"); setDrawTool(null); setBoxToPlace(null); setDraggedBox(null); }} />
           <ModeButton icon={Hand} label="Bewegen" active={mode === "pan"} onClick={() => { setMode("pan"); setDrawTool(null); }} />
           {!isMobile && (
@@ -815,14 +815,14 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
         </div>
 
         <div className="flex items-center gap-2">
-          <button onClick={() => setZoom(prev => Math.max(0.3, prev - 0.25))} className="p-1.5 bg-gray-700 hover:bg-gray-600 rounded text-white">
+          <button onClick={() => setZoom(prev => Math.max(0.3, prev - 0.25))} className="p-1.5 bg-gray-700 dark:bg-gray-800 hover:bg-gray-600 dark:hover:bg-gray-700 rounded text-white">
             <ZoomOut className="w-4 h-4" />
           </button>
-          <span className="text-gray-400 text-sm w-12 text-center">{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom(prev => Math.min(5, prev + 0.25))} className="p-1.5 bg-gray-700 hover:bg-gray-600 rounded text-white">
+          <span className="text-gray-400 dark:text-gray-500 text-sm w-12 text-center">{Math.round(zoom * 100)}%</span>
+          <button onClick={() => setZoom(prev => Math.min(5, prev + 0.25))} className="p-1.5 bg-gray-700 dark:bg-gray-800 hover:bg-gray-600 dark:hover:bg-gray-700 rounded text-white">
             <ZoomIn className="w-4 h-4" />
           </button>
-          <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-1.5 bg-gray-700 hover:bg-gray-600 rounded text-white">
+          <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-1.5 bg-gray-700 dark:bg-gray-800 hover:bg-gray-600 dark:hover:bg-gray-700 rounded text-white">
             <Maximize2 className="w-4 h-4" />
           </button>
         </div>

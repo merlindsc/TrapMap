@@ -43,10 +43,10 @@ export default function LayoutEditor() {
 
   }, [layout]);
 
-  if (!layout) return <div className="text-white">Lade...</div>;
+  if (!layout) return <div className="text-white dark:text-gray-100">Lade...</div>;
 
   return (
-    <div className="text-white">
+    <div className="text-white dark:text-gray-100">
       <h1 className="text-3xl font-bold mb-4">{layout.name}</h1>
 
       <div

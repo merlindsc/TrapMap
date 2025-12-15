@@ -1,0 +1,64 @@
+/* ============================================
+   BOX MARKER STYLES
+   Für Leaflet-Karten in TrapMap
+   ============================================ */
+
+/* Reset für DivIcon */
+.box-pin-marker,
+.box-dot-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Animation beim Hover */
+.box-pin-marker:hover svg,
+.box-dot-marker:hover svg {
+  transform: scale(1.2);
+  transition: transform 0.15s ease-out;
+}
+
+/* Pulsieren für überfällige Boxen (optional via Klasse) */
+.box-marker-overdue svg circle:first-child {
+  animation: pulse-marker 2s infinite;
+}
+
+@keyframes pulse-marker {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Cluster-Marker (falls verwendet) */
+.marker-cluster-small,
+.marker-cluster-medium,
+.marker-cluster-large {
+  background-color: rgba(59, 130, 246, 0.6);
+}
+
+.marker-cluster-small div,
+.marker-cluster-medium div,
+.marker-cluster-large div {
+  background-color: rgba(59, 130, 246, 0.8);
+  color: white;
+  font-weight: bold;
+}
+
+/* Leaflet Popup Styling */
+.leaflet-popup-content-wrapper {
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.leaflet-popup-content {
+  margin: 12px;
+}
+
+.leaflet-popup-tip {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}

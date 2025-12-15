@@ -1,144 +1,121 @@
-/* ============================================================
-   TRAPMAP - BOX MARKER KOMPONENTE
-   
-   Zeigt:
-   - QR-Nummer (kurz) ÜBER dem Kreis
-   - Display-Nummer (1, 2, 3...) IM Kreis
-   - Grid-Position UNTER dem Kreis (nur Lageplan)
-   - Status-Farbe als Kreis-Hintergrund
-   ============================================================ */
+// ============================================
+// BOX MARKER KOMPONENTE FÜR LEAFLET
+// Kleiner Pin-Marker statt großem Kreis
+// ============================================
 
 import React from 'react';
 import { Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
-import { getShortQr, getStatusHex, getBoxIcon } from './BoxHelpers';
 
-/**
- * Erstellt das Marker-Icon mit allen Nummern
- */
-function createBoxIcon(box, displayNumber, isFloorplan = false) {
-  const shortQr = getShortQr(box);
-  const statusColor = getStatusHex(box.current_status);
+// ============================================
+// STATUS FARBEN
+// ============================================
+const STATUS_COLORS = {
+  green: '#22c55e',
+  yellow: '#eab308',
+  orange: '#f97316',
+  red: '#ef4444',
+  gray: '#9ca3af'
+};
+
+// ============================================
+// KLEINER PIN-MARKER (SVG)
+// ============================================
+const createPinIcon = (status = 'green', number = '') => {
+  const color = STATUS_COLORS[status] || STATUS_COLORS.gray;
   
-  // Grid-Position nur bei Lageplan
-  const gridHtml = isFloorplan && box.grid_position 
-    ? `<div class="box-grid-label">${box.grid_position}</div>` 
-    : '';
-
-  const html = `
-    <div class="box-marker-container">
-      <div class="box-qr-label">${shortQr}</div>
-      <div class="box-circle" style="background-color: ${statusColor}">
-        <span class="box-display-number">${displayNumber || '?'}</span>
-      </div>
-      ${gridHtml}
-    </div>
+  // Kleiner, einfacher Pin - nur Stecknadel, kein großer Kreis
+  const svgPin = `
+    <svg width="24" height="32" viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">
+      <!-- Pin-Kopf -->
+      <circle cx="12" cy="10" r="8" fill="${color}" stroke="white" stroke-width="2"/>
+      <!-- Pin-Spitze -->
+      <path d="M12 18 L8 10 L16 10 Z" fill="${color}"/>
+      <path d="M12 18 L12 30" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+      <!-- Nummer im Pin -->
+      <text x="12" y="13" text-anchor="middle" fill="white" font-size="8" font-weight="bold" font-family="Arial, sans-serif">
+        ${number}
+      </text>
+    </svg>
   `;
 
   return L.divIcon({
-    html: html,
-    className: 'box-marker-wrapper',
-    iconSize: [40, 60],
-    iconAnchor: [20, 50],
-    popupAnchor: [0, -50]
+    html: svgPin,
+    className: 'box-pin-marker',
+    iconSize: [24, 32],
+    iconAnchor: [12, 32], // Spitze des Pins
+    popupAnchor: [0, -32]
   });
-}
+};
 
-/**
- * BoxMarker für Leaflet Maps
- */
-export function BoxMarker({ 
+// ============================================
+// EINFACHER PUNKT-MARKER (für Kontrollansicht)
+// Nur ein kleiner Punkt ohne Text
+// ============================================
+const createDotIcon = (status = 'green') => {
+  const color = STATUS_COLORS[status] || STATUS_COLORS.gray;
+  
+  const svgDot = `
+    <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="8" cy="8" r="6" fill="${color}" stroke="white" stroke-width="2"/>
+    </svg>
+  `;
+
+  return L.divIcon({
+    html: svgDot,
+    className: 'box-dot-marker',
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
+    popupAnchor: [0, -8]
+  });
+};
+
+// ============================================
+// BOX MARKER KOMPONENTE
+// ============================================
+export default function BoxMarker({ 
   box, 
-  displayNumber,
-  position,
-  isFloorplan = false,
   onClick,
-  onDragEnd,
-  draggable = false
+  showNumber = true,
+  simplified = false, // true = nur Punkt, false = Pin mit Nummer
+  children 
 }) {
-  if (!position || !position[0] || !position[1]) return null;
+  if (!box.lat || !box.lng) return null;
 
-  const icon = createBoxIcon(box, displayNumber, isFloorplan);
+  const position = [box.lat, box.lng];
+  const status = box.current_status || 'green';
+  
+  // Icon basierend auf Modus
+  const icon = simplified 
+    ? createDotIcon(status)
+    : createPinIcon(status, showNumber ? (box.number || '') : '');
 
   return (
     <Marker
       position={position}
       icon={icon}
-      draggable={draggable}
       eventHandlers={{
-        click: () => onClick?.(box),
-        dragend: (e) => {
-          const { lat, lng } = e.target.getLatLng();
-          onDragEnd?.(box, { lat, lng });
-        }
+        click: () => onClick && onClick(box)
       }}
     >
-      <Popup>
-        <div className="box-popup">
-          <div className="box-popup-header">
-            <span className="box-popup-icon">{getBoxIcon(box)}</span>
-            <strong>Box #{displayNumber}</strong>
+      {children || (
+        <Popup>
+          <div className="text-sm">
+            <p className="font-bold">Box #{box.number || box.id}</p>
+            {box.box_type_name && (
+              <p className="text-gray-600">{box.box_type_name}</p>
+            )}
+            {box.notes && (
+              <p className="text-gray-500 text-xs mt-1">{box.notes}</p>
+            )}
           </div>
-          <div className="box-popup-info">
-            <div>QR: {box.qr_code}</div>
-            <div>Typ: {box.box_type_name || 'Standard'}</div>
-            <div>Status: {box.current_status || 'pending'}</div>
-            {box.grid_position && <div>Position: {box.grid_position}</div>}
-            {box.bait && <div>Köder: {box.bait}</div>}
-          </div>
-        </div>
-      </Popup>
+        </Popup>
+      )}
     </Marker>
   );
 }
 
-/**
- * BoxMarker für Lageplan (ImageOverlay)
- * Verwendet absolute Positionierung statt Leaflet
- */
-export function FloorplanBoxMarker({
-  box,
-  displayNumber,
-  containerWidth,
-  containerHeight,
-  onClick,
-  isSelected = false,
-  isDragging = false
-}) {
-  const shortQr = getShortQr(box);
-  const statusColor = getStatusHex(box.current_status);
-
-  // Position in Pixel umrechnen
-  const x = (box.pos_x / 100) * containerWidth;
-  const y = (box.pos_y / 100) * containerHeight;
-
-  return (
-    <div
-      className={`floorplan-box-marker ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`}
-      style={{
-        left: x,
-        top: y,
-        transform: 'translate(-50%, -50%)'
-      }}
-      onClick={() => onClick?.(box)}
-    >
-      {/* QR-Nummer über dem Kreis */}
-      <div className="box-qr-label">{shortQr}</div>
-      
-      {/* Kreis mit Display-Nummer */}
-      <div 
-        className="box-circle" 
-        style={{ backgroundColor: statusColor }}
-      >
-        <span className="box-display-number">{displayNumber || '?'}</span>
-      </div>
-      
-      {/* Grid-Position unter dem Kreis */}
-      {box.grid_position && (
-        <div className="box-grid-label">{box.grid_position}</div>
-      )}
-    </div>
-  );
-}
-
-export default BoxMarker;
+// ============================================
+// EXPORT HELPER FUNCTIONS
+// ============================================
+export { createPinIcon, createDotIcon, STATUS_COLORS };

@@ -6,9 +6,9 @@ export default function SidebarItem({ to, icon: Icon, label }) {
       to={to}
       className={({ isActive }) =>
         `
-        flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300
-        hover:bg-gray-700 transition 
-        ${isActive ? "bg-gray-700 text-white" : ""}
+        flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 dark:text-gray-400
+        hover:bg-gray-700 dark:hover:bg-gray-800 transition 
+        ${isActive ? "bg-gray-700 dark:bg-gray-800 text-white dark:text-gray-100" : ""}
         `
       }
     >
