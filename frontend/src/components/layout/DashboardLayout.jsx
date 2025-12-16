@@ -8,7 +8,7 @@
 import React, { useState, useEffect, createContext, useContext } from "react";
 import { useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
-import { Bars3Icon } from "@heroicons/react/24/outline";
+import { Bars3Icon, SunIcon, MoonIcon } from "@heroicons/react/24/outline";
 import { LogOut } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import "./DashboardLayout.css";
@@ -93,6 +93,7 @@ export function ThemeProvider({ children }) {
 export default function DashboardLayout({ children }) {
   const { pathname } = useLocation();
   const { user, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
@@ -138,11 +139,22 @@ export default function DashboardLayout({ children }) {
             <button 
               className="hamburger-btn"
               onClick={() => setSidebarOpen(true)}
+              aria-label="Menu öffnen"
             >
               <Bars3Icon className="hamburger-icon" />
             </button>
             <img src={trapMapLogo} alt="TrapMap" className="mobile-header-logo" />
-            <div className="spacer" />
+            <button 
+              className="mobile-theme-toggle"
+              onClick={toggleTheme}
+              aria-label={theme === 'dark' ? 'Zum hellen Modus wechseln' : 'Zum dunklen Modus wechseln'}
+            >
+              {theme === 'dark' ? (
+                <SunIcon className="theme-icon" />
+              ) : (
+                <MoonIcon className="theme-icon" />
+              )}
+            </button>
           </header>
         )}
 
