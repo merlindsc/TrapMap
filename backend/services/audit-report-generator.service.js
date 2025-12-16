@@ -4,6 +4,8 @@
    ============================================================ */
 
 const PDFDocument = require("pdfkit");
+const path = require("path");
+const fs = require("fs");
 const { supabase } = require("../config/supabase");
 
 // Konstanten
@@ -11,7 +13,7 @@ const MARGIN = 50;
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
 const CONTENT_WIDTH = PAGE_WIDTH - 2 * MARGIN;
-const USABLE_HEIGHT = PAGE_HEIGHT - 120;
+const USABLE_HEIGHT = PAGE_HEIGHT - 80;
 
 // Farben
 const BLUE = "#1e40af";
@@ -113,6 +115,19 @@ async function loadData(objectId, orgId, options = {}) {
 async function generateAuditReport(objectId, orgId, options = {}) {
   const data = await loadData(objectId, orgId, options);
   
+  // Organisations-Logo laden falls verfügbar
+  let orgLogoBuffer = null;
+  if (data.org?.logo_url) {
+    try {
+      const response = await fetch(data.org.logo_url);
+      if (response.ok) {
+        orgLogoBuffer = Buffer.from(await response.arrayBuffer());
+      }
+    } catch (e) {
+      console.log("Organisation logo loading failed:", e.message);
+    }
+  }
+  
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ 
       size: "A4", 
@@ -135,10 +150,14 @@ async function generateAuditReport(objectId, orgId, options = {}) {
       doc.addPage();
       pageNum++;
       y = MARGIN;
+      
+      // Logos auf jeder Seite
+      addLogosToPage();
+      
       doc.fontSize(8).fillColor(GRAY);
-      doc.text(`${data.org?.name || "TrapMap"} | ${data.obj.name} | Seite ${pageNum}`, MARGIN, 30);
-      doc.moveTo(MARGIN, 45).lineTo(PAGE_WIDTH - MARGIN, 45).strokeColor(LIGHT_GRAY).stroke();
-      y = 60;
+      doc.text(`${data.obj.name} | Seite ${pageNum}`, MARGIN, 42);
+      doc.moveTo(MARGIN, 50).lineTo(PAGE_WIDTH - MARGIN, 50).strokeColor(LIGHT_GRAY).stroke();
+      y = 60; // Optimaler Abstand nach Logos
     };
 
     const drawLine = () => {
@@ -146,7 +165,35 @@ async function generateAuditReport(objectId, orgId, options = {}) {
       y += 5;
     };
 
+    // Logo-Funktion für alle Seiten
+    const addLogosToPage = () => {
+      try {
+        // TrapMap Logo oben links (erstmal als Text)
+        doc.fontSize(12).fillColor(BLUE).font("Helvetica-Bold");
+        doc.text("TRAPMAP", MARGIN, 15);
+        
+        // Kleine Linie unter TrapMap
+        doc.fontSize(8).fillColor(GRAY).font("Helvetica");
+        doc.text("Schädlingsmonitoring", MARGIN, 28);
+
+        // Organisations-Info oben rechts
+        doc.fontSize(10).fillColor(BLACK).font("Helvetica-Bold");
+        doc.text(data.org?.name || "Organisation", PAGE_WIDTH - 150, 15, { width: 130, align: 'right' });
+        
+        if (data.org?.address || data.org?.city) {
+          doc.fontSize(8).fillColor(GRAY).font("Helvetica");
+          const address = [data.org?.address, data.org?.city].filter(Boolean).join(", ");
+          doc.text(address, PAGE_WIDTH - 150, 28, { width: 130, align: 'right' });
+        }
+      } catch (e) {
+        console.error("Logo loading error:", e.message);
+      }
+    };
+
     // ========== SEITE 1: TITEL ==========
+    
+    // Logos auch auf der ersten Seite
+    addLogosToPage();
     
     doc.fontSize(24).fillColor(BLUE).font("Helvetica-Bold");
     doc.text("AUDIT-REPORT", MARGIN, y);
@@ -184,7 +231,7 @@ async function generateAuditReport(objectId, orgId, options = {}) {
     
     doc.fontSize(14).fillColor(BLUE).font("Helvetica-Bold");
     doc.text("Zusammenfassung", MARGIN, y);
-    y += 20;
+    y += 14;
 
     const totalBoxes = data.boxes.length;
     const totalScans = data.scans.length;
@@ -251,18 +298,18 @@ async function generateAuditReport(objectId, orgId, options = {}) {
         doc.text(cut(info.cat, 20), MARGIN + 150, y);
         doc.text(cut(info.bait, 25), MARGIN + 280, y);
         doc.text(String(info.count), MARGIN + 420, y);
-        y += 13;
+        y += 11;
       });
     }
 
-    // ========== SEITE 2: FALLEN-DETAILS ==========
+    // ========== FALLEN-DETAILS ==========
     
     if (data.boxes.length > 0) {
-      addPage();
+      if (needsNewPage(500)) addPage(); // Höhere Schwelle
       
       doc.fontSize(14).fillColor(BLUE).font("Helvetica-Bold");
       doc.text("Fallenübersicht", MARGIN, y);
-      y += 18;
+      y += 12;
 
       doc.fontSize(7).fillColor(GRAY).font("Helvetica-Bold");
       doc.text("Nr.", MARGIN, y);
@@ -277,7 +324,7 @@ async function generateAuditReport(objectId, orgId, options = {}) {
       doc.font("Helvetica").fontSize(7);
       
       data.boxes.forEach(box => {
-        if (needsNewPage(11)) addPage();
+        if (needsNewPage(100)) addPage();
 
         const status = STATUS_MAP[box.current_status] || STATUS_MAP.green;
         const interval = box.control_interval_days || 30;
@@ -302,14 +349,15 @@ async function generateAuditReport(objectId, orgId, options = {}) {
       });
     }
 
-    // ========== SEITE 3: SCANS ==========
+    // ========== SCANS ==========
     
     if (data.scans.length > 0) {
-      addPage();
+      y += 20; // Abstand zur vorherigen Sektion
+      if (needsNewPage(400)) addPage(); // Höhere Schwelle
       
       doc.fontSize(14).fillColor(BLUE).font("Helvetica-Bold");
       doc.text("Kontrollprotokoll", MARGIN, y);
-      y += 18;
+      y += 12;
 
       doc.fontSize(7).fillColor(GRAY).font("Helvetica-Bold");
       doc.text("Datum", MARGIN, y);
@@ -324,7 +372,7 @@ async function generateAuditReport(objectId, orgId, options = {}) {
       const maxScans = Math.min(data.scans.length, options.maxScans || 100);
       
       for (let i = 0; i < maxScans; i++) {
-        if (needsNewPage(10)) addPage();
+        if (needsNewPage(50)) addPage();
         
         const scan = data.scans[i];
         const status = STATUS_MAP[scan.status] || STATUS_MAP.green;
@@ -348,11 +396,12 @@ async function generateAuditReport(objectId, orgId, options = {}) {
 
     // ========== TECHNIKER ==========
     
-    if (data.technicians.length > 0 && !needsNewPage(80)) {
-      y += 20;
+    if (data.technicians.length > 0) {
+      // Techniker auf selber Seite halten
+      y += 15;
       doc.fontSize(14).fillColor(BLUE).font("Helvetica-Bold");
       doc.text("Techniker", MARGIN, y);
-      y += 18;
+      y += 15;
 
       doc.fontSize(8).fillColor(GRAY).font("Helvetica-Bold");
       doc.text("Name", MARGIN, y);
@@ -377,9 +426,10 @@ async function generateAuditReport(objectId, orgId, options = {}) {
       });
     }
 
-    // ========== LETZTE SEITE: RECHTLICHES ==========
+    // ========== RECHTLICHES ==========
     
-    addPage();
+    y += 30; // Größerer Abstand
+    // Rechtliches nur auf neue Seite wenn wirklich kein Platz (< 150px)
     
     doc.fontSize(14).fillColor(BLUE).font("Helvetica-Bold");
     doc.text("Rechtliche Hinweise", MARGIN, y);
@@ -414,16 +464,13 @@ async function generateAuditReport(objectId, orgId, options = {}) {
 
     // ========== FOOTER ==========
     
-    const pages = doc.bufferedPageRange();
-    for (let i = 0; i < pages.count; i++) {
-      doc.switchToPage(i);
-      doc.fontSize(8).fillColor(GRAY).font("Helvetica");
-      doc.text(
-        `${formatDateTime(new Date())} | www.trap-map.de | Seite ${i + 1}/${pages.count}`,
-        MARGIN, PAGE_HEIGHT - 30,
-        { width: CONTENT_WIDTH, align: "center" }
-      );
-    }
+    // Footer nur auf aktueller Seite, keine Iteration über alle Seiten
+    doc.fontSize(8).fillColor(GRAY).font("Helvetica");
+    doc.text(
+      `${formatDateTime(new Date())} | www.trap-map.de`,
+      MARGIN, PAGE_HEIGHT - 30,
+      { width: CONTENT_WIDTH, align: "center" }
+    );
 
     doc.end();
   });

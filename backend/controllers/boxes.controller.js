@@ -1,6 +1,6 @@
 // ============================================
-// BOXES CONTROLLER - KOMPLETT
-// Inkl. Pool-Funktionen und userId für Audit
+// BOXES CONTROLLER - KOMPLETT V2
+// Inkl. Pool-Funktionen, Bulk-Return, Archivierung
 // ============================================
 
 const boxesService = require("../services/boxes.service");
@@ -120,6 +120,9 @@ exports.updateLocation = async (req, res) => {
   }
 };
 
+// Alias für PUT /position
+exports.updatePosition = exports.updateLocation;
+
 // ============================================
 // UNDO LOCATION (GPS zurücksetzen)
 // ============================================
@@ -218,7 +221,7 @@ exports.assignToObject = async (req, res) => {
       req.params.id,
       object_id,
       req.user.organisation_id,
-      req.user.id  // userId für Audit
+      req.user.id
     );
 
     if (!result.success) {
@@ -233,14 +236,14 @@ exports.assignToObject = async (req, res) => {
 };
 
 // ============================================
-// RETURN TO POOL - VOLLSTÄNDIGER RESET!
+// RETURN TO POOL - EINZELNE BOX
 // ============================================
 exports.returnToPool = async (req, res) => {
   try {
     const result = await boxesService.returnToPool(
       req.params.id,
       req.user.organisation_id,
-      req.user.id  // userId für Audit
+      req.user.id
     );
 
     if (!result.success) {
@@ -256,26 +259,79 @@ exports.returnToPool = async (req, res) => {
 };
 
 // ============================================
-// UNASSIGN FROM OBJECT (Alias für returnToPool)
+// BULK RETURN TO POOL - MEHRERE BOXEN
 // ============================================
-exports.unassignFromObject = async (req, res) => {
+exports.bulkReturnToPool = async (req, res) => {
   try {
-    const result = await boxesService.returnToPool(
-      req.params.id,
+    const { box_ids } = req.body;
+    
+    if (!box_ids || !Array.isArray(box_ids) || box_ids.length === 0) {
+      return res.status(400).json({ error: "box_ids Array erforderlich" });
+    }
+
+    if (box_ids.length > 100) {
+      return res.status(400).json({ error: "Maximal 100 Boxen auf einmal" });
+    }
+
+    const result = await boxesService.bulkReturnToPool(
+      box_ids,
       req.user.organisation_id,
-      req.user.id  // userId für Audit
+      req.user.id
     );
 
     if (!result.success) {
       return res.status(400).json({ error: result.message });
     }
 
-    return res.json(result.data);
+    console.log(`✅ ${result.count} Boxen ins Lager zurückgesendet von User ${req.user.id}`);
+    return res.json({ 
+      success: true, 
+      count: result.count,
+      data: result.data
+    });
   } catch (err) {
-    console.error("unassignFromObject error:", err);
+    console.error("bulkReturnToPool error:", err);
     res.status(500).json({ error: "Server error" });
   }
 };
+
+// ============================================
+// ARCHIVE OBJECT BOXES - Alle Boxen eines Objekts ins Lager
+// ============================================
+exports.archiveObjectBoxes = async (req, res) => {
+  try {
+    const { object_id } = req.body;
+    
+    if (!object_id) {
+      return res.status(400).json({ error: "object_id erforderlich" });
+    }
+
+    const result = await boxesService.archiveObjectBoxes(
+      object_id,
+      req.user.organisation_id,
+      req.user.id
+    );
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.message });
+    }
+
+    console.log(`✅ ${result.count} Boxen von Objekt ${object_id} ins Lager - User ${req.user.id}`);
+    return res.json({ 
+      success: true, 
+      count: result.count,
+      message: `${result.count} Boxen zurück ins Lager`
+    });
+  } catch (err) {
+    console.error("archiveObjectBoxes error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// ============================================
+// UNASSIGN FROM OBJECT (Alias für returnToPool)
+// ============================================
+exports.unassignFromObject = exports.returnToPool;
 
 // ============================================
 // PLACE ON MAP (GPS)
@@ -295,7 +351,7 @@ exports.placeOnMap = async (req, res) => {
       lng,
       box_type_id || null,
       object_id || null,
-      req.user.id  // userId für Audit
+      req.user.id
     );
 
     if (!result.success) {
@@ -343,24 +399,7 @@ exports.placeOnFloorPlan = async (req, res) => {
 // ============================================
 // UNPLACE (von Karte/Lageplan entfernen)
 // ============================================
-exports.unplace = async (req, res) => {
-  try {
-    const result = await boxesService.returnToPool(
-      req.params.id, 
-      req.user.organisation_id,
-      req.user.id  // userId für Audit
-    );
-    
-    if (!result.success) {
-      return res.status(400).json({ error: result.message });
-    }
-    
-    return res.json(result.data);
-  } catch (err) {
-    console.error("unplace error:", err);
-    res.status(500).json({ error: "Server error" });
-  }
-};
+exports.unplace = exports.returnToPool;
 
 // ============================================
 // MOVE TO OBJECT
@@ -377,7 +416,7 @@ exports.moveToObject = async (req, res) => {
       req.params.id,
       target_object_id,
       req.user.organisation_id,
-      req.user.id  // userId für Audit
+      req.user.id
     );
 
     if (!result.success) {
@@ -387,6 +426,49 @@ exports.moveToObject = async (req, res) => {
     return res.json(result.data);
   } catch (err) {
     console.error("moveToObject error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// ============================================
+// RENUMBER OBJECT BOXES
+// ============================================
+exports.renumberObject = async (req, res) => {
+  try {
+    const result = await boxesService.renumberObject(
+      req.params.objectId,
+      req.user.organisation_id,
+      req.user.id
+    );
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.message });
+    }
+
+    return res.json({ success: true, count: result.count });
+  } catch (err) {
+    console.error("renumberObject error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// ============================================
+// RENUMBER ALL BOXES
+// ============================================
+exports.renumberAll = async (req, res) => {
+  try {
+    const result = await boxesService.renumberAll(
+      req.user.organisation_id,
+      req.user.id
+    );
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.message });
+    }
+
+    return res.json({ success: true, count: result.count });
+  } catch (err) {
+    console.error("renumberAll error:", err);
     res.status(500).json({ error: "Server error" });
   }
 };

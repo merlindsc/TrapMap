@@ -610,6 +610,19 @@ exports.generateGefahrenanalyse = async (formData, organisation) => {
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
 
+      // Seitenhöhe Management
+      const PAGE_HEIGHT = 842;
+      const MARGIN = 50;
+      const USABLE_HEIGHT = PAGE_HEIGHT - 100; // Mehr Platz nutzen
+      
+      const needsNewPage = (needed) => y + needed > USABLE_HEIGHT;
+      const addPageIfNeeded = (needed) => {
+        if (needsNewPage(needed)) {
+          doc.addPage();
+          y = MARGIN;
+        }
+      };
+
       // Header
       doc.rect(0, 0, doc.page.width, 100).fill(COLORS.primary);
       
@@ -625,39 +638,47 @@ exports.generateGefahrenanalyse = async (formData, organisation) => {
       // Objekt-Info
       if (formData.objekt) {
         doc.fontSize(12).fillColor(COLORS.primary).text("Objekt", 50, y);
-        y += 18;
+        y += 15; // Kompakter
         
         doc.fontSize(10).fillColor(COLORS.darkGray);
-        if (formData.objekt.firma) { doc.text(`Firma: ${formData.objekt.firma}`, 50, y); y += 14; }
-        if (formData.objekt.adresse) { doc.text(`Adresse: ${formData.objekt.adresse}`, 50, y); y += 14; }
-        if (formData.objekt.ansprechpartner) { doc.text(`Ansprechpartner: ${formData.objekt.ansprechpartner}`, 50, y); y += 14; }
-        y += 15;
+        if (formData.objekt.firma) { doc.text(`Firma: ${formData.objekt.firma}`, 50, y); y += 12; }
+        if (formData.objekt.adresse) { doc.text(`Adresse: ${formData.objekt.adresse}`, 50, y); y += 12; }
+        if (formData.objekt.ansprechpartner) { doc.text(`Ansprechpartner: ${formData.objekt.ansprechpartner}`, 50, y); y += 12; }
+        y += 10; // Weniger Abstand
       }
 
       // Bewertung
       if (formData.bewertung) {
-        doc.fontSize(12).fillColor(COLORS.primary).text("Bewertung", 50, y);
-        y += 18;
-        
-        doc.fontSize(10).fillColor(COLORS.darkGray);
-        Object.entries(formData.bewertung).forEach(([key, value]) => {
-          if (value) { doc.text(`${key}: ${value}`, 50, y); y += 14; }
-        });
-        y += 15;
+        const bewertungEntries = Object.entries(formData.bewertung).filter(([key, value]) => value);
+        if (bewertungEntries.length > 0) {
+          doc.fontSize(12).fillColor(COLORS.primary).text("Bewertung", 50, y);
+          y += 15; // Kompakter
+          
+          doc.fontSize(10).fillColor(COLORS.darkGray);
+          bewertungEntries.forEach(([key, value]) => {
+            doc.text(`${key}: ${value}`, 50, y); 
+            y += 12; // Kompakter
+          });
+          y += 10; // Weniger Abstand
+        }
       }
 
       // Ergebnis
-      if (formData.ergebnis) {
+      if (formData.ergebnis && formData.ergebnis.trim()) {
         doc.fontSize(12).fillColor(COLORS.primary).text("Ergebnis", 50, y);
-        y += 18;
+        y += 15; // Kompakter
         doc.fontSize(10).fillColor(COLORS.black).text(formData.ergebnis, 50, y, { width: doc.page.width - 100 });
-        y += 50;
+        y += 30; // Fester, kompakter Abstand
       }
 
-      // Unterschriften
-      y += 30;
+      // Unterschriften - nur neue Seite wenn wirklich kein Platz
+      if (needsNewPage(100)) {
+        doc.addPage();
+        y = MARGIN;
+      }
+      y += 20; // Weniger Abstand
       doc.fontSize(9).fillColor(COLORS.gray).text(`Datum: ${formatDate(new Date())}`, 50, y);
-      y += 40;
+      y += 30; // Kompakter
       
       doc.moveTo(50, y).lineTo(230, y).strokeColor(COLORS.gray).stroke();
       doc.moveTo(280, y).lineTo(460, y).stroke();
