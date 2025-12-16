@@ -42,12 +42,46 @@ let qrRoutes = null;
 let qrOrderRoutes = null;
 let partnerRoutes = null;
 let adminRoutes = null;
+let auditReportRoutes = null;
 
-try { floorplansRoutes = require('./routes/floorplans.routes'); console.log('✅ FloorPlans routes loaded'); } catch (e) {}
-try { qrRoutes = require('./routes/qr.routes'); console.log('✅ QR routes loaded'); } catch (e) {}
-try { qrOrderRoutes = require('./routes/qr-order.routes'); console.log('✅ QR-Order routes loaded'); } catch (e) {}
-try { partnerRoutes = require('./routes/partner.routes'); console.log('✅ Partner routes loaded'); } catch (e) {}
-try { adminRoutes = require('./routes/admin.routes'); console.log('✅ Admin routes loaded'); } catch (e) {}
+try { 
+  floorplansRoutes = require('./routes/floorplans.routes'); 
+  console.log('✅ FloorPlans routes loaded'); 
+} catch (e) {}
+
+try { 
+  qrRoutes = require('./routes/qr.routes'); 
+  console.log('✅ QR routes loaded'); 
+} catch (e) {}
+
+try { 
+  qrOrderRoutes = require('./routes/qr-order.routes'); 
+  console.log('✅ QR-Order routes loaded'); 
+} catch (e) {}
+
+try { 
+  partnerRoutes = require('./routes/partner.routes'); 
+  console.log('✅ Partner routes loaded'); 
+} catch (e) {}
+
+try { 
+  adminRoutes = require('./routes/admin.routes'); 
+  console.log('✅ Admin routes loaded'); 
+} catch (e) {}
+
+// ============================================
+// AUDIT REPORT ROUTES (PDF Generator)
+// ============================================
+try {
+  auditReportRoutes = require('./routes/audit-report.routes');
+  console.log('✅ Audit Report routes loaded');
+  console.log('   📄 GET /api/audit-reports/:objectId -> PDF Download');
+  console.log('   📊 GET /api/audit-reports/:objectId/preview -> JSON Preview');
+} catch (e) {
+  console.log('⚠️ Audit Report routes not found');
+  console.log('   Reason:', e && e.message ? e.message : e);
+  console.log('   📝 To enable: Copy audit-report.routes.js to routes/');
+}
 
 // ============================================
 // EXPRESS APP SETUP
@@ -126,6 +160,13 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: config.nodeEnv,
+    features: {
+      auditReports: !!auditReportRoutes,
+      floorPlans: !!floorplansRoutes,
+      qrCodes: !!qrRoutes,
+      partners: !!partnerRoutes,
+      admin: !!adminRoutes
+    },
     security: {
       helmet: true,
       rateLimiting: true,
@@ -174,6 +215,15 @@ if (partnerRoutes) {
 if (adminRoutes) app.use('/api/admin', adminRoutes);
 
 // ============================================
+// AUDIT REPORT ROUTES (PDF Generator)
+// Eigener Pfad /api/audit-reports (nicht /api/reports)
+// ============================================
+if (auditReportRoutes) {
+  app.use('/api/audit-reports', auditReportRoutes);
+  console.log('✅ Audit Report API registered at /api/audit-reports');
+}
+
+// ============================================
 // 404 HANDLER
 // ============================================
 
@@ -216,6 +266,14 @@ app.listen(PORT, () => {
   console.log(`🌍 Environment: ${config.nodeEnv}`);
   console.log(`📡 API Base: http://localhost:${PORT}/api`);
   console.log(`❤️  Health Check: http://localhost:${PORT}/health`);
+  console.log('═════════════════════════════════════════════');
+  console.log('📦 Loaded Modules:');
+  console.log(`   Auth, Users, Objects, Boxes, Scans: ✅`);
+  console.log(`   Floor Plans: ${floorplansRoutes ? '✅' : '❌'}`);
+  console.log(`   QR Codes: ${qrRoutes ? '✅' : '❌'}`);
+  console.log(`   Partners: ${partnerRoutes ? '✅' : '❌'}`);
+  console.log(`   Admin: ${adminRoutes ? '✅' : '❌'}`);
+  console.log(`   Audit Reports (PDF): ${auditReportRoutes ? '✅' : '❌'}`);
   console.log('═════════════════════════════════════════════');
   console.log('🔐 Security Status:');
   console.log(`   Helmet: ✅ Active`);

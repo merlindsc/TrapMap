@@ -787,13 +787,12 @@ export default function Maps() {
 
   const handleGoToFloorplan = () => {
     if (pendingFloorplanBox && selectedObject) {
-      // GEÄNDERT: Direkt zum Lageplan-Editor mit openBox
-      const fpId = pendingFloorplanBox.floor_plan_id;
-      if (fpId) {
-        navigate(`/layouts/${selectedObject.id}?fp=${fpId}&openBox=${pendingFloorplanBox.id}`);
-      } else {
-        navigate(`/layouts/${selectedObject.id}?openBox=${pendingFloorplanBox.id}`);
-      }
+      // Navigation zur Objekt-Detailseite mit Lageplan-Tab und openBox Parameter
+      const searchParams = new URLSearchParams({
+        tab: 'layouts',
+        openBox: pendingFloorplanBox.id
+      });
+      navigate(`/objects/${selectedObject.id}?${searchParams.toString()}`);
     }
     setFloorplanDialogOpen(false);
     setPendingFloorplanBox(null);

@@ -1,8 +1,13 @@
+// ============================================
+// SCANS SERVICE - KOMPLETT
+// GPS wird NUR aktualisiert wenn update_gps === true
+// ============================================
+
 const { supabase } = require("../config/supabase");
 
-// --------------------------------------------------------
+// ============================================
 // GET HISTORY FOR BOX
-// --------------------------------------------------------
+// ============================================
 exports.getHistoryForBox = async (boxId, orgId) => {
   try {
     console.log("📍 Loading scans for box:", boxId);
@@ -34,9 +39,9 @@ exports.getHistoryForBox = async (boxId, orgId) => {
   }
 };
 
-// --------------------------------------------------------
+// ============================================
 // GET HISTORY FOR OBJECT
-// --------------------------------------------------------
+// ============================================
 exports.getHistoryForObject = async (objectId, orgId) => {
   try {
     console.log("📍 Loading scans for object:", objectId);
@@ -91,10 +96,10 @@ exports.getHistoryForObject = async (objectId, orgId) => {
   }
 };
 
-// --------------------------------------------------------
+// ============================================
 // CREATE SCAN
-// GPS nur für Boxen OHNE floor_plan_id aktualisieren!
-// --------------------------------------------------------
+// GPS nur für Boxen OHNE floor_plan_id UND nur wenn update_gps === true!
+// ============================================
 exports.create = async (payload, orgId) => {
   try {
     console.log("🟢 Creating scan with payload:", payload);
@@ -140,6 +145,7 @@ exports.create = async (payload, orgId) => {
     };
 
     // GPS-Koordinaten zum Scan hinzufügen falls vorhanden
+    // (Scan speichert IMMER die GPS-Position zum Zeitpunkt des Scans)
     if (payload.latitude && payload.longitude) {
       scan.latitude = parseFloat(payload.latitude);
       scan.longitude = parseFloat(payload.longitude);
@@ -159,13 +165,17 @@ exports.create = async (payload, orgId) => {
     }
 
     // ============================================
-    // BOX UPDATE - GPS NUR für Boxen OHNE floor_plan_id!
+    // BOX UPDATE
+    // GPS NUR wenn:
+    // 1. Box hat KEINE floor_plan_id (= GPS-Box auf Karte)
+    // 2. GPS-Koordinaten wurden mitgeschickt
+    // 3. NEU: update_gps === true (explizite Anforderung!)
     // ============================================
     
     // Erst Box laden um floor_plan_id zu prüfen
     const { data: boxData, error: boxFetchError } = await supabase
       .from("boxes")
-      .select("id, floor_plan_id, pos_x, pos_y, grid_position")
+      .select("id, floor_plan_id, pos_x, pos_y, grid_position, lat, lng")
       .eq("id", parseInt(payload.box_id))
       .eq("organisation_id", orgId)
       .single();
@@ -174,22 +184,27 @@ exports.create = async (payload, orgId) => {
       console.error("⚠️ Warning: Could not fetch box:", boxFetchError);
     }
 
-    // Update-Objekt vorbereiten
+    // Update-Objekt vorbereiten - Status und last_scan IMMER aktualisieren
     const boxUpdate = {
       current_status: payload.status,
       last_scan: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
 
-    // GPS NUR aktualisieren wenn:
-    // 1. Box hat KEINE floor_plan_id (= GPS-Box auf Karte)
+    // ============================================
+    // GPS NUR aktualisieren wenn ALLE Bedingungen erfüllt:
+    // 1. Box hat KEINE floor_plan_id (= GPS-Box, nicht Lageplan)
     // 2. GPS-Koordinaten wurden mitgeschickt
-    if (boxData && !boxData.floor_plan_id && payload.latitude && payload.longitude) {
-      boxUpdate.latitude = parseFloat(payload.latitude);
-      boxUpdate.longitude = parseFloat(payload.longitude);
-      console.log(`📍 GPS-Update für Box ${payload.box_id}: ${payload.latitude}, ${payload.longitude}`);
+    // 3. update_gps === true (User hat explizit Button gedrückt!)
+    // ============================================
+    if (boxData && !boxData.floor_plan_id && payload.latitude && payload.longitude && payload.update_gps === true) {
+      boxUpdate.lat = parseFloat(payload.latitude);
+      boxUpdate.lng = parseFloat(payload.longitude);
+      console.log(`📍 GPS-Update für Box ${payload.box_id}: ${payload.latitude}, ${payload.longitude} (explizit angefordert)`);
     } else if (boxData && boxData.floor_plan_id) {
       console.log(`🗺️ Box ${payload.box_id} ist auf Lageplan - GPS wird NICHT aktualisiert`);
+    } else if (payload.latitude && payload.longitude && payload.update_gps !== true) {
+      console.log(`📍 GPS vorhanden aber update_gps !== true - Position wird NICHT aktualisiert`);
     }
 
     const { error: boxError } = await supabase
@@ -211,9 +226,9 @@ exports.create = async (payload, orgId) => {
   }
 };
 
-// --------------------------------------------------------
+// ============================================
 // GET RECENT SCANS (für Dashboard)
-// --------------------------------------------------------
+// ============================================
 exports.getRecent = async (orgId, limit = 10) => {
   try {
     const { data, error } = await supabase
@@ -247,6 +262,110 @@ exports.getRecent = async (orgId, limit = 10) => {
     return { success: true, data };
   } catch (err) {
     console.error("❌ UNHANDLED ERROR in getRecent:", err);
+    return { success: false, message: err.message };
+  }
+};
+
+// ============================================
+// GET SCANS BY DATE RANGE
+// ============================================
+exports.getByDateRange = async (orgId, startDate, endDate, objectId = null) => {
+  try {
+    let query = supabase
+      .from("scans")
+      .select(`
+        *,
+        users:user_id (
+          id,
+          first_name,
+          last_name
+        ),
+        boxes:box_id (
+          id,
+          number,
+          object_id,
+          objects:object_id (
+            id,
+            name
+          )
+        )
+      `)
+      .eq("organisation_id", orgId)
+      .gte("scanned_at", startDate)
+      .lte("scanned_at", endDate)
+      .order("scanned_at", { ascending: false });
+
+    if (objectId) {
+      // Filter by object - need to get box IDs first
+      const { data: boxes } = await supabase
+        .from("boxes")
+        .select("id")
+        .eq("object_id", objectId)
+        .eq("organisation_id", orgId);
+      
+      if (boxes && boxes.length > 0) {
+        const boxIds = boxes.map(b => b.id);
+        query = query.in("box_id", boxIds);
+      } else {
+        return { success: true, data: [] };
+      }
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("❌ Supabase ERROR (getByDateRange):", error);
+      throw error;
+    }
+
+    return { success: true, data };
+  } catch (err) {
+    console.error("❌ UNHANDLED ERROR in getByDateRange:", err);
+    return { success: false, message: err.message };
+  }
+};
+
+// ============================================
+// GET SCAN STATISTICS
+// ============================================
+exports.getStatistics = async (orgId, days = 30) => {
+  try {
+    const since = new Date(Date.now() - days * 86400000).toISOString();
+
+    const { data, error } = await supabase
+      .from("scans")
+      .select("status, scanned_at")
+      .eq("organisation_id", orgId)
+      .gte("scanned_at", since);
+
+    if (error) {
+      console.error("❌ Supabase ERROR (getStatistics):", error);
+      throw error;
+    }
+
+    // Status-Verteilung berechnen
+    const statusCounts = {};
+    const dailyCounts = {};
+
+    data.forEach(scan => {
+      // Status zählen
+      statusCounts[scan.status] = (statusCounts[scan.status] || 0) + 1;
+      
+      // Tägliche Counts
+      const day = scan.scanned_at.split('T')[0];
+      dailyCounts[day] = (dailyCounts[day] || 0) + 1;
+    });
+
+    return {
+      success: true,
+      data: {
+        total: data.length,
+        byStatus: statusCounts,
+        byDay: dailyCounts
+      }
+    };
+  } catch (err) {
+    console.error("❌ UNHANDLED ERROR in getStatistics:", err);
     return { success: false, message: err.message };
   }
 };

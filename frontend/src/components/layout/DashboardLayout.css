@@ -185,7 +185,6 @@ body.sidebar-open {
 .spacer {
   width: 44px;
 }
-
 /* ============================================================
    DESKTOP NAVBAR
    ============================================================ */
@@ -243,6 +242,24 @@ body.sidebar-open {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.theme-toggle-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-toggle-nav:hover {
+  background: var(--bg-hover);
 }
 
 .navbar-user {

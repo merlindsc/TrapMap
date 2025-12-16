@@ -160,6 +160,11 @@ export default function Sidebar({ isMobile, onClose }) {
             </div>
           </div>
         )}
+
+        <button className="theme-toggle-header" onClick={toggleTheme}>
+          {theme === 'light' ? <MoonIcon className="sidebar-nav-icon" /> : <SunIcon className="sidebar-nav-icon" />}
+          <span>{theme === 'light' ? 'Dunkel' : 'Hell'} aktivieren</span>
+        </button>
       </div>
 
       {/* Navigation */}
@@ -179,21 +184,6 @@ export default function Sidebar({ isMobile, onClose }) {
 
       {/* Footer */}
       <div className="sidebar-footer">
-        {/* Theme Toggle */}
-        <button className="theme-toggle" onClick={toggleTheme}>
-          {theme === 'dark' ? (
-            <>
-              <SunIcon style={{ width: 18, height: 18 }} />
-              <span>Hell</span>
-            </>
-          ) : (
-            <>
-              <MoonIcon style={{ width: 18, height: 18 }} />
-              <span>Dunkel</span>
-            </>
-          )}
-        </button>
-
         {user && (
           <div className="sidebar-user-details">
             <div className="user-name">{user.name || user.email?.split('@')[0]}</div>

@@ -371,7 +371,7 @@ export default function Settings() {
               type="text"
               value={orgData.city}
               onChange={(e) => setOrgData(prev => ({ ...prev, city: e.target.value }))}
-              className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg px-4 py-2 text-white"
+              className="w-full bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg px-4 py-2 text-white"
               placeholder="Hamburg"
             />
           </div>
@@ -399,7 +399,7 @@ export default function Settings() {
                 type="email"
                 value={orgData.email}
                 onChange={(e) => setOrgData(prev => ({ ...prev, email: e.target.value }))}
-                className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg px-4 py-2 text-white"
+                className="w-full bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg px-4 py-2 text-white"
                 placeholder="info@firma.de"
               />
             </div>
@@ -411,7 +411,7 @@ export default function Settings() {
               type="text"
               value={orgData.contact_name}
               onChange={(e) => setOrgData(prev => ({ ...prev, contact_name: e.target.value }))}
-              className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg px-4 py-2 text-white"
+              className="w-full bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg px-4 py-2 text-white"
               placeholder="Max Mustermann"
             />
           </div>

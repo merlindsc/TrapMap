@@ -198,7 +198,7 @@ export default function Admin() {
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
               activeTab === tab.id
                 ? `${tab.color} text-white`
-                : 'bg-[#1a1a2e] text-gray-400 hover:bg-[#252542] hover:text-white'
+                : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
             }`}
           >
             <tab.icon size={18} />
@@ -212,7 +212,7 @@ export default function Admin() {
         // QR-Tab: Nutze die separate Komponente
         <SuperAdminQROrders />
       ) : (
-        <div className="bg-[#1a1a2e] border border-white/10 rounded-xl p-6">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl p-6">
           {loading ? (
             <div className="flex justify-center py-12">
               <Loader className="animate-spin text-indigo-400" size={32} />
@@ -363,7 +363,7 @@ function OrganisationsTab({ organisations, onRefresh, showMessage, headers, json
           Organisationen ({organisations.length})
         </h2>
         <div className="flex gap-2">
-          <button onClick={onRefresh} className="p-2 bg-[#0d0d1a] hover:bg-[#252542] rounded-lg text-gray-400">
+          <button onClick={onRefresh} className="p-2 bg-gray-100 dark:bg-gray-950 hover:bg-gray-200 dark:hover:bg-gray-900 rounded-lg text-gray-600 dark:text-gray-400">
             <RefreshCw size={18} />
           </button>
           <button
@@ -377,7 +377,7 @@ function OrganisationsTab({ organisations, onRefresh, showMessage, headers, json
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-[#0d0d1a] rounded-lg p-4 mb-6 border border-white/10">
+        <form onSubmit={handleSubmit} className="bg-gray-50 dark:bg-gray-950 rounded-lg p-4 mb-6 border border-gray-200 dark:border-white/10">
           {/* Titel zeigt Create vs Edit */}
           <h3 className="text-white font-medium mb-4 flex items-center gap-2">
             {editingOrg ? (
@@ -387,14 +387,14 @@ function OrganisationsTab({ organisations, onRefresh, showMessage, headers, json
             )}
           </h3>
           <div className="grid md:grid-cols-2 gap-4 mb-4">
-            <input type="text" placeholder="Name *" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" required />
-            <input type="email" placeholder="E-Mail" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
-            <input type="text" placeholder="Straße" value={form.address} onChange={e => setForm({...form, address: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
+            <input type="text" placeholder="Name *" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-white/10 rounded-lg px-4 py-2 text-gray-900 dark:text-white" required />
+            <input type="email" placeholder="E-Mail" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-white/10 rounded-lg px-4 py-2 text-gray-900 dark:text-white" />
+            <input type="text" placeholder="Stra\u00dfe" value={form.address} onChange={e => setForm({...form, address: e.target.value})} className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-white/10 rounded-lg px-4 py-2 text-gray-900 dark:text-white" />
             <div className="flex gap-2">
-              <input type="text" placeholder="PLZ" value={form.zip} onChange={e => setForm({...form, zip: e.target.value})} className="w-24 bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
-              <input type="text" placeholder="Ort" value={form.city} onChange={e => setForm({...form, city: e.target.value})} className="flex-1 bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
+              <input type="text" placeholder="PLZ" value={form.zip} onChange={e => setForm({...form, zip: e.target.value})} className="w-24 bg-white dark:bg-gray-900 border border-gray-300 dark:border-white/10 rounded-lg px-4 py-2 text-gray-900 dark:text-white" />
+              <input type="text" placeholder="Ort" value={form.city} onChange={e => setForm({...form, city: e.target.value})} className="flex-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-white/10 rounded-lg px-4 py-2 text-gray-900 dark:text-white" />
             </div>
-            <input type="tel" placeholder="Telefon" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
+            <input type="tel" placeholder="Telefon" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-white/10 rounded-lg px-4 py-2 text-gray-900 dark:text-white" />
           </div>
           <div className="flex gap-2">
             <button type="submit" disabled={saving} className={`px-4 py-2 text-white rounded-lg disabled:opacity-50 ${editingOrg ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}`}>
@@ -407,7 +407,7 @@ function OrganisationsTab({ organisations, onRefresh, showMessage, headers, json
 
       <div className="space-y-2">
         {organisations.map(org => (
-          <div key={org.id} className="flex items-center justify-between p-4 bg-[#0d0d1a] rounded-lg border border-white/5 hover:border-white/10">
+          <div key={org.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-950 rounded-lg border border-gray-200 dark:border-white/5 hover:border-gray-300 dark:hover:border-white/10">
             <div className="flex-1">
               <div className="flex items-center gap-3">
                 <span className="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded">#{org.id}</span>
@@ -510,22 +510,22 @@ function UsersTab({ users, organisations, onRefresh, showMessage, headers, jsonH
       {showForm && (
         <form onSubmit={handleCreate} className="bg-[#0d0d1a] rounded-lg p-4 mb-6 border border-white/10">
           <div className="grid md:grid-cols-2 gap-4 mb-4">
-            <select value={form.organisation_id} onChange={e => setForm({...form, organisation_id: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" required>
+            <select value={form.organisation_id} onChange={e => setForm({...form, organisation_id: e.target.value})} className="bg-gray-900 dark:bg-gray-950 border border-white/10 dark:border-white/20 rounded-lg px-4 py-2 text-white" required>
               <option value="">Organisation wählen *</option>
               {organisations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
             </select>
-            <select value={form.role} onChange={e => setForm({...form, role: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white">
+            <select value={form.role} onChange={e => setForm({...form, role: e.target.value})} className="bg-gray-900 dark:bg-gray-950 border border-white/10 dark:border-white/20 rounded-lg px-4 py-2 text-white">
               {roles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
-            <input type="email" placeholder="E-Mail *" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" required />
+            <input type="email" placeholder="E-Mail *" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="bg-gray-900 dark:bg-gray-950 border border-white/10 dark:border-white/20 rounded-lg px-4 py-2 text-white" required />
             <div className="relative">
-              <input type={showPassword ? "text" : "password"} placeholder="Passwort *" value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="w-full bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 pr-10 text-white" required />
+              <input type={showPassword ? "text" : "password"} placeholder="Passwort *" value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="w-full bg-gray-900 dark:bg-gray-950 border border-white/10 dark:border-white/20 rounded-lg px-4 py-2 pr-10 text-white" required />
               <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
-            <input type="text" placeholder="Vorname" value={form.first_name} onChange={e => setForm({...form, first_name: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
-            <input type="text" placeholder="Nachname" value={form.last_name} onChange={e => setForm({...form, last_name: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
+            <input type="text" placeholder="Vorname" value={form.first_name} onChange={e => setForm({...form, first_name: e.target.value})} className="bg-gray-900 dark:bg-gray-950 border border-white/10 dark:border-white/20 rounded-lg px-4 py-2 text-white" />
+            <input type="text" placeholder="Nachname" value={form.last_name} onChange={e => setForm({...form, last_name: e.target.value})} className="bg-gray-900 dark:bg-gray-950 border border-white/10 dark:border-white/20 rounded-lg px-4 py-2 text-white" />
           </div>
           <div className="flex gap-2">
             <button type="submit" disabled={saving} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50">
@@ -538,7 +538,7 @@ function UsersTab({ users, organisations, onRefresh, showMessage, headers, jsonH
 
       <div className="space-y-2">
         {users.map(user => (
-          <div key={user.id} className={`flex items-center justify-between p-4 rounded-lg border ${user.active ? 'bg-[#0d0d1a] border-white/5' : 'bg-red-900/10 border-red-500/20'}`}>
+          <div key={user.id} className={`flex items-center justify-between p-4 rounded-lg border ${user.active ? 'bg-gray-950 dark:bg-black border-white/5' : 'bg-red-900/10 border-red-500/20'}`}>
             <div className="flex-1">
               <div className="flex items-center gap-3">
                 <span className={`text-xs px-2 py-0.5 rounded ${getRoleStyle(user.role)}`}>{user.role}</span>

@@ -18,7 +18,7 @@ import trapMapLogo from "../../assets/trapmap-logo-150.png";
 // THEME CONTEXT
 // ============================================================
 const ThemeContext = createContext({
-  theme: 'dark',
+  theme: 'light',
   toggleTheme: () => {}
 });
 
@@ -29,12 +29,13 @@ export function useTheme() {
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem("trapmap_theme");
-    return saved || "dark";
+    return saved || "light";
   });
 
   useEffect(() => {
     // CSS-Variablen direkt auf :root setzen
     const root = document.documentElement;
+    root.classList.toggle('dark', theme === 'dark');
     
     if (theme === 'light') {
       root.style.setProperty('--bg-primary', '#f8fafc');
@@ -167,6 +168,9 @@ export default function DashboardLayout({ children }) {
             </div>
 
             <div className="navbar-right">
+              <button className="theme-toggle-nav" onClick={toggleTheme} aria-label="Theme umschalten">
+                {theme === "light" ? "🌙" : "☀️"}
+              </button>
               {user && (
                 <div className="navbar-user">
                   <div className="user-avatar">

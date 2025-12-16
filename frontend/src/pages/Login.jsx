@@ -215,7 +215,7 @@ export default function Login() {
             <p className="text-gray-400">Schädlingsüberwachung</p>
           </div>
 
-          <div className="bg-[#1a1a2e]/80 dark:bg-gray-900/90 backdrop-blur-xl border border-white/10 dark:border-white/20 rounded-2xl p-8 shadow-2xl">
+          <div className="bg-gray-900/80 dark:bg-gray-900/90 backdrop-blur-xl border border-white/10 dark:border-white/20 rounded-2xl p-8 shadow-2xl">
             <h2 className="text-2xl font-bold text-white dark:text-gray-100 mb-6 text-center">Anmelden</h2>
 
             {error && (
@@ -234,7 +234,7 @@ export default function Login() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-[#0d0d1a] dark:bg-gray-950 border border-white/10 dark:border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 dark:placeholder-gray-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                    className="w-full bg-gray-950 dark:bg-gray-950 border border-white/10 dark:border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 dark:placeholder-gray-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
                     placeholder="ihre@email.de"
                     required
                   />
@@ -298,7 +298,7 @@ export default function Login() {
             <img src={trapMapLogo} alt="TrapMap" className="h-24 mx-auto mb-4" />
           </div>
 
-          <div className="bg-[#1a1a2e]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
+          <div className="bg-gray-900/80 dark:bg-gray-900/90 backdrop-blur-xl border border-white/10 dark:border-white/20 rounded-2xl p-8 shadow-2xl">
             <button
               onClick={() => { setView("login"); setForgotSent(false); setError(""); }}
               className="flex items-center gap-1 text-gray-400 hover:text-white mb-4"
@@ -333,7 +333,7 @@ export default function Login() {
                       type="email"
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
-                      className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:border-indigo-500 outline-none"
+                      className="w-full bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:border-indigo-500 outline-none"
                       placeholder="ihre@email.de"
                       required
                     />
@@ -366,7 +366,7 @@ export default function Login() {
             <img src={trapMapLogo} alt="TrapMap" className="h-24 mx-auto mb-4" />
           </div>
 
-          <div className="bg-[#1a1a2e]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
+          <div className="bg-gray-900/80 dark:bg-gray-900/90 backdrop-blur-xl border border-white/10 dark:border-white/20 rounded-2xl p-8 shadow-2xl">
             <h2 className="text-2xl font-bold text-white mb-2">Neues Passwort</h2>
             <p className="text-gray-400 text-sm mb-6">
               Geben Sie Ihr neues Passwort ein.
@@ -401,7 +401,7 @@ export default function Login() {
                       type={showNewPassword ? "text" : "password"}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg pl-10 pr-12 py-3 text-white placeholder-gray-500 focus:border-indigo-500 outline-none"
+                      className="w-full bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg pl-10 pr-12 py-3 text-white placeholder-gray-500 focus:border-indigo-500 outline-none"
                       placeholder="Mindestens 8 Zeichen"
                       minLength={8}
                       required
@@ -425,7 +425,7 @@ export default function Login() {
                       type="password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full bg-[#0d0d1a] border border-white/10 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:border-indigo-500 outline-none"
+                      className="w-full bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:border-indigo-500 outline-none"
                       placeholder="Passwort wiederholen"
                       minLength={8}
                       required
@@ -459,7 +459,7 @@ export default function Login() {
             <img src={trapMapLogo} alt="TrapMap" className="h-24 mx-auto mb-4" />
           </div>
 
-          <div className="bg-[#1a1a2e]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
+          <div className="bg-gray-900/80 dark:bg-gray-900/90 backdrop-blur-xl border border-white/10 dark:border-white/20 rounded-2xl p-8 shadow-2xl">
             <div className="mb-6 p-4 bg-yellow-500/20 border border-yellow-500/30 rounded-lg text-yellow-400">
               <AlertCircle size={20} className="inline mr-2" />
               <strong>Willkommen, {mustChangeUser?.first_name}!</strong>

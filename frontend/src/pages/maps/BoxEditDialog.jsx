@@ -429,7 +429,7 @@ export default function BoxEditDialog({
     >
       <div 
         onClick={(e) => e.stopPropagation()}
-        className="bg-gray-900 dark:bg-gray-950 rounded-xl w-full max-w-md max-h-[90vh] border border-white/10 dark:border-white/20 shadow-2xl overflow-hidden flex flex-col"
+        className="bg-white dark:bg-gray-900 rounded-xl w-full max-w-md max-h-[90vh] border border-gray-200 dark:border-white/10 shadow-2xl overflow-hidden flex flex-col"
       >
         {/* Header - MIT QR-INFO */}
         <div className="flex items-center justify-between p-4 border-b border-white/10 dark:border-white/20 bg-gray-950 dark:bg-black">
@@ -444,7 +444,7 @@ export default function BoxEditDialog({
               <div className="flex items-center gap-2 text-xs text-gray-500">
                 {/* QR-Code Badge */}
                 {qrNumber && (
-                  <span className="bg-gray-700 dark:bg-gray-800 px-2 py-0.5 rounded flex items-center gap-1 font-mono">
+                  <span className="bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded flex items-center gap-1 font-mono text-gray-900 dark:text-gray-100">
                     <Hash size={10} />
                     QR {qrNumber}
                   </span>
@@ -561,7 +561,7 @@ export default function BoxEditDialog({
               📦 Box-Typ *
             </label>
             {boxTypesLoading ? (
-              <div className="w-full px-3 py-2.5 bg-[#0d1117] border border-white/10 rounded-lg text-gray-500 text-sm">
+              <div className="w-full px-3 py-2.5 bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg text-gray-500 text-sm">
                 Lade Box-Typen...
               </div>
             ) : boxTypes.length === 0 ? (
@@ -671,7 +671,7 @@ export default function BoxEditDialog({
               {qrNumber && displayNumber !== qrNumber && (
                 <button
                   onClick={() => setDisplayNumber(qrNumber)}
-                  className="px-3 py-2.5 bg-gray-700 dark:bg-gray-800 hover:bg-gray-600 dark:hover:bg-gray-700 rounded-lg text-xs text-gray-300 dark:text-gray-400"
+                  className="px-3 py-2.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg text-xs text-gray-700 dark:text-gray-300"
                   title="Auf QR-Nummer zurücksetzen"
                 >
                   = QR {qrNumber}
@@ -698,7 +698,7 @@ export default function BoxEditDialog({
                   setBait(e.target.value);
                   if (e.target.value !== "custom") setCustomBait("");
                 }}
-                className="w-full px-3 py-2.5 bg-[#0d1117] border border-white/10 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors"
+                className="w-full px-3 py-2.5 bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors"
               >
                 <option value="">Kein Köder / Leer</option>
                 {COMMON_BAITS.map(b => <option key={b} value={b}>{b}</option>)}
@@ -745,7 +745,7 @@ export default function BoxEditDialog({
                 className={`w-full mt-2 py-2.5 px-3 rounded-lg text-sm text-left transition-all ${
                   insectType === "custom"
                     ? "bg-purple-500/20 text-purple-400 border border-purple-500/50"
-                    : "bg-[#0d1117] text-gray-300 border border-white/10 hover:border-purple-500/30"
+                    : "bg-gray-950 dark:bg-black text-gray-300 border border-white/10 dark:border-white/20 hover:border-purple-500/30"
                 }`}
               >
                 Anderes Insekt...
@@ -787,7 +787,7 @@ export default function BoxEditDialog({
                 className={`py-2 px-3 rounded-lg text-sm font-medium transition-all ${
                   intervalType === "range"
                     ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/50"
-                    : "bg-[#0d1117] text-gray-400 border border-white/10 hover:border-white/20"
+                    : "bg-gray-950 dark:bg-black text-gray-400 border border-white/10 dark:border-white/20 hover:border-white/20"
                 }`}
               >
                 Range
@@ -827,7 +827,7 @@ export default function BoxEditDialog({
                       max="365"
                       value={intervalRangeStart}
                       onChange={(e) => setIntervalRangeStart(parseInt(e.target.value) || 1)}
-                      className="w-full px-3 py-2 bg-[#0d1117] border border-white/10 rounded-lg text-white text-center text-sm focus:border-indigo-500 focus:outline-none"
+                      className="w-full px-3 py-2 bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg text-white text-center text-sm focus:border-indigo-500 focus:outline-none"
                     />
                   </div>
                   <span className="text-gray-500 pt-5">–</span>
@@ -839,7 +839,7 @@ export default function BoxEditDialog({
                       max="365"
                       value={intervalRangeEnd}
                       onChange={(e) => setIntervalRangeEnd(parseInt(e.target.value) || intervalRangeStart)}
-                      className="w-full px-3 py-2 bg-[#0d1117] border border-white/10 rounded-lg text-white text-center text-sm focus:border-indigo-500 focus:outline-none"
+                      className="w-full px-3 py-2 bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg text-white text-center text-sm focus:border-indigo-500 focus:outline-none"
                     />
                   </div>
                   <span className="text-gray-400 pt-5 text-sm">Tage</span>

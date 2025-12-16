@@ -1,0 +1,1046 @@
+/* ============================================================
+   TRAPMAP – AUDIT REPORT PDF GENERATOR
+   Professioneller PDF-Generator mit sauberem Layout
+   Version 2.0 - Komplett neu geschrieben
+   ============================================================ */
+
+const PDFDocument = require("pdfkit");
+const path = require("path");
+const fs = require("fs");
+
+// Supabase - mit Fallback falls nicht gefunden
+let supabase;
+try {
+  const supabaseModule = require("../config/supabase");
+  supabase = supabaseModule.supabase;
+  console.log("✅ Supabase connection loaded");
+} catch (e) {
+  console.error("❌ Supabase config not found:", e.message);
+  throw new Error("Supabase configuration required");
+}
+
+// ============================================
+// KONSTANTEN
+// ============================================
+const PAGE = {
+  WIDTH: 595.28,
+  HEIGHT: 841.89,
+  MARGIN_TOP: 50,
+  MARGIN_BOTTOM: 60,
+  MARGIN_LEFT: 50,
+  MARGIN_RIGHT: 50
+};
+
+const CONTENT = {
+  WIDTH: PAGE.WIDTH - PAGE.MARGIN_LEFT - PAGE.MARGIN_RIGHT, // 495.28
+  START_Y: 100,
+  END_Y: PAGE.HEIGHT - PAGE.MARGIN_BOTTOM - 20 // ~762
+};
+
+const COLORS = {
+  primary: "#1e40af",
+  success: "#16a34a",
+  warning: "#d97706",
+  danger: "#dc2626",
+  yellow: "#eab308",
+  text: "#1f2937",
+  textLight: "#6b7280",
+  textMuted: "#9ca3af",
+  border: "#e5e7eb",
+  background: "#f9fafb",
+  white: "#ffffff"
+};
+
+const STATUS = {
+  green: { color: COLORS.success, label: "OK" },
+  yellow: { color: COLORS.yellow, label: "Leicht auffällig" },
+  orange: { color: COLORS.warning, label: "Auffällig" },
+  red: { color: COLORS.danger, label: "Befall" }
+};
+
+// ============================================
+// HILFSFUNKTIONEN
+// ============================================
+const formatDate = (dateStr) => {
+  if (!dateStr) return "-";
+  return new Date(dateStr).toLocaleDateString("de-DE", {
+    day: "2-digit",
+    month: "2-digit", 
+    year: "numeric"
+  });
+};
+
+const formatDateTime = (dateStr) => {
+  if (!dateStr) return "-";
+  return new Date(dateStr).toLocaleString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+};
+
+const truncate = (text, maxLen) => {
+  if (!text) return "-";
+  const str = String(text);
+  return str.length > maxLen ? str.substring(0, maxLen - 2) + ".." : str;
+};
+
+// ============================================
+// LOGO LADEN (lokal oder URL)
+// ============================================
+const loadLocalLogo = () => {
+  const possiblePaths = [
+    path.join(__dirname, "../assets/simple-logo.png"),
+    path.join(__dirname, "../assets/trapmap-logo.png"),
+    path.join(__dirname, "../assets/logo.png")
+  ];
+
+  for (const logoPath of possiblePaths) {
+    try {
+      if (fs.existsSync(logoPath)) {
+        const buffer = fs.readFileSync(logoPath);
+        // Prüfe ob echtes PNG oder JPG
+        const isPNG = buffer.slice(0, 8).toString("hex") === "89504e470d0a1a0a";
+        const isJPG = buffer.slice(0, 3).toString("hex") === "ffd8ff";
+        if (isPNG || isJPG) {
+          return logoPath;
+        }
+      }
+    } catch (e) {
+      // Ignorieren
+    }
+  }
+  return null;
+};
+
+const loadLogoFromUrl = async (url) => {
+  if (!url || !url.startsWith("http")) return null;
+  
+  try {
+    const proto = url.startsWith("https") ? require("https") : require("http");
+    
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve(null), 5000);
+      
+      proto.get(url, (response) => {
+        if (response.statusCode !== 200) {
+          clearTimeout(timeout);
+          return resolve(null);
+        }
+        
+        const chunks = [];
+        response.on("data", (chunk) => chunks.push(chunk));
+        response.on("end", () => {
+          clearTimeout(timeout);
+          resolve(Buffer.concat(chunks));
+        });
+        response.on("error", () => {
+          clearTimeout(timeout);
+          resolve(null);
+        });
+      }).on("error", () => {
+        clearTimeout(timeout);
+        resolve(null);
+      });
+    });
+  } catch {
+    return null;
+  }
+};
+
+// ============================================
+// DATEN LADEN
+// ============================================
+async function loadReportData(objectId, organisationId, options = {}) {
+  console.log("📄 Loading report data for object:", objectId, "org:", organisationId);
+
+  if (!organisationId) {
+    throw new Error("Organisations-ID ist erforderlich");
+  }
+
+  // Organisation laden
+  const { data: org } = await supabase
+    .from("organisations")
+    .select("id, name, logo_url, address, zip, city, phone, email, contact_name")
+    .eq("id", organisationId)
+    .single();
+
+  console.log("🏢 Organisation:", org?.name || "nicht gefunden");
+
+  // Objekt laden
+  const { data: object } = await supabase
+    .from("objects")
+    .select("*")
+    .eq("id", objectId)
+    .eq("organisation_id", organisationId)
+    .single();
+
+  if (!object) {
+    throw new Error(`Objekt ${objectId} nicht gefunden oder keine Berechtigung`);
+  }
+
+  console.log("🏠 Objekt:", object.name);
+
+  // Boxen laden
+  let boxesQuery = supabase
+    .from("boxes")
+    .select(`
+      *,
+      box_types:box_type_id (
+        id, name, category, bait_type, bait_substance, 
+        is_toxic, registration_number, manufacturer, target_pests
+      ),
+      floor_plans:floor_plan_id (id, name)
+    `)
+    .eq("object_id", objectId)
+    .eq("organisation_id", organisationId)
+    .order("number", { ascending: true });
+
+  // Optional: Nur aktive Boxen
+  if (!options.includeInactive) {
+    boxesQuery = boxesQuery.eq("active", true);
+  }
+
+  const { data: boxes } = await boxesQuery;
+  console.log("📦 Boxen geladen:", boxes?.length || 0);
+
+  // Scans laden
+  const boxIds = boxes?.map((b) => b.id) || [];
+  
+  let scansQuery = supabase
+    .from("scans")
+    .select(`
+      *,
+      users:user_id (id, first_name, last_name, email),
+      boxes:box_id (id, number, qr_code)
+    `)
+    .eq("organisation_id", organisationId)
+    .in("box_id", boxIds.length > 0 ? boxIds : [-1])
+    .order("scanned_at", { ascending: false });
+
+  // Datumsfilter
+  if (options.dateFrom) {
+    scansQuery = scansQuery.gte("scanned_at", options.dateFrom);
+  }
+  if (options.dateTo) {
+    scansQuery = scansQuery.lte("scanned_at", options.dateTo + "T23:59:59");
+  }
+
+  const { data: scans } = await scansQuery.limit(options.maxScans || 500);
+  console.log("📋 Scans geladen:", scans?.length || 0);
+
+  // Techniker extrahieren
+  const technicianIds = [...new Set(scans?.map((s) => s.user_id).filter(Boolean) || [])];
+  const { data: technicians } = await supabase
+    .from("users")
+    .select("id, first_name, last_name, email")
+    .in("id", technicianIds.length > 0 ? technicianIds : [-1]);
+
+  return {
+    organisation: org,
+    object,
+    boxes: boxes || [],
+    scans: scans || [],
+    technicians: technicians || [],
+    generatedAt: new Date().toISOString()
+  };
+}
+
+// ============================================
+// PDF GENERATOR KLASSE
+// ============================================
+class AuditReportPDF {
+  constructor(data, options = {}) {
+    this.data = data;
+    this.options = options;
+    this.doc = null;
+    this.pageNum = 0;
+    this.y = CONTENT.START_Y;
+    this.localLogo = loadLocalLogo();
+    this.orgLogoBuffer = null;
+  }
+
+  // Neue Seite hinzufügen
+  newPage() {
+    if (this.pageNum > 0) {
+      this.doc.addPage();
+    }
+    this.pageNum++;
+    this.y = CONTENT.START_Y;
+    this.drawHeader();
+    this.drawFooter();
+    return this.y;
+  }
+
+  // Prüfen ob genug Platz auf Seite
+  checkSpace(needed) {
+    if (this.y + needed > CONTENT.END_Y) {
+      this.newPage();
+    }
+  }
+
+  // Header zeichnen
+  drawHeader() {
+    const doc = this.doc;
+    
+    // TrapMap Logo oder Text
+    if (this.localLogo) {
+      try {
+        doc.image(this.localLogo, PAGE.MARGIN_LEFT, 25, { height: 35 });
+      } catch {
+        this.drawTextLogo();
+      }
+    } else {
+      this.drawTextLogo();
+    }
+
+    // Organisations-Name rechts
+    if (this.data.organisation?.name) {
+      doc.fontSize(11)
+        .font("Helvetica-Bold")
+        .fillColor(COLORS.text)
+        .text(this.data.organisation.name, 300, 35, {
+          width: PAGE.WIDTH - PAGE.MARGIN_RIGHT - 300,
+          align: "right"
+        });
+    }
+
+    // Trennlinie
+    doc.moveTo(PAGE.MARGIN_LEFT, 70)
+      .lineTo(PAGE.WIDTH - PAGE.MARGIN_RIGHT, 70)
+      .strokeColor(COLORS.border)
+      .lineWidth(1)
+      .stroke();
+  }
+
+  // Text-Logo als Fallback
+  drawTextLogo() {
+    const doc = this.doc;
+    doc.fontSize(18)
+      .font("Helvetica-Bold")
+      .fillColor(COLORS.primary)
+      .text("TrapMap", PAGE.MARGIN_LEFT, 30);
+    doc.fontSize(8)
+      .font("Helvetica")
+      .fillColor(COLORS.textLight)
+      .text("Schädlings-Monitoring", PAGE.MARGIN_LEFT, 50);
+  }
+
+  // Footer zeichnen
+  drawFooter() {
+    const doc = this.doc;
+    const footerY = PAGE.HEIGHT - PAGE.MARGIN_BOTTOM + 10;
+
+    // Trennlinie
+    doc.moveTo(PAGE.MARGIN_LEFT, footerY - 15)
+      .lineTo(PAGE.WIDTH - PAGE.MARGIN_RIGHT, footerY - 15)
+      .strokeColor(COLORS.border)
+      .lineWidth(0.5)
+      .stroke();
+
+    doc.fontSize(8)
+      .font("Helvetica")
+      .fillColor(COLORS.textMuted);
+
+    // Links: Datum
+    doc.text(`Erstellt: ${formatDateTime(this.data.generatedAt)}`, PAGE.MARGIN_LEFT, footerY);
+
+    // Mitte: TrapMap
+    doc.text("www.trap-map.de", 0, footerY, {
+      width: PAGE.WIDTH,
+      align: "center"
+    });
+
+    // Rechts: Seite
+    doc.text(`Seite ${this.pageNum}`, 0, footerY, {
+      width: PAGE.WIDTH - PAGE.MARGIN_RIGHT,
+      align: "right"
+    });
+  }
+
+  // Sektion-Titel zeichnen
+  drawSectionTitle(title) {
+    this.checkSpace(40);
+    
+    this.doc.fontSize(14)
+      .font("Helvetica-Bold")
+      .fillColor(COLORS.primary)
+      .text(title, PAGE.MARGIN_LEFT, this.y);
+    
+    this.y += 25;
+  }
+
+  // Tabellen-Header zeichnen
+  drawTableHeader(columns) {
+    const doc = this.doc;
+    const headerY = this.y;
+
+    // Header-Hintergrund
+    doc.rect(PAGE.MARGIN_LEFT, headerY - 3, CONTENT.WIDTH, 18)
+      .fillColor(COLORS.background)
+      .fill();
+
+    // Header-Text
+    doc.fontSize(8)
+      .font("Helvetica-Bold")
+      .fillColor(COLORS.text);
+
+    columns.forEach((col) => {
+      doc.text(col.label, col.x, headerY, { width: col.width });
+    });
+
+    // Unterstrich
+    this.y = headerY + 18;
+    doc.moveTo(PAGE.MARGIN_LEFT, this.y)
+      .lineTo(PAGE.WIDTH - PAGE.MARGIN_RIGHT, this.y)
+      .strokeColor(COLORS.border)
+      .lineWidth(0.5)
+      .stroke();
+
+    this.y += 8;
+  }
+
+  // Tabellen-Zeile zeichnen
+  drawTableRow(columns, data, rowHeight = 14) {
+    const doc = this.doc;
+
+    doc.fontSize(8)
+      .font("Helvetica")
+      .fillColor(COLORS.text);
+
+    columns.forEach((col) => {
+      let value = data[col.key] || "-";
+      
+      // Farbige Werte (z.B. Status)
+      if (col.color) {
+        doc.fillColor(col.color);
+      } else {
+        doc.fillColor(COLORS.text);
+      }
+
+      doc.text(truncate(value, col.maxChars || 30), col.x, this.y, { 
+        width: col.width 
+      });
+    });
+
+    this.y += rowHeight;
+  }
+
+  // ========================================
+  // SEITEN GENERIEREN
+  // ========================================
+
+  // Titelseite
+  generateTitlePage() {
+    this.newPage();
+    const doc = this.doc;
+    const { object, organisation } = this.data;
+
+    // Großer Titel
+    doc.fontSize(28)
+      .font("Helvetica-Bold")
+      .fillColor(COLORS.primary)
+      .text("AUDIT-REPORT", PAGE.MARGIN_LEFT, this.y, {
+        width: CONTENT.WIDTH,
+        align: "center"
+      });
+    this.y += 40;
+
+    doc.fontSize(14)
+      .font("Helvetica")
+      .fillColor(COLORS.textLight)
+      .text("Schädlingsmonitoring & Dokumentation", PAGE.MARGIN_LEFT, this.y, {
+        width: CONTENT.WIDTH,
+        align: "center"
+      });
+    this.y += 50;
+
+    // Objekt-Box
+    const boxHeight = 100;
+    doc.roundedRect(PAGE.MARGIN_LEFT, this.y, CONTENT.WIDTH, boxHeight, 8)
+      .fillColor(COLORS.background)
+      .fill();
+
+    this.y += 15;
+    doc.fontSize(18)
+      .font("Helvetica-Bold")
+      .fillColor(COLORS.text)
+      .text(object.name, PAGE.MARGIN_LEFT + 20, this.y);
+    this.y += 28;
+
+    doc.fontSize(10)
+      .font("Helvetica")
+      .fillColor(COLORS.textLight);
+
+    if (object.address) {
+      doc.text(`📍 ${object.address}`, PAGE.MARGIN_LEFT + 20, this.y);
+      this.y += 15;
+    }
+    if (object.city) {
+      doc.text(`   ${object.zip_code || ""} ${object.city}`, PAGE.MARGIN_LEFT + 20, this.y);
+      this.y += 15;
+    }
+    if (object.contact_person) {
+      doc.text(`👤 ${object.contact_person}`, PAGE.MARGIN_LEFT + 20, this.y);
+    }
+
+    this.y += boxHeight - 70;
+
+    // Dienstleister-Info
+    if (organisation) {
+      this.y += 20;
+      doc.fontSize(11)
+        .font("Helvetica-Bold")
+        .fillColor(COLORS.primary)
+        .text("Durchgeführt von:", PAGE.MARGIN_LEFT, this.y);
+      this.y += 18;
+
+      doc.fontSize(11)
+        .font("Helvetica-Bold")
+        .fillColor(COLORS.text)
+        .text(organisation.name, PAGE.MARGIN_LEFT, this.y);
+      this.y += 15;
+
+      doc.fontSize(9)
+        .font("Helvetica")
+        .fillColor(COLORS.textLight);
+      
+      if (organisation.address) {
+        let addr = organisation.address;
+        if (organisation.zip || organisation.city) {
+          addr += `, ${organisation.zip || ""} ${organisation.city || ""}`;
+        }
+        doc.text(addr, PAGE.MARGIN_LEFT, this.y);
+        this.y += 12;
+      }
+      if (organisation.phone || organisation.email) {
+        let contact = "";
+        if (organisation.phone) contact += `📞 ${organisation.phone}`;
+        if (organisation.email) contact += `  ✉ ${organisation.email}`;
+        doc.text(contact.trim(), PAGE.MARGIN_LEFT, this.y);
+      }
+    }
+
+    this.y += 40;
+  }
+
+  // Zusammenfassung / KPIs
+  generateSummary() {
+    const doc = this.doc;
+    const { boxes, scans } = this.data;
+
+    // Nur generieren wenn Daten vorhanden
+    if (!boxes?.length && !scans?.length) {
+      return;
+    }
+
+    this.drawSectionTitle("Zusammenfassung");
+
+    // Statistiken berechnen
+    const totalBoxes = boxes.length;
+    const totalScans = scans.length;
+    
+    const boxStatus = {
+      green: boxes.filter((b) => b.current_status === "green").length,
+      yellow: boxes.filter((b) => b.current_status === "yellow").length,
+      orange: boxes.filter((b) => b.current_status === "orange").length,
+      red: boxes.filter((b) => b.current_status === "red").length
+    };
+
+    const scanStatus = {
+      green: scans.filter((s) => s.status === "green").length,
+      red: scans.filter((s) => s.status === "red").length
+    };
+
+    const infestationRate = totalScans > 0 
+      ? ((scanStatus.red / totalScans) * 100).toFixed(1) 
+      : 0;
+
+    // KPI-Boxen
+    const kpiWidth = 115;
+    const kpiHeight = 55;
+    const kpis = [
+      { label: "Fallen gesamt", value: totalBoxes, color: COLORS.primary },
+      { label: "Kontrollen", value: totalScans, color: COLORS.textLight },
+      { label: "Status OK", value: boxStatus.green, color: COLORS.success },
+      { label: "Befall", value: boxStatus.red, color: COLORS.danger }
+    ];
+
+    kpis.forEach((kpi, i) => {
+      const x = PAGE.MARGIN_LEFT + i * (kpiWidth + 10);
+      
+      doc.roundedRect(x, this.y, kpiWidth, kpiHeight, 5)
+        .fillColor(kpi.color)
+        .fill();
+
+      doc.fontSize(22)
+        .font("Helvetica-Bold")
+        .fillColor(COLORS.white)
+        .text(String(kpi.value), x, this.y + 8, {
+          width: kpiWidth,
+          align: "center"
+        });
+
+      doc.fontSize(9)
+        .font("Helvetica")
+        .text(kpi.label, x, this.y + 35, {
+          width: kpiWidth,
+          align: "center"
+        });
+    });
+
+    this.y += kpiHeight + 25;
+
+    // Gesamtbewertung
+    let assessment = "Sehr gut - Keine Auffälligkeiten";
+    let assessmentColor = COLORS.success;
+
+    if (infestationRate > 5) {
+      assessment = "Kritisch - Sofortmaßnahmen erforderlich";
+      assessmentColor = COLORS.danger;
+    } else if (infestationRate > 2) {
+      assessment = "Auffällig - Verstärkte Überwachung empfohlen";
+      assessmentColor = COLORS.warning;
+    } else if (boxStatus.yellow + boxStatus.orange > totalBoxes * 0.2) {
+      assessment = "Gut - Leichte Auffälligkeiten beobachtet";
+      assessmentColor = COLORS.yellow;
+    }
+
+    doc.roundedRect(PAGE.MARGIN_LEFT, this.y, CONTENT.WIDTH, 40, 5)
+      .fillColor(assessmentColor)
+      .fill();
+
+    doc.fontSize(12)
+      .font("Helvetica-Bold")
+      .fillColor(COLORS.white)
+      .text(`Gesamtbewertung: ${assessment}`, PAGE.MARGIN_LEFT + 15, this.y + 10);
+
+    doc.fontSize(10)
+      .font("Helvetica")
+      .text(`Befallsrate: ${infestationRate}%`, PAGE.MARGIN_LEFT + 15, this.y + 26);
+
+    this.y += 60;
+  }
+
+  // Fallentypen-Übersicht
+  generateBoxTypes() {
+    const { boxes } = this.data;
+    if (boxes.length === 0) return;
+
+    this.checkSpace(150);
+    this.drawSectionTitle("Eingesetzte Fallentypen");
+
+    // Gruppieren nach Typ
+    const typeMap = new Map();
+    boxes.forEach((box) => {
+      const typeName = box.box_types?.name || "Unbekannt";
+      if (!typeMap.has(typeName)) {
+        typeMap.set(typeName, {
+          count: 0,
+          category: box.box_types?.category || "-",
+          baitType: box.box_types?.bait_type || "-",
+          substance: box.box_types?.bait_substance || "-"
+        });
+      }
+      typeMap.get(typeName).count++;
+    });
+
+    // Tabelle
+    const columns = [
+      { label: "Fallentyp", x: PAGE.MARGIN_LEFT, width: 120, key: "name" },
+      { label: "Kategorie", x: 175, width: 80, key: "category" },
+      { label: "Köder", x: 260, width: 100, key: "baitType" },
+      { label: "Wirkstoff", x: 365, width: 100, key: "substance" },
+      { label: "Anzahl", x: 470, width: 60, key: "count" }
+    ];
+
+    this.drawTableHeader(columns);
+
+    typeMap.forEach((info, name) => {
+      this.checkSpace(16);
+      this.drawTableRow(columns, {
+        name,
+        category: info.category,
+        baitType: info.baitType,
+        substance: info.substance,
+        count: String(info.count)
+      });
+    });
+
+    this.y += 20;
+  }
+
+  // Fallen-Details
+  generateBoxDetails() {
+    const { boxes } = this.data;
+    if (boxes.length === 0) return;
+
+    this.newPage();
+    this.drawSectionTitle("Fallenübersicht - Details");
+
+    const columns = [
+      { label: "Nr.", x: PAGE.MARGIN_LEFT, width: 30, key: "number", maxChars: 4 },
+      { label: "QR-Code", x: 85, width: 70, key: "qrCode", maxChars: 12 },
+      { label: "Typ", x: 160, width: 80, key: "type", maxChars: 15 },
+      { label: "Standort", x: 245, width: 90, key: "location", maxChars: 18 },
+      { label: "Status", x: 340, width: 60, key: "status", maxChars: 12 },
+      { label: "Letzte Kontrolle", x: 405, width: 70, key: "lastScan", maxChars: 10 },
+      { label: "Nächste fällig", x: 480, width: 65, key: "nextDue", maxChars: 12 }
+    ];
+
+    this.drawTableHeader(columns);
+
+    for (const box of boxes) {
+      this.checkSpace(16);
+
+      // Standort bestimmen
+      let location = "-";
+      if (box.floor_plans?.name) {
+        location = box.floor_plans.name;
+        if (box.grid_position) location += ` (${box.grid_position})`;
+      } else if (box.lat && box.lng) {
+        location = `GPS: ${box.lat.toFixed(3)}, ${box.lng.toFixed(3)}`;
+      }
+
+      // Nächste Kontrolle
+      const interval = box.control_interval_days || 30;
+      const lastScan = box.last_scan ? new Date(box.last_scan) : null;
+      let nextDue = "-";
+      let overdueColor = null;
+
+      if (lastScan) {
+        const nextDate = new Date(lastScan.getTime() + interval * 86400000);
+        nextDue = formatDate(nextDate);
+        if (nextDate < new Date()) {
+          nextDue += " ⚠";
+          overdueColor = COLORS.danger;
+        }
+      }
+
+      // Status-Farbe
+      const statusInfo = STATUS[box.current_status] || STATUS.green;
+
+      // Zeile zeichnen
+      const doc = this.doc;
+      const rowY = this.y;
+
+      doc.fontSize(8).font("Helvetica");
+
+      // Nr.
+      doc.fillColor(COLORS.text).text(String(box.number || "-"), columns[0].x, rowY, { width: columns[0].width });
+      
+      // QR-Code
+      doc.text(truncate(box.qr_code, 12), columns[1].x, rowY, { width: columns[1].width });
+      
+      // Typ
+      doc.text(truncate(box.box_types?.name, 15), columns[2].x, rowY, { width: columns[2].width });
+      
+      // Standort
+      doc.text(truncate(location, 18), columns[3].x, rowY, { width: columns[3].width });
+      
+      // Status (farbig)
+      doc.fillColor(statusInfo.color).text(statusInfo.label, columns[4].x, rowY, { width: columns[4].width });
+      
+      // Letzte Kontrolle
+      doc.fillColor(COLORS.text).text(formatDate(box.last_scan), columns[5].x, rowY, { width: columns[5].width });
+      
+      // Nächste fällig
+      doc.fillColor(overdueColor || COLORS.text).text(nextDue, columns[6].x, rowY, { width: columns[6].width });
+
+      this.y += 14;
+    }
+
+    this.y += 20;
+  }
+
+  // Kontrollprotokoll
+  generateScans() {
+    const { scans, boxes } = this.data;
+    if (scans.length === 0) return;
+
+    this.newPage();
+    this.drawSectionTitle("Kontrollprotokoll");
+
+    const columns = [
+      { label: "Datum/Zeit", x: PAGE.MARGIN_LEFT, width: 85, key: "dateTime", maxChars: 16 },
+      { label: "Falle", x: 140, width: 35, key: "boxNum", maxChars: 5 },
+      { label: "Status", x: 180, width: 70, key: "status", maxChars: 12 },
+      { label: "Techniker", x: 255, width: 90, key: "technician", maxChars: 18 },
+      { label: "Befunde/Bemerkungen", x: 350, width: 195, key: "notes", maxChars: 40 }
+    ];
+
+    this.drawTableHeader(columns);
+
+    const maxScans = Math.min(scans.length, this.options.maxScans || 100);
+
+    for (let i = 0; i < maxScans; i++) {
+      const scan = scans[i];
+      this.checkSpace(14);
+
+      const box = boxes.find((b) => b.id === scan.box_id);
+      const statusInfo = STATUS[scan.status] || STATUS.green;
+      
+      const techName = scan.users
+        ? `${scan.users.first_name || ""} ${scan.users.last_name || ""}`.trim()
+        : "-";
+
+      // Bemerkungen zusammenfassen
+      const notes = [scan.findings, scan.notes, scan.corrective_action]
+        .filter(Boolean)
+        .join(", ") || "-";
+
+      const doc = this.doc;
+      const rowY = this.y;
+
+      doc.fontSize(8).font("Helvetica");
+
+      // Datum/Zeit
+      doc.fillColor(COLORS.text).text(formatDateTime(scan.scanned_at).substring(0, 16), columns[0].x, rowY, { width: columns[0].width });
+      
+      // Falle
+      doc.text(String(box?.number || scan.boxes?.number || "-"), columns[1].x, rowY, { width: columns[1].width });
+      
+      // Status (farbig)
+      doc.fillColor(statusInfo.color).text(statusInfo.label, columns[2].x, rowY, { width: columns[2].width });
+      
+      // Techniker
+      doc.fillColor(COLORS.text).text(truncate(techName, 18), columns[3].x, rowY, { width: columns[3].width });
+      
+      // Bemerkungen
+      doc.text(truncate(notes, 40), columns[4].x, rowY, { width: columns[4].width });
+
+      this.y += 13;
+    }
+
+    if (scans.length > maxScans) {
+      this.y += 10;
+      this.doc.fontSize(9)
+        .fillColor(COLORS.textMuted)
+        .font("Helvetica-Oblique")
+        .text(`... und ${scans.length - maxScans} weitere Kontrollen`, PAGE.MARGIN_LEFT, this.y);
+    }
+
+    this.y += 20;
+  }
+
+  // Techniker-Übersicht
+  generateTechnicians() {
+    const { technicians, scans } = this.data;
+    if (technicians.length === 0) return;
+
+    this.checkSpace(150);
+    this.drawSectionTitle("Techniker-Übersicht");
+
+    const columns = [
+      { label: "Techniker", x: PAGE.MARGIN_LEFT, width: 150, key: "name" },
+      { label: "Kontrollen", x: 210, width: 60, key: "count" },
+      { label: "Letzte Kontrolle", x: 280, width: 100, key: "lastScan" },
+      { label: "OK", x: 390, width: 50, key: "green" },
+      { label: "Auffällig", x: 445, width: 50, key: "yellow" },
+      { label: "Befall", x: 500, width: 45, key: "red" }
+    ];
+
+    this.drawTableHeader(columns);
+
+    for (const tech of technicians) {
+      this.checkSpace(18);
+
+      const techScans = scans.filter((s) => s.user_id === tech.id);
+      const name = `${tech.first_name || ""} ${tech.last_name || ""}`.trim() || tech.email;
+      const lastScan = techScans[0]?.scanned_at;
+      
+      const greenCount = techScans.filter((s) => s.status === "green").length;
+      const yellowCount = techScans.filter((s) => ["yellow", "orange"].includes(s.status)).length;
+      const redCount = techScans.filter((s) => s.status === "red").length;
+
+      const doc = this.doc;
+      const rowY = this.y;
+
+      doc.fontSize(9).font("Helvetica");
+
+      doc.fillColor(COLORS.text).text(truncate(name, 25), columns[0].x, rowY, { width: columns[0].width });
+      doc.text(String(techScans.length), columns[1].x, rowY, { width: columns[1].width });
+      doc.text(formatDate(lastScan), columns[2].x, rowY, { width: columns[2].width });
+      doc.fillColor(COLORS.success).text(String(greenCount), columns[3].x, rowY, { width: columns[3].width });
+      doc.fillColor(COLORS.warning).text(String(yellowCount), columns[4].x, rowY, { width: columns[4].width });
+      doc.fillColor(COLORS.danger).text(String(redCount), columns[5].x, rowY, { width: columns[5].width });
+
+      this.y += 16;
+    }
+
+    this.y += 20;
+  }
+
+  // Rechtliche Hinweise & Unterschriften
+  generateLegalSection() {
+    this.newPage();
+    this.drawSectionTitle("Rechtliche Hinweise & Zertifizierung");
+
+    const doc = this.doc;
+
+    const sections = [
+      {
+        text: "Dieser Bericht wurde automatisch durch das TrapMap Schädlingsmonitoring-System erstellt und dient als Nachweis für die ordnungsgemäße Durchführung von Schädlingskontrollen gemäß den geltenden Hygienevorschriften."
+      },
+      {
+        title: "HACCP-Konformität:",
+        text: "Dieser Bericht unterstützt die Dokumentationsanforderungen nach HACCP (Hazard Analysis and Critical Control Points) und kann als Nachweis bei Audits und behördlichen Kontrollen verwendet werden."
+      },
+      {
+        title: "IFS Food / BRC:",
+        text: "Die dokumentierten Kontrollen entsprechen den Anforderungen der International Featured Standards (IFS) sowie des British Retail Consortium (BRC) Standards für Schädlingsbekämpfung."
+      },
+      {
+        title: "Datenintegrität:",
+        text: "Alle Daten werden manipulationssicher in der TrapMap-Datenbank gespeichert. Jede Änderung wird protokolliert und ist nachvollziehbar."
+      }
+    ];
+
+    sections.forEach((section) => {
+      this.checkSpace(60);
+
+      if (section.title) {
+        doc.fontSize(10)
+          .font("Helvetica-Bold")
+          .fillColor(COLORS.text)
+          .text(section.title, PAGE.MARGIN_LEFT, this.y);
+        this.y += 15;
+      }
+
+      doc.fontSize(10)
+        .font("Helvetica")
+        .fillColor(COLORS.textLight)
+        .text(section.text, PAGE.MARGIN_LEFT, this.y, {
+          width: CONTENT.WIDTH,
+          lineGap: 3
+        });
+
+      this.y += doc.heightOfString(section.text, { width: CONTENT.WIDTH }) + 20;
+    });
+
+    // Unterschriftenfelder
+    this.y += 30;
+    this.checkSpace(100);
+
+    doc.fontSize(11)
+      .font("Helvetica-Bold")
+      .fillColor(COLORS.text)
+      .text("Unterschriften:", PAGE.MARGIN_LEFT, this.y);
+    this.y += 35;
+
+    // Ersteller
+    doc.moveTo(PAGE.MARGIN_LEFT, this.y + 30)
+      .lineTo(PAGE.MARGIN_LEFT + 180, this.y + 30)
+      .strokeColor(COLORS.text)
+      .lineWidth(0.5)
+      .stroke();
+
+    doc.fontSize(9)
+      .font("Helvetica")
+      .fillColor(COLORS.textLight)
+      .text("Erstellt durch", PAGE.MARGIN_LEFT, this.y + 35)
+      .text("Datum: ________________", PAGE.MARGIN_LEFT, this.y + 48);
+
+    // Verantwortlicher
+    doc.moveTo(310, this.y + 30)
+      .lineTo(490, this.y + 30)
+      .stroke();
+
+    doc.text("Verantwortlicher Betrieb", 310, this.y + 35)
+      .text("Datum: ________________", 310, this.y + 48);
+  }
+
+  // ========================================
+  // HAUPT-GENERATOR
+  // ========================================
+  async generate() {
+    // Org-Logo laden falls URL
+    if (this.data.organisation?.logo_url) {
+      this.orgLogoBuffer = await loadLogoFromUrl(this.data.organisation.logo_url);
+    }
+
+    return new Promise((resolve, reject) => {
+      this.doc = new PDFDocument({
+        size: "A4",
+        margins: {
+          top: PAGE.MARGIN_TOP,
+          bottom: PAGE.MARGIN_BOTTOM,
+          left: PAGE.MARGIN_LEFT,
+          right: PAGE.MARGIN_RIGHT
+        },
+        bufferPages: true,
+        info: {
+          Title: `Audit-Report: ${this.data.object?.name || "TrapMap"}`,
+          Author: this.data.organisation?.name || "TrapMap",
+          Subject: "Schädlingsmonitoring Audit-Report",
+          Creator: "TrapMap PDF Generator v2.0"
+        }
+      });
+
+      const chunks = [];
+      this.doc.on("data", (chunk) => chunks.push(chunk));
+      this.doc.on("end", () => resolve(Buffer.concat(chunks)));
+      this.doc.on("error", reject);
+
+      try {
+        // Seiten generieren - nur die wirklich benötigten
+        this.generateTitlePage();
+        
+        // Nur Sektionen mit Daten
+        if (this.data.boxes?.length > 0 || this.data.scans?.length > 0) {
+          this.generateSummary();
+        }
+        
+        if (this.data.boxes?.length > 0) {
+          this.generateBoxTypes();
+          this.generateBoxDetails();
+        }
+        
+        if (this.data.scans?.length > 0) {
+          this.generateScans();
+          this.generateTechnicians();
+        }
+        
+        // Rechtlicher Teil immer
+        this.generateLegalSection();
+
+        this.doc.end();
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+}
+
+// ============================================
+// HAUPTFUNKTION
+// ============================================
+async function generateAuditReport(objectId, organisationId, options = {}) {
+  console.log("🚀 Generating Audit Report...");
+  console.log("   Object ID:", objectId);
+  console.log("   Organisation ID:", organisationId);
+
+  const data = await loadReportData(objectId, organisationId, options);
+  
+  console.log("📊 Data loaded:");
+  console.log("   Boxes:", data.boxes.length);
+  console.log("   Scans:", data.scans.length);
+  console.log("   Technicians:", data.technicians.length);
+
+  const generator = new AuditReportPDF(data, options);
+  const pdfBuffer = await generator.generate();
+
+  console.log("✅ PDF generated:", pdfBuffer.length, "bytes");
+  
+  return pdfBuffer;
+}
+
+// ============================================
+// EXPORTS
+// ============================================
+module.exports = {
+  generateAuditReport,
+  loadReportData
+};

@@ -1,7 +1,7 @@
 // ============================================
-// QR SERVICE - KOMPLETT (FIXED)
+// QR SERVICE - KOMPLETT
 // Bei Code-Generierung wird automatisch Box erstellt!
-// FIX: checkCode lädt alle nötigen Felder für Scanner
+// returnToPool mit vollständigem Reset
 // ============================================
 
 const { supabase } = require("../config/supabase");
@@ -86,31 +86,15 @@ exports.generateCodes = async (organisation_id, count) => {
 };
 
 // ============================================
-// CHECK CODE - FIXED!
-// Lädt alle Felder die der Scanner braucht
+// CHECK CODE
 // ============================================
 exports.checkCode = async (code) => {
   const { data, error } = await supabase
     .from("qr_codes")
     .select(`
-      id, organisation_id, box_id, assigned, sequence_number,
+      id, organisation_id, box_id, assigned,
       boxes:box_id (
-        id, 
-        number, 
-        qr_code,
-        status, 
-        position_type, 
-        object_id, 
-        box_type_id, 
-        current_status,
-        lat,
-        lng,
-        floor_plan_id,
-        pos_x,
-        pos_y,
-        grid_position,
-        notes,
-        control_interval_days,
+        id, number, status, position_type, object_id, box_type_id, current_status,
         objects:object_id (id, name),
         box_types:box_type_id (id, name)
       )
@@ -124,43 +108,36 @@ exports.checkCode = async (code) => {
 
 // ============================================
 // GET CODES BY ORGANISATION
-// FIX: Sortierung nach sequence_number AUFSTEIGEND (kleinste zuerst)
 // ============================================
 exports.getCodesByOrganisation = async (organisation_id) => {
   const { data, error } = await supabase
     .from("qr_codes")
     .select(`
-      id, box_id, assigned, created_at, sequence_number,
+      id, box_id, assigned, created_at,
       boxes:box_id (
         id, number, status, position_type, object_id, box_type_id, current_status,
-        lat, lng, floor_plan_id, pos_x, pos_y, grid_position,
         objects:object_id (id, name),
         box_types:box_type_id (id, name)
       )
     `)
     .eq("organisation_id", parseInt(organisation_id))
-    .order("sequence_number", { ascending: true, nullsFirst: false });
+    .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
-  
-  // Debug logging
-  console.log(`📦 getCodesByOrganisation: ${data?.length || 0} Codes geladen für org ${organisation_id}`);
-  
   return data || [];
 };
 
 // ============================================
 // GET AVAILABLE (Pool-Boxen)
-// FIX: Sortierung nach number AUFSTEIGEND
 // ============================================
 exports.getAvailableCodes = async (organisation_id) => {
   const { data, error } = await supabase
     .from("boxes")
-    .select("id, qr_code, number, status, created_at")
+    .select("id, qr_code, status, created_at")
     .eq("organisation_id", parseInt(organisation_id))
     .eq("status", "pool")
     .eq("active", true)
-    .order("number", { ascending: true, nullsFirst: false });
+    .order("created_at", { ascending: true });
 
   if (error) throw new Error(error.message);
   return data || [];
@@ -199,7 +176,6 @@ exports.assignToObject = async (box_id, object_id, organisation_id) => {
     .update({
       object_id: parseInt(object_id),
       status: "assigned",
-      object_assigned_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     })
     .eq("id", parseInt(box_id))
@@ -210,33 +186,58 @@ exports.assignToObject = async (box_id, object_id, organisation_id) => {
 };
 
 // ============================================
-// RETURN TO POOL
+// RETURN TO POOL - VOLLSTÄNDIGER RESET!
+// Box wird zurückgesetzt wie frisch aus QR-Order
 // ============================================
 exports.returnToPool = async (box_id, organisation_id) => {
   const { error } = await supabase
     .from("boxes")
     .update({
+      // Objekt-Zuweisung entfernen
       object_id: null,
+      
+      // Status zurücksetzen
       status: "pool",
       position_type: "none",
+      current_status: "green",  // Frischer Status!
+      
+      // Typ entfernen
+      box_type_id: null,
+      
+      // GPS-Position löschen
       lat: null,
       lng: null,
+      
+      // Lageplan-Position löschen
       floor_plan_id: null,
       pos_x: null,
       pos_y: null,
       grid_position: null,
-      object_assigned_at: null,
+      
+      // Notizen löschen
+      notes: null,
+      
+      // Intervall zurücksetzen
+      control_interval_days: null,
+      
+      // Scan-Historie zurücksetzen (Box wie nie benutzt)
+      last_scan: null,
+      
+      // Timestamp
       updated_at: new Date().toISOString()
     })
     .eq("id", parseInt(box_id))
     .eq("organisation_id", parseInt(organisation_id));
 
   if (error) throw new Error(error.message);
+  
+  console.log(`📦 Box ${box_id} vollständig zurückgesetzt und ins Lager verschoben`);
   return { success: true };
 };
 
 // ============================================
 // MOVE TO OTHER OBJECT
+// Position wird zurückgesetzt, aber nicht alles
 // ============================================
 exports.moveToObject = async (box_id, new_object_id, organisation_id) => {
   const { error } = await supabase
@@ -251,7 +252,6 @@ exports.moveToObject = async (box_id, new_object_id, organisation_id) => {
       pos_x: null,
       pos_y: null,
       grid_position: null,
-      object_assigned_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     })
     .eq("id", parseInt(box_id))

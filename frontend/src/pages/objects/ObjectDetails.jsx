@@ -4,7 +4,7 @@
    ============================================================ */
 
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import { 
   ArrowLeft, Map, Package, Info, Settings, MapPin, Phone, User, 
   FileText, Calendar, CheckCircle, Clock, ChevronRight, Edit, Trash2,
@@ -17,6 +17,7 @@ const API = import.meta.env.VITE_API_URL;
 export default function ObjectDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const token = localStorage.getItem("trapmap_token");
 
   const [objectData, setObjectData] = useState(null);
@@ -27,6 +28,16 @@ export default function ObjectDetails() {
   
   // Edit Dialog
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+
+  // ============================================
+  // URL Parameter verarbeiten
+  // ============================================
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && ['overview', 'layouts', 'boxes', 'gps'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   // ============================================
   // Load Data
@@ -153,7 +164,7 @@ export default function ObjectDetails() {
       </div>
 
       {/* Tab Content */}
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
         
         {/* ============================================
             UEBERSICHT TAB
@@ -221,7 +232,7 @@ export default function ObjectDetails() {
               </button>
               <button
                 onClick={() => setActiveTab("boxes")}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition"
+                className="flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg transition"
               >
                 <Package className="w-4 h-4" />
                 Boxen anzeigen
@@ -230,7 +241,7 @@ export default function ObjectDetails() {
               {objectData.lat && objectData.lng && (
                 <button
                   onClick={handleGoToMap}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition"
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg transition"
                 >
                   <MapPin className="w-4 h-4" />
                   Auf Karte zeigen
@@ -278,7 +289,11 @@ export default function ObjectDetails() {
             LAGEPLAENE TAB
             ============================================ */}
         {activeTab === "layouts" && (
-          <FloorPlanEditor objectId={id} objectName={objectData.name} />
+          <FloorPlanEditor 
+            objectId={id} 
+            objectName={objectData.name} 
+            openBoxIdProp={searchParams.get('openBox')} 
+          />
         )}
 
         {/* ============================================
@@ -344,7 +359,7 @@ export default function ObjectDetails() {
             <div className="space-y-4">
               <button
                 onClick={handleEditObject}
-                className="flex items-center gap-2 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition w-full md:w-auto"
+                className="flex items-center gap-2 px-4 py-3 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg transition w-full md:w-auto"
               >
                 <Settings className="w-5 h-5" />
                 Objekt bearbeiten
@@ -395,7 +410,7 @@ function TabButton({ active, onClick, icon: Icon, label }) {
       className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
         active
           ? "bg-blue-600 text-white"
-          : "bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700"
+          : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-700"
       }`}
     >
       <Icon className="w-4 h-4" />
@@ -516,7 +531,7 @@ function ObjectEditDialog({ object, onClose, onSave }) {
       className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-gray-800 rounded-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="p-4 border-b border-gray-700 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-white">Objekt bearbeiten</h2>

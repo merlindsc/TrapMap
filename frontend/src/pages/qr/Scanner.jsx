@@ -665,7 +665,7 @@ export default function Scanner() {
   // RENDER
   // ============================================
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
+    <div className="min-h-screen bg-black dark:bg-gray-950 text-white">
 
       {/* Success Toast */}
       {showSuccess && (
@@ -677,7 +677,7 @@ export default function Scanner() {
 
       {/* ========== GPS WARNING ========== */}
       {showGPSWarning && currentBox && (
-        <div className="fixed inset-0 z-[100] bg-[#0a0a0a] overflow-auto">
+        <div className="fixed inset-0 z-[100] bg-black dark:bg-gray-950 overflow-auto">
           <div className="flex items-center justify-between p-4 bg-[#111] border-b border-white/10">
             <button onClick={resetScanner} className="p-2 text-gray-400 hover:text-white">
               <X size={24} />
@@ -737,7 +737,7 @@ export default function Scanner() {
 
       {/* ========== BOX SCAN DIALOG ========== */}
       {showScanDialog && currentBox && (
-        <div className="fixed inset-0 z-[100] bg-[#0a0a0a]">
+        <div className="fixed inset-0 z-[100] bg-black dark:bg-gray-950">
           <BoxScanDialog
             box={currentBox}
             onClose={resetScanner}
@@ -759,7 +759,7 @@ export default function Scanner() {
 
       {/* ========== ERSTEINRICHTUNG ========== */}
       {showFirstSetup && currentBox && (
-        <div className="fixed inset-0 z-[100] bg-[#0a0a0a]">
+        <div className="fixed inset-0 z-[100] bg-black dark:bg-gray-950">
           <BoxEditDialog
             box={currentBox}
             boxTypes={boxTypes}
@@ -772,7 +772,7 @@ export default function Scanner() {
 
       {/* ========== PLATZIERUNGSAUSWAHL ========== */}
       {showPlacementChoice && pendingPlacement && (
-        <div className="fixed inset-0 z-[100] bg-[#0a0a0a] overflow-auto">
+        <div className="fixed inset-0 z-[100] bg-black dark:bg-gray-950 overflow-auto">
           <div className="flex items-center justify-between p-4 bg-[#111] border-b border-white/10">
             <button onClick={resetScanner} className="p-2 text-gray-400 hover:text-white">
               <X size={24} />
@@ -794,7 +794,7 @@ export default function Scanner() {
               <button
                 onClick={handleChooseGPS}
                 disabled={gpsLoading}
-                className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-green-500/50 rounded-xl p-5 text-left"
+                className="w-full bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border border-gray-300 dark:border-white/10 hover:border-green-500 dark:hover:border-green-500/50 rounded-xl p-5 text-left"
               >
                 <div className="flex items-center gap-4">
                   <div className="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center">
@@ -815,7 +815,7 @@ export default function Scanner() {
               {objectFloorplans.length > 0 && (
                 <button
                   onClick={handleChooseFloorplan}
-                  className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-blue-500/50 rounded-xl p-5 text-left"
+                  className="w-full bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border border-gray-300 dark:border-white/10 hover:border-blue-500 dark:hover:border-blue-500/50 rounded-xl p-5 text-left"
                 >
                   <div className="flex items-center gap-4">
                     <div className="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center">
