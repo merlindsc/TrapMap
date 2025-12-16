@@ -21,7 +21,7 @@ import L from "leaflet";
 import { 
   Plus, Layers3, X, Search, MapPin, Building2, 
   ChevronLeft, ChevronRight, Map, LayoutGrid, Navigation,
-  ChevronDown, Clock, User, Package, ArrowRight, List
+  ChevronDown, Clock, User, Package, ArrowRight, List, Archive
 } from "lucide-react";
 import "./Maps.css";
 
@@ -195,7 +195,7 @@ function CollapsibleBoxSection({ title, icon, count, variant = "default", defaul
 /* ============================================================
    BOX LIST ITEM - Mit display_number, QR-Badge und FlyTo
    ============================================================ */
-function BoxListItem({ box, onClick, onFlyTo, showFlyTo = false, isFloorplan = false }) {
+function BoxListItem({ box, onClick, onFlyTo, onReturnToStorage, showFlyTo = false, isFloorplan = false }) {
   const formatLastScan = (lastScan) => {
     if (!lastScan) return "Nie";
     const date = new Date(lastScan);
@@ -237,6 +237,18 @@ function BoxListItem({ box, onClick, onFlyTo, showFlyTo = false, isFloorplan = f
         </div>
       </div>
       <div className="box-item-right">
+        {onReturnToStorage && (
+          <button 
+            className="return-storage-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onReturnToStorage(box);
+            }}
+            title="Zurück ins Lager"
+          >
+            <Archive size={14} />
+          </button>
+        )}
         {canFlyTo && (
           <button 
             className="flyto-btn"
@@ -290,6 +302,9 @@ export default function Maps() {
   const [objectEditDialogOpen, setObjectEditDialogOpen] = useState(false);
   const [floorplanDialogOpen, setFloorplanDialogOpen] = useState(false);
   const [pendingFloorplanBox, setPendingFloorplanBox] = useState(null);
+  const [returnStorageDialogOpen, setReturnStorageDialogOpen] = useState(false);
+  const [boxToReturn, setBoxToReturn] = useState(null);
+  const [returningBox, setReturningBox] = useState(false);
 
   // Mobile Bottom Sheet State
   const [isMobile, setIsMobile] = useState(isMobileDevice());
@@ -792,6 +807,53 @@ export default function Maps() {
     
     if (isMobile) {
       setSheetState('peek');
+    }
+  };
+
+  /* ============================================================
+     RETURN BOX TO STORAGE HANDLER
+     ============================================================ */
+  const handleReturnToStorage = (box) => {
+    setBoxToReturn(box);
+    setReturnStorageDialogOpen(true);
+  };
+
+  const confirmReturnToStorage = async () => {
+    if (!boxToReturn) return;
+    
+    setReturningBox(true);
+    try {
+      const response = await fetch(`${API}/boxes/${boxToReturn.id}/return-to-pool`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        // Success - reload boxes
+        if (selectedObject) {
+          await loadBoxes(selectedObject.id);
+        }
+        await loadPoolBoxes();
+        
+        setReturnStorageDialogOpen(false);
+        setBoxToReturn(null);
+        
+        // Show success notification
+        setRequestMessage({ type: "success", text: `Box #${boxToReturn.display_number || boxToReturn.number} zurück ins Lager` });
+        setTimeout(() => setRequestMessage(null), 3000);
+      } else {
+        const error = await response.json();
+        throw new Error(error.error || 'Fehler beim Zurückgeben');
+      }
+    } catch (err) {
+      console.error('Return to storage error:', err);
+      setRequestMessage({ type: "error", text: err.message || 'Fehler beim Zurückgeben' });
+      setTimeout(() => setRequestMessage(null), 3000);
+    } finally {
+      setReturningBox(false);
     }
   };
 
@@ -1438,6 +1500,7 @@ export default function Maps() {
                           box={box} 
                           onClick={() => handleBoxClick(box)}
                           onFlyTo={handleFlyToBox}
+                          onReturnToStorage={canEdit ? handleReturnToStorage : undefined}
                           showFlyTo={true}
                         />
                       ))
@@ -1460,6 +1523,7 @@ export default function Maps() {
                           key={box.id} 
                           box={box} 
                           onClick={() => handleBoxClick(box)}
+                          onReturnToStorage={canEdit ? handleReturnToStorage : undefined}
                           isFloorplan={true}
                           showFlyTo={false}
                         />
@@ -1484,6 +1548,72 @@ export default function Maps() {
       {/* ============================================================
           DIALOGS
           ============================================================ */}
+      {returnStorageDialogOpen && boxToReturn && (
+        <div className="dialog-overlay" onClick={() => !returningBox && setReturnStorageDialogOpen(false)}>
+          <div className="dialog-compact" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-icon" style={{ background: 'rgba(239, 68, 68, 0.15)' }}>
+              <Archive size={32} style={{ color: '#ef4444' }} />
+            </div>
+            <h3>Box zurück ins Lager?</h3>
+            <p>
+              Möchtest du <strong>Box #{boxToReturn.display_number || boxToReturn.number}</strong> 
+              {boxToReturn.box_type_name && <> ({boxToReturn.box_type_name})</>} 
+              wirklich zurück ins Lager verschieben?
+            </p>
+            {(boxToReturn.lat || boxToReturn.lng || isFloorplanBox(boxToReturn)) && (
+              <div style={{ 
+                marginTop: 12, 
+                padding: '8px 12px', 
+                background: 'rgba(251, 191, 36, 0.15)', 
+                borderRadius: 6,
+                border: '1px solid rgba(251, 191, 36, 0.3)',
+                fontSize: 13,
+                color: '#fbbf24'
+              }}>
+                ⚠️ Die Box wird von der {isFloorplanBox(boxToReturn) ? 'Lageplan' : 'Karte'}-Position entfernt
+              </div>
+            )}
+            <div className="dialog-buttons">
+              <button 
+                className="btn-secondary" 
+                onClick={() => setReturnStorageDialogOpen(false)}
+                disabled={returningBox}
+              >
+                Abbrechen
+              </button>
+              <button 
+                className="btn-primary" 
+                onClick={confirmReturnToStorage}
+                disabled={returningBox}
+                style={{ 
+                  background: '#ef4444',
+                  opacity: returningBox ? 0.6 : 1
+                }}
+              >
+                {returningBox ? (
+                  <>
+                    <div style={{ 
+                      width: 14, 
+                      height: 14, 
+                      border: '2px solid white', 
+                      borderTopColor: 'transparent',
+                      borderRadius: '50%', 
+                      animation: 'spin 1s linear infinite'
+                    }} />
+                    Wird verschoben...
+                  </>
+                ) : (
+                  <>
+                    <Archive size={16} />
+                    Ins Lager
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {floorplanDialogOpen && (
         <div className="dialog-overlay" onClick={() => setFloorplanDialogOpen(false)}>
           <div className="dialog-compact" onClick={(e) => e.stopPropagation()}>
@@ -1511,6 +1641,11 @@ export default function Maps() {
           onClose={() => { setControlDialogOpen(false); setSelectedBox(null); }}
           onEdit={() => { setIsFirstSetup(false); setBoxEditDialogOpen(true); setControlDialogOpen(false); }}
           onSave={() => { setControlDialogOpen(false); setSelectedBox(null); if (selectedObject) loadBoxes(selectedObject.id); }}
+          onReturnToStorage={canEdit ? (box) => {
+            setControlDialogOpen(false);
+            setSelectedBox(null);
+            handleReturnToStorage(box);
+          } : undefined}
           onAdjustPosition={(box) => { 
             setControlDialogOpen(false); 
             // NUR für GPS-Boxen!

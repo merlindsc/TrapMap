@@ -9,7 +9,7 @@
    ============================================================ */
 
 import { useState, useEffect } from "react";
-import { X, Save, Camera, Clock, CheckCircle, AlertCircle, Edit3, MapPin, Navigation, Maximize2, Hash } from "lucide-react";
+import { X, Save, Camera, Clock, CheckCircle, AlertCircle, Edit3, MapPin, Navigation, Maximize2, Hash, Archive } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -177,7 +177,8 @@ export default function BoxScanDialog({
   onEdit,
   onAdjustPosition,
   onSetGPS,
-  onShowDetails
+  onShowDetails,
+  onReturnToStorage   // NEU: Callback für "Zurück ins Lager"
 }) {
   const token = localStorage.getItem("trapmap_token");
   
@@ -853,6 +854,43 @@ export default function BoxScanDialog({
               }}>
                 <Save size={14}/> {loading ? "Speichern..." : "Kontrolle speichern"}
               </button>
+              
+              {/* Return to Storage Button */}
+              {onReturnToStorage && box?.object_id && (
+                <button 
+                  onClick={() => onReturnToStorage(box)} 
+                  disabled={loading}
+                  style={{
+                    width: "100%", 
+                    padding: "11px", 
+                    borderRadius: 6, 
+                    border: "1px solid #30363d",
+                    background: "transparent", 
+                    color: "#ef4444",
+                    fontSize: 12, 
+                    fontWeight: 500, 
+                    cursor: loading ? "not-allowed" : "pointer",
+                    display: "flex", 
+                    alignItems: "center", 
+                    justifyContent: "center", 
+                    gap: 6,
+                    marginTop: 8,
+                    transition: "all 0.2s"
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!loading) {
+                      e.currentTarget.style.background = "rgba(239, 68, 68, 0.15)";
+                      e.currentTarget.style.borderColor = "#ef4444";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.borderColor = "#30363d";
+                  }}
+                >
+                  <Archive size={14}/> Zurück ins Lager
+                </button>
+              )}
             </div>
           )}
         </div>

@@ -902,6 +902,32 @@
   background: rgba(59, 130, 246, 0.2);
 }
 
+.return-storage-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #8b949e;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s;
+  padding: 4px;
+}
+
+.box-item-detailed:hover .return-storage-btn {
+  opacity: 1;
+}
+
+.return-storage-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+}
+
 .status-indicator {
   width: 8px;
   height: 8px;
