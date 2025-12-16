@@ -45,7 +45,7 @@
 
 /* Logo Bild */
 .sidebar-logo-img {
-  height: 110px;
+  height: 77px;
   width: auto;
   object-fit: contain;
 }
@@ -285,7 +285,7 @@
   }
   
   .sidebar-logo-img {
-    height: 188px;
+    height: 132px;
   }
   
   .sidebar-nav-item {

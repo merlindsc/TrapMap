@@ -133,7 +133,7 @@ body.sidebar-open {
 
 /* Mobile Header Logo */
 .mobile-header-logo {
-  height: 88px;
+  height: 176px;
   width: auto;
   object-fit: contain;
   filter: brightness(1.1) contrast(1.1) saturate(1.1);
@@ -370,7 +370,7 @@ body.sidebar-open {
   }
   
   .mobile-header-logo {
-    height: 36px;
+    height: 72px;
   }
 }
 
@@ -380,7 +380,7 @@ body.sidebar-open {
   .btn { padding: 8px 12px; font-size: 13px; }
   
   .mobile-header-logo {
-    height: 32px;
+    height: 64px;
   }
 }
 
