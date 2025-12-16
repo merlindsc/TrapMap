@@ -245,26 +245,6 @@ function BoxListItem({ box, onClick, onFlyTo, onReturnToStorage, showFlyTo = fal
               onReturnToStorage(box);
             }}
             title="Zurück ins Lager"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#8b949e',
-              cursor: 'pointer',
-              padding: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: '4px',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
-              e.currentTarget.style.color = '#ef4444';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
-              e.currentTarget.style.color = '#8b949e';
-            }}
           >
             <Archive size={14} />
           </button>
@@ -1580,7 +1560,7 @@ export default function Maps() {
               {boxToReturn.box_type_name && <> ({boxToReturn.box_type_name})</>} 
               wirklich zurück ins Lager verschieben?
             </p>
-            {(boxToReturn.lat || boxToReturn.floor_plan_id) && (
+            {(boxToReturn.lat || boxToReturn.lng || isFloorplanBox(boxToReturn)) && (
               <div style={{ 
                 marginTop: 12, 
                 padding: '8px 12px', 
@@ -1590,7 +1570,7 @@ export default function Maps() {
                 fontSize: 13,
                 color: '#fbbf24'
               }}>
-                ⚠️ Die Box wird von der {boxToReturn.floor_plan_id ? 'Lageplan' : 'Karte'}-Position entfernt
+                ⚠️ Die Box wird von der {isFloorplanBox(boxToReturn) ? 'Lageplan' : 'Karte'}-Position entfernt
               </div>
             )}
             <div className="dialog-buttons">
