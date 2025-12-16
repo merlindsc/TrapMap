@@ -43,7 +43,7 @@ import {
 // Logo - optional, mit Fallback
 let logoImg = null;
 try {
-  logoImg = new URL("../../assets/trapmap-logo.png", import.meta.url).href;
+  logoImg = new URL("../../assets/trapmap-logo-200.png", import.meta.url).href;
 } catch (e) {
   // Logo nicht vorhanden
 }

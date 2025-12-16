@@ -12,7 +12,7 @@ import { Bars3Icon, SunIcon, MoonIcon } from "@heroicons/react/24/outline";
 import { LogOut } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import "./DashboardLayout.css";
-import trapMapLogo from "../../assets/trapmap-logo-150.png";
+import trapMapLogo from "../../assets/trapmap-logo-200.png";
 
 // ============================================================
 // THEME CONTEXT

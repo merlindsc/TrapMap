@@ -6,7 +6,7 @@
 import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { QrCode, Mail, Lock, LogIn, Loader, AlertCircle, Building2 } from "lucide-react";
-import trapMapLogo from "../assets/trapmap-logo-150.png";
+import trapMapLogo from "../assets/trapmap-logo-200.png";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -211,7 +211,11 @@ const styles = {
   },
   logo: {
     height: "80px",
-    width: "auto"
+    width: "auto",
+    filter: "brightness(1.1) contrast(1.1) saturate(1.1)",
+    imageRendering: "-webkit-optimize-contrast",
+    WebkitBackfaceVisibility: "hidden",
+    backfaceVisibility: "hidden"
   },
   badge: {
     display: "inline-flex",

@@ -8,7 +8,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from './DashboardLayout';
 import './Sidebar.css';
-import trapMapLogo from '../../assets/trapmap-logo-150.png';
+import trapMapLogo from '../../assets/trapmap-logo-200.png';
 
 import {
   HomeIcon,

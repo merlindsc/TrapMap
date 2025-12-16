@@ -17,7 +17,7 @@ import {
   ChevronRight, Camera, X, Eye, EyeOff, Lock, Save
 } from "lucide-react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
-import trapMapLogo from "../assets/trapmap-logo-150.png";
+import trapMapLogo from "../assets/trapmap-logo-200.png";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -726,7 +726,11 @@ const styles = {
   },
   headerLogo: {
     height: 44,
-    width: "auto"
+    width: "auto",
+    filter: "brightness(1.1) contrast(1.1) saturate(1.1)",
+    imageRendering: "-webkit-optimize-contrast",
+    WebkitBackfaceVisibility: "hidden",
+    backfaceVisibility: "hidden"
   },
   subtitle: {
     margin: 0,

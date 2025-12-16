@@ -224,3 +224,16 @@ body,
 .text-muted { color: var(--text-muted); }
 
 .border-theme { border-color: var(--border-color); }
+
+/* ============================================================
+   LOGO OPTIMIERUNGEN - SCHÄRFERE DARSTELLUNG
+   ============================================================ */
+.logo-sharp {
+  filter: brightness(1.1) contrast(1.1) saturate(1.1);
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}

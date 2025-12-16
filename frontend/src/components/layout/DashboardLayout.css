@@ -136,6 +136,11 @@ body.sidebar-open {
   height: 88px;
   width: auto;
   object-fit: contain;
+  filter: brightness(1.1) contrast(1.1) saturate(1.1);
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 .mobile-logo {
@@ -210,6 +215,11 @@ body.sidebar-open {
   height: 94px;
   width: auto;
   object-fit: contain;
+  filter: brightness(1.1) contrast(1.1) saturate(1.1);
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 .navbar-title {
