@@ -125,7 +125,8 @@ const createBoxIcon = (displayNumber, shortQr, status = "green") => {
     `,
     className: "box-marker-wrapper",
     iconSize: [40, 50],
-    iconAnchor: [20, 45],
+    iconAnchor: [20, 25], // Zentriert auf den Kreis statt auf die Spitze
+    popupAnchor: [0, -25],
   });
 };
 
@@ -133,12 +134,22 @@ const createBoxIcon = (displayNumber, shortQr, status = "green") => {
    BOX MARKER - Mit display_number und shortQr
    ============================================================ */
 function BoxMarker({ box, onClick }) {
+  // Validierung der Koordinaten - prüft null/undefined aber erlaubt 0
+  if (box.lat == null || box.lng == null || isNaN(box.lat) || isNaN(box.lng)) {
+    console.warn('Invalid coordinates for box:', box.id, box.lat, box.lng);
+    return null;
+  }
+
   const displayNum = box.display_number || '?';
   const shortQr = getShortQr(box);
   
+  // Koordinaten als Zahlen konvertieren
+  const lat = parseFloat(box.lat);
+  const lng = parseFloat(box.lng);
+  
   return (
     <Marker
-      position={[box.lat, box.lng]}
+      position={[lat, lng]}
       icon={createBoxIcon(displayNum, shortQr, box.current_status || box.status)}
       eventHandlers={{ click: () => onClick(box) }}
     />
@@ -730,8 +741,9 @@ export default function Maps() {
     // Sortieren nach display_number
     const sortByDisplayNumber = (a, b) => (a.display_number || 999) - (b.display_number || 999);
 
+    // Alle Boxen mit GPS-Koordinaten auf die Karte
     const mapBoxes = boxes
-      .filter(b => isGpsBox(b))
+      .filter(b => b?.lat != null && b?.lng != null)
       .sort(sortByDisplayNumber);
 
     const floorplanBoxes = boxes
@@ -739,7 +751,11 @@ export default function Maps() {
       .sort(sortByDisplayNumber);
 
     const unplacedBoxes = boxes
-      .filter(b => !isGpsBox(b) && !isFloorplanBox(b))
+      .filter(b => {
+        const hasCoords = b?.lat != null && b?.lng != null;
+        const isOnFloorplan = isFloorplanBox(b);
+        return !hasCoords && !isOnFloorplan;
+      })
       .sort(sortByDisplayNumber);
 
     return { mapBoxes, floorplanBoxes, unplacedBoxes };
@@ -1214,7 +1230,11 @@ export default function Maps() {
             ))}
 
             {sortedBoxes.mapBoxes.map((box) => (
-              <BoxMarker key={box.id} box={box} onClick={handleBoxClick} />
+              <BoxMarker 
+                key={box.id} 
+                box={box} 
+                onClick={handleBoxClick} 
+              />
             ))}
           </MapContainer>
 

@@ -187,18 +187,46 @@
   max-width: 600px;
 }
 
+.hero-badges {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
 .hero-badge {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.3);
   border-radius: 50px;
-  color: var(--accent);
   font-size: 13px;
   font-weight: 600;
-  margin-bottom: 24px;
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.hero-badge.primary {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: var(--accent);
+}
+
+.hero-badge.beta {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  animation-delay: 0.2s;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .hero h1 {
@@ -243,6 +271,49 @@
   -webkit-text-fill-color: transparent;
   background-clip: text;
   font-weight: 600;
+}
+
+.beta-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.1));
+  border: 2px solid rgba(239, 68, 68, 0.2);
+  border-radius: 16px;
+  margin: 32px 0;
+  max-width: 600px;
+  animation: slideInLeft 0.8s ease-out;
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.beta-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.beta-text strong {
+  color: #ef4444;
+  font-size: 16px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.beta-text p {
+  color: var(--text-muted);
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .hero-actions {
@@ -1081,6 +1152,261 @@
 }
 
 /* ============================================================
+   PREISE & PAKETE SECTION
+   ============================================================ */
+.pricing-section {
+  padding: 100px 0;
+  background: var(--bg-card);
+}
+
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 32px;
+  margin-top: 60px;
+}
+
+.pricing-card {
+  background: var(--bg-dark);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 40px 32px;
+  text-align: center;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.pricing-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-8px);
+  box-shadow: 0 20px 60px rgba(99, 102, 241, 0.2);
+}
+
+.pricing-card.popular {
+  border-color: var(--primary);
+  box-shadow: 0 10px 40px rgba(99, 102, 241, 0.3);
+}
+
+.popular-badge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--primary);
+  color: white;
+  padding: 6px 20px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pricing-header h3 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-light);
+  margin: 0 0 8px;
+}
+
+.pricing-header p {
+  color: var(--text-muted);
+  margin: 0 0 32px;
+}
+
+.price {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 40px;
+}
+
+.amount {
+  font-size: 48px;
+  font-weight: 800;
+  color: var(--text-light);
+  line-height: 1;
+}
+
+.period {
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+.pricing-features {
+  text-align: left;
+  margin-bottom: 40px;
+}
+
+.pricing-features .feature {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  color: var(--text-light);
+  font-size: 15px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.pricing-features .feature svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.pricing-cta {
+  width: 100%;
+  padding: 16px 24px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-light);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.pricing-cta:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.pricing-cta.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
+.pricing-cta.primary:hover {
+  background: var(--primary-dark);
+}
+
+/* ============================================================
+   ACCOUNT-TYPEN SECTION
+   ============================================================ */
+.accounts-section {
+  padding: 100px 0;
+  background: var(--bg-dark);
+}
+
+.accounts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 32px;
+  margin-top: 60px;
+}
+
+.account-card {
+  background: var(--bg-card);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 40px;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.account-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.account-card.partner:hover {
+  border-color: #10b981;
+  box-shadow: 0 20px 60px rgba(16, 185, 129, 0.2);
+}
+
+.account-card.viewer:hover {
+  border-color: #6366f1;
+  box-shadow: 0 20px 60px rgba(99, 102, 241, 0.2);
+}
+
+.account-card.technician:hover {
+  border-color: #f59e0b;
+  box-shadow: 0 20px 60px rgba(245, 158, 11, 0.2);
+}
+
+.account-icon {
+  width: 64px;
+  height: 64px;
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.account-card.partner .account-icon {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+}
+
+.account-card.viewer .account-icon {
+  background: rgba(99, 102, 241, 0.1);
+  color: #6366f1;
+}
+
+.account-card.technician .account-icon {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
+.account-content h3 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-light);
+  margin: 0 0 12px;
+}
+
+.account-badge {
+  display: inline-block;
+  background: rgba(99, 102, 241, 0.2);
+  color: #8b5cf6;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.account-card.partner .account-badge {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+}
+
+.account-card.viewer .account-badge {
+  background: rgba(99, 102, 241, 0.2);
+  color: #6366f1;
+}
+
+.account-card.technician .account-badge {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.account-content p {
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.account-content strong {
+  color: var(--text-light);
+}
+
+.account-features {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.account-features .feature {
+  color: var(--text-light);
+  font-size: 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* ============================================================
    FOOTER
    ============================================================ */
 .footer {
@@ -1177,6 +1503,28 @@
   
   .footer-links {
     gap: 40px;
+  }
+  
+  .pricing-grid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  
+  .pricing-card {
+    padding: 32px 24px;
+  }
+  
+  .accounts-grid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  
+  .account-card {
+    padding: 32px 24px;
+  }
+  
+  .amount {
+    font-size: 36px;
   }
   
   .pricing-card.popular {

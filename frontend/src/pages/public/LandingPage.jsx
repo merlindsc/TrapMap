@@ -147,9 +147,15 @@ export default function LandingPage() {
           ============================================ */}
       <section className="hero">
         <div className="hero-content">
-          <div className="hero-badge">
-            <Sparkles size={16} />
-            Bis 01.02.2026 kostenlos testen
+          <div className="hero-badges">
+            <div className="hero-badge primary">
+              <Sparkles size={16} />
+              Bis 01.02.2026 kostenlos testen
+            </div>
+            <div className="hero-badge beta">
+              <UserCheck size={16} />
+              BETA Testphase - Jetzt mitmachen!
+            </div>
           </div>
           
           <h1>
@@ -162,6 +168,14 @@ export default function LandingPage() {
             QR-Code scannen, Status dokumentieren, Report generieren – fertig. 
             <span className="highlight-text">Audit-sicher in nur 2 Minuten.</span>
           </p>
+
+          <div className="beta-notice">
+            <div className="beta-icon">🚀</div>
+            <div className="beta-text">
+              <strong>Wir sind in der BETA-Phase!</strong>
+              <p>Hilf uns TrapMap zu perfektionieren. Dein Feedback ist Gold wert und macht uns besser!</p>
+            </div>
+          </div>
 
           <div className="hero-actions">
             <a href="#testen" className="btn-primary">
@@ -364,33 +378,212 @@ export default function LandingPage() {
       </section>
 
       {/* ============================================
-          PARTNER ACCOUNT ERKLÄRUNG
+          PREISE & PAKETE
           ============================================ */}
-      <section className="partner-section">
+      <section id="preise" className="pricing-section">
         <div className="section-container">
-          <div className="partner-card">
-            <div className="partner-icon">
-              <UserCheck size={32} />
+          <div className="section-header">
+            <h2>Transparente Preise für jeden Bedarf</h2>
+            <p>Wählen Sie das passende Paket für Ihr Unternehmen</p>
+          </div>
+
+          <div className="pricing-grid">
+            {/* STARTER PAKET */}
+            <div className="pricing-card starter">
+              <div className="pricing-header">
+                <h3>Starter</h3>
+                <p>Für kleinere Betriebe</p>
+                <div className="price">
+                  <span className="amount">29€</span>
+                  <span className="period">/Monat</span>
+                </div>
+              </div>
+              <div className="pricing-features">
+                <div className="feature">
+                  <Check size={16} />
+                  Bis zu 100 Boxen
+                </div>
+                <div className="feature">
+                  <Check size={16} />
+                  5 Objekte
+                </div>
+                <div className="feature">
+                  <Check size={16} />
+                  Grundreporting
+                </div>
+                <div className="feature">
+                  <Check size={16} />
+                  E-Mail Support
+                </div>
+                <div className="feature">
+                  <Check size={16} />
+                  Mobile App
+                </div>
+              </div>
+              <button className="pricing-cta">Jetzt testen</button>
             </div>
-            <div className="partner-content">
-              <h3>Was ist ein Partner-Account?</h3>
-              <p>
-                Mit Partner-Accounts gibst du deinen <strong>Kunden direkten Lesezugriff</strong> auf ihre Objekte. 
-                Sie können Status, Reports und Historie einsehen – ohne dass du PDFs verschicken musst.
-              </p>
-              <p>
-                Perfekt für Kunden die regelmäßig Nachweise brauchen (Hotels, Lebensmittelindustrie, etc.). 
-                Du sparst Zeit, der Kunde hat immer Zugriff.
-              </p>
+
+            {/* PROFESSIONAL PAKET */}
+            <div className="pricing-card professional popular">
+              <div className="popular-badge">Beliebt</div>
+              <div className="pricing-header">
+                <h3>Professional</h3>
+                <p>Für Schädlingsbekämpfer</p>
+                <div className="price">
+                  <span className="amount">79€</span>
+                  <span className="period">/Monat</span>
+                </div>
+              </div>
+              <div className="pricing-features">
+                <div className="feature">
+                  <Check size={16} />
+                  Unbegrenzte Boxen
+                </div>
+                <div className="feature">
+                  <Check size={16} />
+                  Unbegrenzte Objekte
+                </div>
+                <div className="feature">
+                  <Check size={16} />
+                  Erweiterte Reports
+                </div>
+                <div className="feature">
+                  <Check size={16} />
+                  Kunden-Accounts (Viewer)
+                </div>
+                <div className="feature">
+                  <Check size={16} />
+                  Telefon Support
+                </div>
+                <div className="feature">
+                  <Check size={16} />
+                  API Zugang
+                </div>
+              </div>
+              <button className="pricing-cta primary">Jetzt testen</button>
+            </div>
+
+            {/* ENTERPRISE PAKET */}
+            <div className="pricing-card enterprise">
+              <div className="pricing-header">
+                <h3>Enterprise</h3>
+                <p>Für große Unternehmen</p>
+                <div className="price">
+                  <span className="amount">Auf Anfrage</span>
+                </div>
+              </div>
+              <div className="pricing-features">
+                <div className="feature">
+                  <Check size={16} />
+                  Alles aus Professional
+                </div>
+                <div className="feature">
+                  <Check size={16} />
+                  White-Label Lösung
+                </div>
+                <div className="feature">
+                  <Check size={16} />
+                  Dedicated Support
+                </div>
+                <div className="feature">
+                  <Check size={16} />
+                  Custom Integrationen
+                </div>
+                <div className="feature">
+                  <Check size={16} />
+                  On-Premise Option
+                </div>
+              </div>
+              <button className="pricing-cta">Kontakt aufnehmen</button>
             </div>
           </div>
         </div>
       </section>
 
       {/* ============================================
-          PREISE
+          ACCOUNT-TYPEN ERKLÄRUNG
           ============================================ */}
-      <section id="preise" className="pricing">
+      <section className="accounts-section">
+        <div className="section-container">
+          <div className="section-header">
+            <h2>Die richtigen Accounts für jede Situation</h2>
+            <p>Verstehen Sie die Unterschiede zwischen den verschiedenen Account-Typen</p>
+          </div>
+
+          <div className="accounts-grid">
+            {/* PARTNER ACCOUNT */}
+            <div className="account-card partner">
+              <div className="account-icon">
+                <Users size={32} />
+              </div>
+              <div className="account-content">
+                <h3>Partner-Account</h3>
+                <div className="account-badge">Für Kunden mit eigenen zertifizierten Mitarbeitern</div>
+                <p>
+                  <strong>Perfekt für Unternehmen mit eigenen Schädlingsexperten!</strong> 
+                  Hotels, Restaurants oder Industriebetriebe mit zertifizierten Mitarbeitern 
+                  können ihre Schädlingsfallen selbst kontrollieren und dokumentieren.
+                </p>
+                <div className="account-features">
+                  <div className="feature">✓ Vollzugriff auf TrapMap</div>
+                  <div className="feature">✓ Eigene Kontrollen durchführen</div>
+                  <div className="feature">✓ Reports selbst erstellen</div>
+                  <div className="feature">✓ Für zertifizierte Mitarbeiter</div>
+                </div>
+              </div>
+            </div>
+
+            {/* VIEWER ACCOUNT */}
+            <div className="account-card viewer">
+              <div className="account-icon">
+                <Shield size={32} />
+              </div>
+              <div className="account-content">
+                <h3>Viewer-Account (Kunden-Zugang)</h3>
+                <div className="account-badge">Nur Lesezugriff für Ihre Kunden</div>
+                <p>
+                  Geben Sie Ihren Kunden direkten <strong>Lesezugriff</strong> auf ihre Objekte. 
+                  Sie können Status, Reports und Historie einsehen – ohne dass Sie PDFs 
+                  verschicken müssen.
+                </p>
+                <div className="account-features">
+                  <div className="feature">✓ Nur Ansicht, keine Bearbeitung</div>
+                  <div className="feature">✓ Aktuelle Status einsehen</div>
+                  <div className="feature">✓ Reports herunterladen</div>
+                  <div className="feature">✓ Historie durchsuchen</div>
+                </div>
+              </div>
+            </div>
+
+            {/* TECHNIKER ACCOUNT */}
+            <div className="account-card technician">
+              <div className="account-icon">
+                <Radio size={32} />
+              </div>
+              <div className="account-content">
+                <h3>Techniker-Account</h3>
+                <div className="account-badge">Für Ihre Außendienstmitarbeiter</div>
+                <p>
+                  Ihre Techniker können Kontrollen durchführen, Boxen scannen 
+                  und Status erfassen – aber haben keinen Zugriff auf 
+                  Verwaltung oder Kundendaten.
+                </p>
+                <div className="account-features">
+                  <div className="feature">✓ Kontrollen durchführen</div>
+                  <div className="feature">✓ QR-Codes scannen</div>
+                  <div className="feature">✓ Status dokumentieren</div>
+                  <div className="feature">✓ Eingeschränkte Rechte</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============================================
+          PREISE & PAKETE
+          ============================================ */}
+      <section id="preise" className="pricing-section">
         <div className="section-container">
           <div className="section-header">
             <span className="section-badge">Preise</span>

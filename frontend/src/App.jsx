@@ -20,6 +20,8 @@ import AGB from "./pages/legal/AGB";
 
 // Cookie Consent
 import CookieConsent from "./components/CookieConsent";
+import UpdatesWidget from "./components/UpdatesWidget";
+import FeedbackWidget from "./components/FeedbackWidget";
 
 // Partner Components (lazy loaded)
 const PartnerLogin = lazy(() => import("./pages/PartnerLogin").catch(() => ({ default: () => <div className="min-h-screen flex items-center justify-center bg-gray-900 text-red-400">PartnerLogin.jsx nicht gefunden</div> })));
@@ -233,15 +235,15 @@ function MainApp() {
           ======================================== */}
       {["admin", "supervisor"].includes(user.role) && (
         <>
-          <Route path="/dashboard" element={<DashboardLayout><Dashboard /></DashboardLayout>} />
-          <Route path="/objects" element={<DashboardLayout><ObjectList /></DashboardLayout>} />
-          <Route path="/objects/new" element={<DashboardLayout><ObjectCreate /></DashboardLayout>} />
-          <Route path="/objects/:id" element={<DashboardLayout><ObjectDetails /></DashboardLayout>} />
-          <Route path="/layouts" element={<DashboardLayout><LayoutList /></DashboardLayout>} />
-          <Route path="/layouts/new" element={<DashboardLayout><LayoutCreate /></DashboardLayout>} />
-          <Route path="/layouts/:id" element={<DashboardLayout><LayoutEditor /></DashboardLayout>} />
-          <Route path="/maps" element={<DashboardLayout><Maps /></DashboardLayout>} />
-          <Route path="/technicians" element={<DashboardLayout><div className="p-8 text-white">Techniker-Verwaltung (coming soon)</div></DashboardLayout>} />
+          <Route path="/dashboard" element={<DashboardLayout><Dashboard /><UpdatesWidget /><FeedbackWidget /></DashboardLayout>} />
+          <Route path="/objects" element={<DashboardLayout><ObjectList /><UpdatesWidget /><FeedbackWidget /></DashboardLayout>} />
+          <Route path="/objects/new" element={<DashboardLayout><ObjectCreate /><UpdatesWidget /><FeedbackWidget /></DashboardLayout>} />
+          <Route path="/objects/:id" element={<DashboardLayout><ObjectDetails /><UpdatesWidget /><FeedbackWidget /></DashboardLayout>} />
+          <Route path="/layouts" element={<DashboardLayout><LayoutList /><UpdatesWidget /><FeedbackWidget /></DashboardLayout>} />
+          <Route path="/layouts/new" element={<DashboardLayout><LayoutCreate /><UpdatesWidget /><FeedbackWidget /></DashboardLayout>} />
+          <Route path="/layouts/:id" element={<DashboardLayout><LayoutEditor /><UpdatesWidget /><FeedbackWidget /></DashboardLayout>} />
+          <Route path="/maps" element={<DashboardLayout><Maps /><UpdatesWidget /><FeedbackWidget /></DashboardLayout>} />
+          <Route path="/technicians" element={<DashboardLayout><div className="p-8 text-white">Techniker-Verwaltung (coming soon)</div><UpdatesWidget /><FeedbackWidget /></DashboardLayout>} />
         </>
       )}
 
@@ -250,8 +252,8 @@ function MainApp() {
           ======================================== */}
       {user.role === "technician" && (
         <>
-          <Route path="/dashboard" element={<DashboardLayout><TechnicianHome /></DashboardLayout>} />
-          <Route path="/maps" element={<DashboardLayout><Maps /></DashboardLayout>} />
+          <Route path="/dashboard" element={<DashboardLayout><TechnicianHome /><UpdatesWidget /><FeedbackWidget /></DashboardLayout>} />
+          <Route path="/maps" element={<DashboardLayout><Maps /><UpdatesWidget /><FeedbackWidget /></DashboardLayout>} />
         </>
       )}
 
@@ -260,9 +262,9 @@ function MainApp() {
           ======================================== */}
       {["auditor", "viewer", "partner"].includes(user.role) && (
         <>
-          <Route path="/dashboard" element={<DashboardLayout><Dashboard /></DashboardLayout>} />
-          <Route path="/objects" element={<DashboardLayout><ObjectList /></DashboardLayout>} />
-          <Route path="/maps" element={<DashboardLayout><Maps /></DashboardLayout>} />
+          <Route path="/dashboard" element={<DashboardLayout><Dashboard /><UpdatesWidget /><FeedbackWidget /></DashboardLayout>} />
+          <Route path="/objects" element={<DashboardLayout><ObjectList /><UpdatesWidget /><FeedbackWidget /></DashboardLayout>} />
+          <Route path="/maps" element={<DashboardLayout><Maps /><UpdatesWidget /><FeedbackWidget /></DashboardLayout>} />
         </>
       )}
 
