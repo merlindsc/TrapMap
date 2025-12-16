@@ -57,7 +57,7 @@ export default function ObjectList() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-white text-xl">Lade Objekte...</div>
+        <div style={{ color: 'var(--text-primary, #ffffff)' }} className="text-xl">Lade Objekte...</div>
       </div>
     );
   }
@@ -80,30 +80,38 @@ export default function ObjectList() {
       both: { 
         icon: Layers, 
         label: "GPS + Lageplan", 
-        bg: "bg-purple-900/50", 
-        text: "text-purple-300",
-        border: "border-purple-500/50"
+        style: { 
+          background: 'rgba(168, 85, 247, 0.15)',
+          color: '#c084fc',
+          borderColor: 'rgba(168, 85, 247, 0.4)'
+        }
       },
       gps: { 
         icon: MapPin, 
         label: "GPS", 
-        bg: "bg-green-900/50", 
-        text: "text-green-300",
-        border: "border-green-500/50"
+        style: { 
+          background: 'rgba(16, 185, 129, 0.15)',
+          color: '#6ee7b7',
+          borderColor: 'rgba(16, 185, 129, 0.4)'
+        }
       },
       floorplan: { 
         icon: Map, 
         label: "Lageplan", 
-        bg: "bg-blue-900/50", 
-        text: "text-blue-300",
-        border: "border-blue-500/50"
+        style: { 
+          background: 'rgba(59, 130, 246, 0.15)',
+          color: '#93c5fd',
+          borderColor: 'rgba(59, 130, 246, 0.4)'
+        }
       },
       none: { 
         icon: Building2, 
         label: "Keine Karte", 
-        bg: "bg-gray-700/50", 
-        text: "text-gray-400",
-        border: "border-gray-600"
+        style: { 
+          background: 'var(--bg-hover, rgba(255, 255, 255, 0.05))',
+          color: 'var(--text-muted, #9ca3af)',
+          borderColor: 'var(--border-color, rgba(255, 255, 255, 0.08))'
+        }
       }
     };
     
@@ -111,7 +119,10 @@ export default function ObjectList() {
     const Icon = badge.icon;
     
     return (
-      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${badge.bg} ${badge.text} border ${badge.border}`}>
+      <span 
+        className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border"
+        style={badge.style}
+      >
         <Icon className="w-3 h-3" />
         {badge.label}
       </span>
@@ -123,13 +134,19 @@ export default function ObjectList() {
       {/* HEADER */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Objekte</h1>
-          <p className="text-gray-400">Verwalten Sie alle Ihre Standorte</p>
+          <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--text-primary, #ffffff)' }}>Objekte</h1>
+          <p style={{ color: 'var(--text-muted, #64748b)' }}>Verwalten Sie alle Ihre Standorte</p>
         </div>
 
         <button
           onClick={handleCreate}
-          className="flex items-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
+          className="flex items-center gap-2 px-4 py-3 rounded-lg font-semibold transition-colors"
+          style={{ 
+            background: '#3b82f6',
+            color: '#ffffff'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.background = '#2563eb'}
+          onMouseLeave={(e) => e.currentTarget.style.background = '#3b82f6'}
         >
           <Plus className="w-5 h-5" />
           <span>Neues Objekt</span>
@@ -137,23 +154,42 @@ export default function ObjectList() {
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-900/50 border border-red-500 rounded text-red-200">
+        <div 
+          className="mb-4 p-4 border rounded"
+          style={{
+            background: 'rgba(239, 68, 68, 0.15)',
+            borderColor: 'rgba(239, 68, 68, 0.4)',
+            color: '#fca5a5'
+          }}
+        >
           {error}
         </div>
       )}
 
       {/* LEERE LISTE */}
       {objects.length === 0 ? (
-        <div className="bg-gray-800 rounded-lg p-12 text-center border border-gray-700">
-          <Building2 className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-white mb-2">Noch keine Objekte</h3>
-          <p className="text-gray-400 mb-6">
+        <div 
+          className="rounded-lg p-12 text-center border"
+          style={{
+            background: 'var(--bg-card, #1f2937)',
+            borderColor: 'var(--border-color, rgba(255, 255, 255, 0.08))'
+          }}
+        >
+          <Building2 className="w-16 h-16 mx-auto mb-4" style={{ color: 'var(--text-muted, #64748b)' }} />
+          <h3 className="text-xl font-semibold mb-2" style={{ color: 'var(--text-primary, #ffffff)' }}>Noch keine Objekte</h3>
+          <p className="mb-6" style={{ color: 'var(--text-muted, #64748b)' }}>
             Erstellen Sie Ihr erstes Objekt - mit oder ohne GPS-Koordinaten
           </p>
 
           <button
             onClick={handleCreate}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold"
+            className="px-6 py-3 rounded-lg font-semibold"
+            style={{ 
+              background: '#3b82f6',
+              color: '#ffffff'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#2563eb'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#3b82f6'}
           >
             Neues Objekt erstellen
           </button>
@@ -168,19 +204,32 @@ export default function ObjectList() {
               <Link
                 key={obj.id}
                 to={`/objects/${obj.id}`}
-                className="bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-blue-500 transition-all hover:shadow-lg hover:shadow-blue-500/10"
+                className="rounded-lg p-6 border transition-all"
+                style={{
+                  background: 'var(--bg-card, #1f2937)',
+                  borderColor: 'var(--border-color, rgba(255, 255, 255, 0.08))'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#3b82f6';
+                  e.currentTarget.style.boxShadow = '0 10px 30px rgba(59, 130, 246, 0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border-color, rgba(255, 255, 255, 0.08))';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
               >
                 <div className="flex items-start justify-between mb-4">
-                  <div className="bg-blue-600 p-3 rounded-lg">
-                    <Building2 className="w-6 h-6 text-white" />
+                  <div className="p-3 rounded-lg" style={{ background: '#3b82f6' }}>
+                    <Building2 className="w-6 h-6" style={{ color: '#ffffff' }} />
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <span
-                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      className="px-3 py-1 rounded-full text-xs font-semibold"
+                      style={
                         obj.active !== false
-                          ? "bg-green-900/50 text-green-300"
-                          : "bg-gray-700 text-gray-400"
-                      }`}
+                          ? { background: 'rgba(16, 185, 129, 0.15)', color: '#6ee7b7' }
+                          : { background: 'var(--bg-hover, rgba(255, 255, 255, 0.05))', color: 'var(--text-muted, #9ca3af)' }
+                      }
                     >
                       {obj.active !== false ? "Aktiv" : "Inaktiv"}
                     </span>
@@ -188,17 +237,23 @@ export default function ObjectList() {
                   </div>
                 </div>
 
-                <h3 className="text-xl font-bold text-white mb-2">{obj.name}</h3>
+                <h3 className="text-xl font-bold mb-2" style={{ color: 'var(--text-primary, #ffffff)' }}>{obj.name}</h3>
 
                 {obj.address && (
-                  <div className="flex items-start gap-2 text-gray-400 text-sm mb-2">
+                  <div className="flex items-start gap-2 text-sm mb-2" style={{ color: 'var(--text-muted, #64748b)' }}>
                     <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
                     <span>{obj.address}</span>
                   </div>
                 )}
 
                 {/* Stats */}
-                <div className="flex gap-4 mt-4 pt-4 border-t border-gray-700 text-sm text-gray-400">
+                <div 
+                  className="flex gap-4 mt-4 pt-4 border-t text-sm"
+                  style={{ 
+                    borderColor: 'var(--border-color, rgba(255, 255, 255, 0.08))',
+                    color: 'var(--text-muted, #64748b)'
+                  }}
+                >
                   {obj.floor_plan_count > 0 && (
                     <span className="flex items-center gap-1">
                       <Map className="w-4 h-4" />
