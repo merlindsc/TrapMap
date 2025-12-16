@@ -43,6 +43,7 @@ let qrOrderRoutes = null;
 let partnerRoutes = null;
 let adminRoutes = null;
 let auditReportRoutes = null;
+let demoRoutes = null;
 
 try { 
   floorplansRoutes = require('./routes/floorplans.routes'); 
@@ -67,6 +68,11 @@ try {
 try { 
   adminRoutes = require('./routes/admin.routes'); 
   console.log('✅ Admin routes loaded'); 
+} catch (e) {}
+
+try { 
+  demoRoutes = require('./routes/demo.routes'); 
+  console.log('✅ Demo routes loaded'); 
 } catch (e) {}
 
 // ============================================
@@ -213,6 +219,7 @@ if (partnerRoutes) {
   app.use('/api/partners', partnerRoutes);
 }
 if (adminRoutes) app.use('/api/admin', adminRoutes);
+if (demoRoutes) app.use('/api/demo', demoRoutes);
 
 // ============================================
 // AUDIT REPORT ROUTES (PDF Generator)
@@ -273,6 +280,7 @@ app.listen(PORT, () => {
   console.log(`   QR Codes: ${qrRoutes ? '✅' : '❌'}`);
   console.log(`   Partners: ${partnerRoutes ? '✅' : '❌'}`);
   console.log(`   Admin: ${adminRoutes ? '✅' : '❌'}`);
+  console.log(`   Demo: ${demoRoutes ? '✅' : '❌'}`);
   console.log(`   Audit Reports (PDF): ${auditReportRoutes ? '✅' : '❌'}`);
   console.log('═════════════════════════════════════════════');
   console.log('🔐 Security Status:');

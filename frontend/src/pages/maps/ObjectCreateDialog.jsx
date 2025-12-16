@@ -1,17 +1,37 @@
 /* ============================================================
-   TRAPMAP — OBJECT CREATE DIALOG
+   TRAPMAP – OBJECT CREATE DIALOG V2
    Neues Objekt auf Karte erstellen
-   Mit vollständigen Inline-Styles
+   + Direkt Boxen aus Pool zuweisen
+   
+   FEATURES:
+   - Objekt erstellen mit Position
+   - Boxen aus Pool auswählen (sortiert nach QR, klein→groß)
+   - QR-Nummern ohne führende Nullen
    ============================================================ */
 
-import { useState } from "react";
-import { X, Save, MapPin, Building2 } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { X, Save, MapPin, Building2, Package, Check, ChevronDown, ChevronUp, Plus, Minus } from "lucide-react";
 
 const API = import.meta.env.VITE_API_URL;
+
+// QR-Nummer extrahieren (DSE-0096 → 96)
+function extractQrNumber(qrCode) {
+  if (!qrCode) return 999999;
+  const match = qrCode.match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : 999999;
+}
+
+// QR-Nummer formatiert (ohne führende Nullen)
+function formatQrNumber(qrCode) {
+  if (!qrCode) return null;
+  const match = qrCode.match(/(\d+)/);
+  return match ? parseInt(match[1], 10).toString() : qrCode;
+}
 
 export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
   const token = localStorage.getItem("trapmap_token");
 
+  // Object Form
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [zip, setZip] = useState("");
@@ -22,6 +42,86 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
+  // Box Assignment
+  const [showBoxSelector, setShowBoxSelector] = useState(false);
+  const [poolBoxes, setPoolBoxes] = useState([]);
+  const [poolLoading, setPoolLoading] = useState(false);
+  const [selectedBoxIds, setSelectedBoxIds] = useState(new Set());
+  const [boxCount, setBoxCount] = useState(0); // Schnellauswahl: Anzahl Boxen
+
+  // Load pool boxes
+  useEffect(() => {
+    loadPoolBoxes();
+  }, []);
+
+  const loadPoolBoxes = async () => {
+    setPoolLoading(true);
+    try {
+      const res = await fetch(`${API}/boxes/pool`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Sortieren nach QR-Nummer (klein → groß)
+        const sorted = (Array.isArray(data) ? data : []).sort((a, b) => 
+          extractQrNumber(a.qr_code) - extractQrNumber(b.qr_code)
+        );
+        setPoolBoxes(sorted);
+      }
+    } catch (e) {
+      console.error("Error loading pool:", e);
+    }
+    setPoolLoading(false);
+  };
+
+  // Sortierte Pool-Boxen für Anzeige
+  const sortedPoolBoxes = useMemo(() => {
+    return [...poolBoxes].sort((a, b) => 
+      extractQrNumber(a.qr_code) - extractQrNumber(b.qr_code)
+    );
+  }, [poolBoxes]);
+
+  // Schnellauswahl: Erste N Boxen auswählen
+  const selectFirstNBoxes = (n) => {
+    const ids = sortedPoolBoxes.slice(0, n).map(b => b.id);
+    setSelectedBoxIds(new Set(ids));
+    setBoxCount(n);
+  };
+
+  // Box-Auswahl toggeln
+  const toggleBoxSelection = (boxId) => {
+    const newSet = new Set(selectedBoxIds);
+    if (newSet.has(boxId)) {
+      newSet.delete(boxId);
+    } else {
+      newSet.add(boxId);
+    }
+    setSelectedBoxIds(newSet);
+    setBoxCount(newSet.size);
+  };
+
+  // Alle/Keine auswählen
+  const selectAll = () => {
+    setSelectedBoxIds(new Set(poolBoxes.map(b => b.id)));
+    setBoxCount(poolBoxes.length);
+  };
+
+  const selectNone = () => {
+    setSelectedBoxIds(new Set());
+    setBoxCount(0);
+  };
+
+  // Schnellauswahl +/- Buttons
+  const incrementBoxCount = () => {
+    const newCount = Math.min(boxCount + 1, poolBoxes.length);
+    selectFirstNBoxes(newCount);
+  };
+
+  const decrementBoxCount = () => {
+    const newCount = Math.max(boxCount - 1, 0);
+    selectFirstNBoxes(newCount);
+  };
+
   const handleSave = async () => {
     if (!name.trim()) {
       setError("Bitte Objektname eingeben!");
@@ -31,26 +131,27 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
     setSaving(true);
     setError(null);
 
-    const data = {
-      name,
-      address,
-      zip,
-      city,
-      contact_person: contactPerson,
-      phone,
-      notes,
-      lat: latLng.lat,
-      lng: latLng.lng,
-    };
-
     try {
+      // 1. Objekt erstellen
+      const objectData = {
+        name,
+        address,
+        zip,
+        city,
+        contact_person: contactPerson,
+        phone,
+        notes,
+        lat: latLng.lat,
+        lng: latLng.lng,
+      };
+
       const res = await fetch(`${API}/objects`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(objectData),
       });
 
       if (!res.ok) {
@@ -59,9 +160,33 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
       }
 
       const newObject = await res.json();
+      console.log("✅ Objekt erstellt:", newObject.id);
+
+      // 2. Boxen zuweisen (falls ausgewählt)
+      if (selectedBoxIds.size > 0) {
+        const boxRes = await fetch(`${API}/boxes/bulk-assign`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            box_ids: Array.from(selectedBoxIds),
+            object_id: newObject.id
+          }),
+        });
+
+        if (boxRes.ok) {
+          const boxData = await boxRes.json();
+          console.log(`✅ ${boxData.count} Boxen zugewiesen`);
+        } else {
+          console.error("⚠️ Boxen konnten nicht zugewiesen werden");
+        }
+      }
+
       onSave(newObject);
     } catch (e) {
-      console.error("❌ Error creating object:", e);
+      console.error("Error creating object:", e);
       setError(e.message || "Fehler beim Erstellen");
     } finally {
       setSaving(false);
@@ -85,7 +210,7 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
       background: "#111827",
       borderRadius: 16,
       width: "100%",
-      maxWidth: 480,
+      maxWidth: 520,
       maxHeight: "90vh",
       border: "1px solid rgba(255, 255, 255, 0.1)",
       boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5)",
@@ -373,7 +498,7 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
           <div style={styles.fieldGroup}>
             <label style={styles.label}>Notizen</label>
             <textarea
-              rows={3}
+              rows={2}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Zusätzliche Informationen..."
@@ -381,6 +506,228 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
               onFocus={(e) => (e.target.style.borderColor = "#6366f1")}
               onBlur={(e) => (e.target.style.borderColor = "rgba(255, 255, 255, 0.1)")}
             />
+          </div>
+
+          {/* ============================================
+              BOX ASSIGNMENT SECTION
+              ============================================ */}
+          <div style={{
+            marginTop: 20, padding: 16, background: "#0d1117",
+            borderRadius: 12, border: "1px solid rgba(255, 255, 255, 0.1)"
+          }}>
+            <div 
+              style={{ 
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                cursor: "pointer"
+              }}
+              onClick={() => setShowBoxSelector(!showBoxSelector)}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <Package size={18} color="#10b981" />
+                <div>
+                  <div style={{ color: "#e5e7eb", fontSize: 14, fontWeight: 500 }}>
+                    Boxen zuweisen
+                  </div>
+                  <div style={{ color: "#6b7280", fontSize: 12 }}>
+                    {poolBoxes.length} Boxen im Lager verfügbar
+                  </div>
+                </div>
+              </div>
+              
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {selectedBoxIds.size > 0 && (
+                  <span style={{
+                    padding: "4px 10px", borderRadius: 20,
+                    background: "#10b98120", color: "#10b981",
+                    fontSize: 12, fontWeight: 600
+                  }}>
+                    {selectedBoxIds.size} ausgewählt
+                  </span>
+                )}
+                {showBoxSelector ? <ChevronUp size={18} color="#6b7280" /> : <ChevronDown size={18} color="#6b7280" />}
+              </div>
+            </div>
+
+            {/* Box Selector Content */}
+            {showBoxSelector && (
+              <div style={{ marginTop: 16 }}>
+                {/* Schnellauswahl */}
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  marginBottom: 12, padding: "10px 12px",
+                  background: "#161b22", borderRadius: 8
+                }}>
+                  <span style={{ color: "#9ca3af", fontSize: 12, whiteSpace: "nowrap" }}>
+                    Schnellauswahl:
+                  </span>
+                  
+                  {/* Counter mit +/- Buttons */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); decrementBoxCount(); }}
+                      disabled={boxCount === 0}
+                      style={{
+                        width: 28, height: 28, borderRadius: 6,
+                        background: "#21262d", border: "1px solid #30363d",
+                        color: boxCount === 0 ? "#4b5563" : "#e5e7eb",
+                        cursor: boxCount === 0 ? "not-allowed" : "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center"
+                      }}
+                    >
+                      <Minus size={14} />
+                    </button>
+                    
+                    <input
+                      type="number"
+                      min="0"
+                      max={poolBoxes.length}
+                      value={boxCount}
+                      onChange={(e) => {
+                        const val = Math.max(0, Math.min(parseInt(e.target.value) || 0, poolBoxes.length));
+                        selectFirstNBoxes(val);
+                      }}
+                      style={{
+                        width: 50, padding: "4px 8px", textAlign: "center",
+                        background: "#0d1117", border: "1px solid #30363d",
+                        borderRadius: 6, color: "#fff", fontSize: 14
+                      }}
+                    />
+                    
+                    <button
+                      onClick={(e) => { e.stopPropagation(); incrementBoxCount(); }}
+                      disabled={boxCount >= poolBoxes.length}
+                      style={{
+                        width: 28, height: 28, borderRadius: 6,
+                        background: "#21262d", border: "1px solid #30363d",
+                        color: boxCount >= poolBoxes.length ? "#4b5563" : "#e5e7eb",
+                        cursor: boxCount >= poolBoxes.length ? "not-allowed" : "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center"
+                      }}
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                  
+                  <span style={{ color: "#6b7280", fontSize: 11 }}>
+                    von {poolBoxes.length}
+                  </span>
+                  
+                  {/* Preset Buttons */}
+                  <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
+                    {[5, 10, 20].filter(n => n <= poolBoxes.length).map(n => (
+                      <button
+                        key={n}
+                        onClick={(e) => { e.stopPropagation(); selectFirstNBoxes(n); }}
+                        style={{
+                          padding: "4px 8px", borderRadius: 4,
+                          background: boxCount === n ? "#10b981" : "#21262d",
+                          border: "1px solid #30363d",
+                          color: boxCount === n ? "#fff" : "#9ca3af",
+                          fontSize: 11, cursor: "pointer"
+                        }}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Box Liste */}
+                {poolLoading ? (
+                  <div style={{ textAlign: "center", padding: 20, color: "#6b7280" }}>
+                    Lade Boxen...
+                  </div>
+                ) : poolBoxes.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: 20, color: "#6b7280", fontSize: 13 }}>
+                    Keine Boxen im Lager verfügbar
+                  </div>
+                ) : (
+                  <div style={{ maxHeight: 200, overflowY: "auto" }}>
+                    {sortedPoolBoxes.map((box, index) => (
+                      <div
+                        key={box.id}
+                        onClick={(e) => { e.stopPropagation(); toggleBoxSelection(box.id); }}
+                        style={{
+                          padding: "8px 12px", marginBottom: 4,
+                          background: selectedBoxIds.has(box.id) ? "#10b98115" : "#161b22",
+                          border: selectedBoxIds.has(box.id) ? "1px solid #10b981" : "1px solid #21262d",
+                          borderRadius: 8, cursor: "pointer",
+                          display: "flex", alignItems: "center", gap: 10,
+                          transition: "all 0.15s"
+                        }}
+                      >
+                        {/* Checkbox */}
+                        <div style={{
+                          width: 20, height: 20, borderRadius: 4,
+                          border: selectedBoxIds.has(box.id) ? "none" : "1px solid #374151",
+                          background: selectedBoxIds.has(box.id) ? "#10b981" : "transparent",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          flexShrink: 0
+                        }}>
+                          {selectedBoxIds.has(box.id) && <Check size={12} color="#fff" />}
+                        </div>
+                        
+                        {/* Box Info */}
+                        <div style={{ flex: 1 }}>
+                          <div style={{ 
+                            color: "#e5e7eb", fontSize: 14, fontWeight: 600,
+                            display: "flex", alignItems: "center", gap: 8
+                          }}>
+                            {formatQrNumber(box.qr_code) || box.number || `#${box.id}`}
+                            <span style={{ 
+                              color: "#6b7280", fontSize: 11, fontWeight: 400,
+                              fontFamily: "monospace"
+                            }}>
+                              {box.qr_code}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Index Badge */}
+                        {selectedBoxIds.has(box.id) && (
+                          <span style={{
+                            padding: "2px 6px", borderRadius: 4,
+                            background: "#10b98130", color: "#10b981",
+                            fontSize: 10, fontWeight: 600
+                          }}>
+                            #{Array.from(selectedBoxIds).indexOf(box.id) + 1}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Auswahl Actions */}
+                {poolBoxes.length > 0 && (
+                  <div style={{ 
+                    display: "flex", gap: 8, marginTop: 10,
+                    paddingTop: 10, borderTop: "1px solid #21262d"
+                  }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); selectAll(); }}
+                      style={{
+                        padding: "6px 12px", borderRadius: 6,
+                        background: "#21262d", border: "1px solid #30363d",
+                        color: "#9ca3af", fontSize: 11, cursor: "pointer"
+                      }}
+                    >
+                      Alle auswählen
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); selectNone(); }}
+                      style={{
+                        padding: "6px 12px", borderRadius: 6,
+                        background: "#21262d", border: "1px solid #30363d",
+                        color: "#9ca3af", fontSize: 11, cursor: "pointer"
+                      }}
+                    >
+                      Keine
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Position */}
@@ -427,7 +774,11 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
             }}
           >
             <Save size={16} />
-            {saving ? "Erstelle..." : "Erstellen"}
+            {saving ? "Erstelle..." : (
+              selectedBoxIds.size > 0 
+                ? `Erstellen + ${selectedBoxIds.size} Boxen`
+                : "Erstellen"
+            )}
           </button>
         </div>
       </div>

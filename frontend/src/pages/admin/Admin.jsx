@@ -8,7 +8,7 @@ import {
   QrCode, Building2, Users, Settings, Shield, Plus, Trash2,
   Edit2, Loader, Check, X, AlertCircle, Mail, Phone, MapPin,
   Eye, EyeOff, RefreshCw, UserPlus, UserCheck,
-  BarChart3, Database, Server, Activity
+  BarChart3, Database, Server, Activity, MessageSquare
 } from "lucide-react";
 
 // QR-Codes Tab als separate Komponente importieren
@@ -35,6 +35,7 @@ export default function Admin() {
   const [organisations, setOrganisations] = useState([]);
   const [users, setUsers] = useState([]);
   const [partners, setPartners] = useState([]);
+  const [demoRequests, setDemoRequests] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
   
@@ -90,6 +91,9 @@ export default function Admin() {
           await loadAllPartners();
           await loadOrganisations(); // Für Dropdown
           break;
+        case "demo":
+          await loadDemoRequests();
+          break;
         case "system":
           await loadSystemStats();
           break;
@@ -133,6 +137,22 @@ export default function Admin() {
     }
   };
 
+  const loadDemoRequests = async () => {
+    try {
+      const res = await fetch(`${API}/demo/requests`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setDemoRequests(data);
+      } else {
+        console.error('Failed to load demo requests');
+        setDemoRequests([]);
+      }
+    } catch (error) {
+      console.error('Error loading demo requests:', error);
+      setDemoRequests([]);
+    }
+  };
+
   // ============================================
   // MESSAGE HELPER
   // ============================================
@@ -149,6 +169,7 @@ export default function Admin() {
     { id: "organisations", label: "Organisationen", icon: Building2, color: "bg-indigo-600" },
     { id: "users", label: "Benutzer", icon: Users, color: "bg-blue-600" },
     { id: "partners", label: "Partner", icon: UserCheck, color: "bg-amber-600" },
+    { id: "demo", label: "Demo-Anfragen", icon: MessageSquare, color: "bg-green-600" },
     { id: "system", label: "System", icon: Settings, color: "bg-gray-600" }
   ];
 
@@ -246,6 +267,13 @@ export default function Admin() {
                   showMessage={showMessage}
                   headers={headers}
                   jsonHeaders={jsonHeaders}
+                />
+              )}
+              {activeTab === "demo" && (
+                <DemoRequestsTab 
+                  demoRequests={demoRequests}
+                  onRefresh={loadDemoRequests}
+                  showMessage={showMessage}
                 />
               )}
               {activeTab === "system" && (
@@ -737,6 +765,190 @@ function StatCard({ icon: Icon, label, value, color }) {
       </div>
       <div className="text-2xl font-bold text-white">{value}</div>
       <div className="text-sm text-gray-400">{label}</div>
+    </div>
+  );
+}
+
+// ============================================
+// DEMO REQUESTS TAB
+// ============================================
+function DemoRequestsTab({ demoRequests, onRefresh, showMessage }) {
+  const [creatingAccount, setCreatingAccount] = useState(null);
+
+  const handleCreateAccount = async (request) => {
+    const password = prompt(`Demo-Account für ${request.name} erstellen.\n\nPasswort eingeben (oder leer lassen für automatisch generiertes):`) || 
+                    'demo' + Math.random().toString(36).substr(2, 6);
+    
+    if (!password) return;
+
+    setCreatingAccount(request.id);
+    
+    try {
+      const API = import.meta.env.VITE_API_URL;
+      const token = localStorage.getItem("trapmap_token");
+      
+      const res = await fetch(`${API}/demo/create-account/${request.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ password, trial_days: 90 })
+      });
+
+      const result = await res.json();
+
+      if (res.ok) {
+        showMessage('success', `Demo-Account für ${request.name} erstellt! Passwort: ${password}`);
+        onRefresh();
+      } else {
+        showMessage('error', result.error || 'Fehler beim Erstellen des Demo-Accounts');
+      }
+    } catch (error) {
+      showMessage('error', 'Netzwerkfehler beim Erstellen des Demo-Accounts');
+      console.error(error);
+    } finally {
+      setCreatingAccount(null);
+    }
+  };
+
+  const handleDelete = async (request) => {
+    if (!window.confirm(`Demo-Anfrage von ${request.name} löschen?`)) return;
+    
+    try {
+      const API = import.meta.env.VITE_API_URL;
+      const token = localStorage.getItem("trapmap_token");
+      
+      const res = await fetch(`${API}/demo/requests/${request.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (res.ok) {
+        showMessage('success', 'Demo-Anfrage gelöscht');
+        onRefresh();
+      } else {
+        showMessage('error', 'Fehler beim Löschen der Demo-Anfrage');
+      }
+    } catch (error) {
+      showMessage('error', 'Netzwerkfehler beim Löschen');
+      console.error(error);
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'completed': return 'text-green-400 bg-green-900/20';
+      case 'pending': return 'text-yellow-400 bg-yellow-900/20';
+      default: return 'text-gray-400 bg-gray-900/20';
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'completed': return 'Erledigt';
+      case 'pending': return 'Offen';
+      default: return status;
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-white">Demo-Anfragen</h3>
+        <div className="text-sm text-gray-400">
+          {demoRequests.length} Anfrage{demoRequests.length !== 1 ? 'n' : ''}
+        </div>
+      </div>
+
+      {demoRequests.length === 0 ? (
+        <div className="bg-gray-900/50 rounded-lg p-8 text-center">
+          <MessageSquare size={48} className="text-gray-600 mx-auto mb-4" />
+          <p className="text-gray-400">Noch keine Demo-Anfragen vorhanden</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {demoRequests.map((request) => (
+            <div key={request.id} className="bg-gray-900/50 rounded-lg p-4 border border-gray-700/50">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h4 className="font-medium text-white">{request.name}</h4>
+                    <span className={`px-2 py-1 rounded text-xs ${getStatusColor(request.status)}`}>
+                      {getStatusText(request.status)}
+                    </span>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <span className="text-gray-400">E-Mail:</span>
+                      <span className="text-gray-300 ml-2">{request.email}</span>
+                    </div>
+                    {request.company && (
+                      <div>
+                        <span className="text-gray-400">Firma:</span>
+                        <span className="text-gray-300 ml-2">{request.company}</span>
+                      </div>
+                    )}
+                    {request.phone && (
+                      <div>
+                        <span className="text-gray-400">Telefon:</span>
+                        <span className="text-gray-300 ml-2">{request.phone}</span>
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-gray-400">Datum:</span>
+                      <span className="text-gray-300 ml-2">
+                        {new Date(request.created_at).toLocaleDateString('de-DE')}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {request.expectations && (
+                    <div className="mt-3">
+                      <span className="text-gray-400 text-sm">Erwartungen:</span>
+                      <p className="text-gray-300 mt-1 text-sm">{request.expectations}</p>
+                    </div>
+                  )}
+
+                  {request.password && (
+                    <div className="mt-3 p-2 bg-green-900/20 border border-green-500/30 rounded">
+                      <span className="text-green-400 text-sm">Passwort: </span>
+                      <code className="text-green-300">{request.password}</code>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2 ml-4">
+                  {request.status === 'pending' && (
+                    <button
+                      onClick={() => handleCreateAccount(request)}
+                      disabled={creatingAccount === request.id}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded disabled:opacity-50"
+                    >
+                      {creatingAccount === request.id ? (
+                        <Loader size={14} className="animate-spin" />
+                      ) : (
+                        <UserPlus size={14} />
+                      )}
+                      Account erstellen
+                    </button>
+                  )}
+                  
+                  <button
+                    onClick={() => handleDelete(request)}
+                    className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-900/20 rounded"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

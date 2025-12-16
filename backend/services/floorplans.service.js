@@ -156,6 +156,7 @@ exports.getBoxesOnPlan = async (floorPlanId, organisationId) => {
     .select(`
       id,
       number,
+      qr_code,
       notes,
       current_status,
       pos_x,
@@ -201,6 +202,7 @@ exports.getUnplacedBoxes = async (objectId, organisationId) => {
     .select(`
       id,
       number,
+      qr_code,
       notes,
       current_status,
       box_type_id,
@@ -216,6 +218,7 @@ exports.getUnplacedBoxes = async (objectId, organisationId) => {
     .eq("organisation_id", organisationId)
     .eq("active", true)
     .is("floor_plan_id", null)
+    .or("position_type.is.null,position_type.eq.none")
     .order("number", { ascending: true });
 
   if (error) {
@@ -230,6 +233,56 @@ exports.getUnplacedBoxes = async (objectId, organisationId) => {
     box_type_category: box.box_types?.category || null
   }));
 
+  return flattenedData;
+};
+
+// ============================================
+// GET GPS-PLACED BOXES
+// Boxen die auf Maps (GPS) platziert sind
+// ============================================
+exports.getGpsBoxes = async (objectId, organisationId) => {
+  const { data, error } = await supabase
+    .from("boxes")
+    .select(`
+      id,
+      number,
+      qr_code,
+      notes,
+      current_status,
+      box_type_id,
+      control_interval_days,
+      object_id,
+      lat,
+      lng,
+      position_type,
+      last_scan,
+      box_types:box_type_id (
+        id,
+        name,
+        category
+      )
+    `)
+    .eq("object_id", objectId)
+    .eq("organisation_id", organisationId)
+    .eq("active", true)
+    .eq("position_type", "gps")
+    .not("lat", "is", null)
+    .not("lng", "is", null)
+    .order("number", { ascending: true });
+
+  if (error) {
+    console.error("FloorPlans getGpsBoxes Error:", error);
+    throw new Error(error.message);
+  }
+
+  // Flatten box_type_name for frontend
+  const flattenedData = (data || []).map(box => ({
+    ...box,
+    box_type_name: box.box_types?.name || null,
+    box_type_category: box.box_types?.category || null
+  }));
+
+  console.log(`📍 Found ${flattenedData.length} GPS boxes for object ${objectId}`);
   return flattenedData;
 };
 

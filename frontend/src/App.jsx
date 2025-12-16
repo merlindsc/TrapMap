@@ -10,6 +10,7 @@ import { ThemeProvider } from "./components/layout/DashboardLayout";
 
 // Public Pages
 import LandingPage from "./pages/public/LandingPage";
+import VerifyDemo from "./pages/public/VerifyDemo";
 import Login from "./pages/Login";
 
 // Legal Pages
@@ -165,6 +166,9 @@ function MainApp() {
         <Routes>
           {/* Landing Page */}
           <Route path="/" element={<LandingPage />} />
+          
+          {/* Demo Verification */}
+          <Route path="/verify-demo" element={<VerifyDemo />} />
           
           {/* Auth Pages */}
           <Route path="/login" element={<Login />} />

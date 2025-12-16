@@ -112,7 +112,7 @@ function CollapsibleBoxSection({ title, icon, count, variant = "default", defaul
 /* ============================================================
    BOX LIST ITEM - Wie Maps!
    ============================================================ */
-function BoxListItem({ box, onClick, isFloorplan = false, isUnplaced = false, isSelected = false, onDragStart }) {
+function BoxListItem({ box, onClick, isFloorplan = false, isUnplaced = false, isGps = false, isSelected = false, onDragStart }) {
   const formatLastScan = (lastScan) => {
     if (!lastScan) return "Nie";
     const date = new Date(lastScan);
@@ -156,6 +156,37 @@ function BoxListItem({ box, onClick, isFloorplan = false, isUnplaced = false, is
             ? (isSelected ? '✓ Plan tippen' : '→ Antippen') 
             : '⇢ Ziehen'}
         </span>
+      </div>
+    );
+  }
+
+  // GPS Box Style
+  if (isGps) {
+    return (
+      <div className={`box-item-detailed gps group`} onClick={onClick}>
+        <div className="box-item-main">
+          <div className={`box-number-badge ${statusColor}`}>
+            {displayNum}
+          </div>
+          <div className="box-item-info">
+            <div className="box-item-name">
+              <span>Box #{displayNum}</span>
+              <span className="qr-badge">{shortQr}</span>
+              <span className="location-badge">📍 Maps</span>
+            </div>
+            <div className="box-item-meta">
+              <span className="box-type">{box.box_type_name || 'Kein Typ'}</span>
+              <span className="last-scan">
+                <Clock size={11} />
+                {formatLastScan(box.last_scan)}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="box-item-right">
+          <span className={`status-indicator ${statusColor}`} />
+          <ChevronRight size={14} className="item-chevron" />
+        </div>
       </div>
     );
   }
@@ -207,8 +238,12 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [boxesOnPlan, setBoxesOnPlan] = useState([]);
   const [unplacedBoxes, setUnplacedBoxes] = useState([]);
+  const [gpsBoxes, setGpsBoxes] = useState([]);
   const [boxTypes, setBoxTypes] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // URL-Parameter State (um mehrfache Ausführung zu verhindern)
+  const [urlParamsProcessed, setUrlParamsProcessed] = useState(false);
 
   // View State
   const [zoom, setZoom] = useState(1);
@@ -379,6 +414,7 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
     if (objectId) {
       loadFloorPlans();
       loadUnplacedBoxes();
+      loadGpsBoxes();
       loadBoxTypes();
     }
   }, [objectId]);
@@ -404,7 +440,7 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
 
   // URL-Parameter: Box per openBox öffnen
   useEffect(() => {
-    if (openBoxId && boxesOnPlan.length > 0) {
+    if (openBoxId && boxesOnPlan.length > 0 && !urlParamsProcessed) {
       const boxToOpen = boxesOnPlan.find(b => b.id === parseInt(openBoxId));
       
       if (boxToOpen) {
@@ -418,15 +454,16 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
           setScanDialogOpen(true);
         }
         
-        // URL-Parameter entfernen
+        // URL-Parameter entfernen und als verarbeitet markieren
         clearUrlParams();
+        setUrlParamsProcessed(true);
       }
     }
-  }, [openBoxId, boxesOnPlan]);
+  }, [openBoxId, boxesOnPlan, urlParamsProcessed]);
 
   // URL-Parameter: Box platzieren
   useEffect(() => {
-    if (shouldPlaceBox && unplacedBoxes.length > 0) {
+    if (shouldPlaceBox && unplacedBoxes.length > 0 && !urlParamsProcessed) {
       const boxId = searchParams.get("placeBox") || openBoxId;
       const boxToPlaceFound = unplacedBoxes.find(b => b.id === parseInt(boxId));
       
@@ -439,9 +476,10 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
         }
         setMode("place");
         clearUrlParams();
+        setUrlParamsProcessed(true);
       }
     }
-  }, [shouldPlaceBox, unplacedBoxes]);
+  }, [shouldPlaceBox, unplacedBoxes, urlParamsProcessed]);
 
   const clearUrlParams = () => {
     const newParams = new URLSearchParams(searchParams);
@@ -487,6 +525,16 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
       setUnplacedBoxes(boxesData);
     } catch (err) {
       console.error("Load unplaced boxes error:", err);
+    }
+  };
+
+  const loadGpsBoxes = async () => {
+    try {
+      const res = await axios.get(`${API}/floorplans/object/${objectId}/gps`, { headers });
+      let boxesData = calculateDisplayNumbers(res.data || []);
+      setGpsBoxes(boxesData);
+    } catch (err) {
+      console.error("Load GPS boxes error:", err);
     }
   };
 
@@ -627,6 +675,7 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
       
       await loadBoxesOnPlan(selectedPlan.id);
       await loadUnplacedBoxes();
+      await loadGpsBoxes();
       
       setDraggedBox(null);
       setBoxToPlace(null);
@@ -690,14 +739,17 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
     loadBoxesOnPlan(selectedPlan.id);
     setScanDialogOpen(false);
     setSelectedBox(null);
+    // URL-Parameter bleiben verarbeitet, um Wiederöffnung zu verhindern
   };
 
   const handleEditCompleted = () => {
     loadBoxesOnPlan(selectedPlan.id);
     loadUnplacedBoxes();
+    loadGpsBoxes();
     setEditDialogOpen(false);
     setSelectedBox(null);
     setIsFirstSetup(false);
+    // URL-Parameter bleiben verarbeitet, um Wiederöffnung zu verhindern
   };
 
   /* ============================================================
@@ -1009,6 +1061,28 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
                 )}
               </CollapsibleBoxSection>
 
+              {/* GPS-Boxen auf Maps */}
+              <CollapsibleBoxSection
+                title="Auf Maps stationiert"
+                icon={<Map size={16} />}
+                count={gpsBoxes.length}
+                variant="map"
+                defaultOpen={false}
+              >
+                {gpsBoxes.length === 0 ? (
+                  <div className="section-empty">Keine GPS-Boxen</div>
+                ) : (
+                  gpsBoxes.map((box) => (
+                    <BoxListItem 
+                      key={box.id} 
+                      box={box} 
+                      isGps={true}
+                      onClick={() => handleBoxClick(box)}
+                    />
+                  ))
+                )}
+              </CollapsibleBoxSection>
+
               {/* Platzierte Boxen */}
               <CollapsibleBoxSection
                 title="Auf Plan"
@@ -1073,7 +1147,7 @@ export default function FloorPlanEditor({ objectId, objectName, openBoxIdProp })
           position={createPosition}
           boxTypes={boxTypes}
           onClose={() => { setCreateDialogOpen(false); setMode("view"); }}
-          onSave={() => { loadBoxesOnPlan(selectedPlan.id); loadUnplacedBoxes(); setCreateDialogOpen(false); setMode("view"); }}
+          onSave={() => { loadBoxesOnPlan(selectedPlan.id); loadUnplacedBoxes(); loadGpsBoxes(); setCreateDialogOpen(false); setMode("view"); }}
         />
       )}
 

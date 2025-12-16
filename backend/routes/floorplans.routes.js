@@ -46,6 +46,16 @@ router.get(
 );
 
 // ========================================================
+// GET GPS-placed boxes for object
+// GET /api/floorplans/object/:objectId/gps
+// ========================================================
+router.get(
+  '/object/:objectId/gps',
+  authenticate,
+  asyncHandler(floorplansController.getGpsBoxes)
+);
+
+// ========================================================
 // GET boxes on a floor plan
 // GET /api/floorplans/:id/boxes
 // ========================================================

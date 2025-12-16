@@ -10,10 +10,92 @@ import {
   Check, Menu, X, Camera, Settings, Users, Sliders,
   Phone, Mail, ArrowRight, Sparkles, Timer, UserCheck
 } from "lucide-react";
+import trapMapLogo from "../../assets/trapmap-logo-200.png";
 import "./LandingPage.css";
 
 export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // Demo form state
+  const [demoForm, setDemoForm] = useState({
+    name: '',
+    company: '',
+    email: '',
+    phone: '',
+    expectations: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState('');
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  // Handle demo form submission
+  const handleDemoSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!demoForm.name || !demoForm.email) {
+      setSubmitMessage('Name und E-Mail sind erforderlich');
+      setSubmitSuccess(false);
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitMessage('');
+
+    try {
+      const API = import.meta.env.VITE_API_URL;
+      const response = await fetch(`${API}/demo/request`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(demoForm)
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setSubmitSuccess(true);
+        
+        // Check if account was created automatically
+        if (result.account_created && result.organization && result.user) {
+          setSubmitMessage(
+            `🎉 Fantastisch ${demoForm.name}! Ihr Demo-Account wurde SOFORT erstellt!\n\n` +
+            `✅ Login-Daten wurden an ${demoForm.email} gesendet\n` +
+            `🏢 Organisation: ${result.organization.name}\n` +
+            `🔗 Login-URL: ${result.login_url}\n\n` +
+            `Sie können sich jetzt direkt einloggen! Checken Sie auch Ihr E-Mail-Postfach für die vollständigen Anmeldedaten.`
+          );
+          
+          // Auto-redirect to login after 8 seconds with confirmation
+          setTimeout(() => {
+            if (window.confirm(
+              '🚀 Möchten Sie jetzt direkt zur Login-Seite?\n\n' +
+              'Ihre Login-Daten wurden per E-Mail verschickt.\n' +
+              'Sie müssen nach dem ersten Login Ihr Passwort ändern.'
+            )) {
+              window.open('/login', '_blank');
+            }
+          }, 8000);
+          
+        } else {
+          // Fallback message if auto-creation failed
+          setSubmitMessage(`Vielen Dank ${demoForm.name}! Ihre Demo-Anfrage wurde erfolgreich übermittelt. Wir melden uns innerhalb von 24 Stunden bei Ihnen.`);
+        }
+        
+        setDemoForm({ name: '', company: '', email: '', phone: '', expectations: '' });
+        
+      } else {
+        setSubmitSuccess(false);
+        setSubmitMessage(result.error || 'Fehler beim Übermitteln der Anfrage');
+      }
+    } catch (error) {
+      setSubmitSuccess(false);
+      setSubmitMessage('Netzwerkfehler. Bitte versuchen Sie es später erneut oder kontaktieren Sie uns direkt.');
+      console.error('Demo request error:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="landing-page">
@@ -23,8 +105,7 @@ export default function LandingPage() {
       <nav className="landing-nav">
         <div className="nav-container">
           <div className="nav-brand">
-            <span className="brand-trap">Trap</span>
-            <span className="brand-map">Map</span>
+            <img src={trapMapLogo} alt="TrapMap Logo" className="brand-logo" />
           </div>
 
           <div className="nav-links">
@@ -72,14 +153,14 @@ export default function LandingPage() {
           </div>
           
           <h1>
-            Nie wieder Zettelwirtschaft
+            <span className="hero-title-main">Nie wieder Zettelwirtschaft</span>
             <span className="gradient-text"> bei der Schädlingskontrolle.</span>
           </h1>
           
           <p className="hero-subtitle">
-            TrapMap digitalisiert dein Schädlingsmonitoring. QR-Code scannen, 
-            Status dokumentieren, Report generieren – fertig. 
-            Audit-sicher in 2 Minuten.
+            <strong>TrapMap digitalisiert dein Schädlingsmonitoring.</strong> 
+            QR-Code scannen, Status dokumentieren, Report generieren – fertig. 
+            <span className="highlight-text">Audit-sicher in nur 2 Minuten.</span>
           </p>
 
           <div className="hero-actions">
@@ -409,17 +490,55 @@ export default function LandingPage() {
               Einfach anmelden und loslegen.
             </p>
 
-            <form className="demo-form" onSubmit={(e) => e.preventDefault()}>
-              <input type="text" placeholder="Dein Name" required />
-              <input type="text" placeholder="Firma" required />
-              <input type="email" placeholder="E-Mail" required />
-              <input type="tel" placeholder="Telefon (optional)" />
-              <textarea placeholder="Was erwartest du von TrapMap? (optional)" rows={3}></textarea>
-              <button type="submit" className="btn-primary">
-                Kostenlosen Zugang anfragen
-                <ArrowRight size={18} />
+            <form className="demo-form" onSubmit={handleDemoSubmit}>
+              <input 
+                type="text" 
+                placeholder="Dein Name" 
+                value={demoForm.name}
+                onChange={(e) => setDemoForm({...demoForm, name: e.target.value})}
+                required 
+                disabled={isSubmitting}
+              />
+              <input 
+                type="text" 
+                placeholder="Firma" 
+                value={demoForm.company}
+                onChange={(e) => setDemoForm({...demoForm, company: e.target.value})}
+                disabled={isSubmitting}
+              />
+              <input 
+                type="email" 
+                placeholder="E-Mail" 
+                value={demoForm.email}
+                onChange={(e) => setDemoForm({...demoForm, email: e.target.value})}
+                required 
+                disabled={isSubmitting}
+              />
+              <input 
+                type="tel" 
+                placeholder="Telefon (optional)" 
+                value={demoForm.phone}
+                onChange={(e) => setDemoForm({...demoForm, phone: e.target.value})}
+                disabled={isSubmitting}
+              />
+              <textarea 
+                placeholder="Was erwartest du von TrapMap? (optional)" 
+                rows={3}
+                value={demoForm.expectations}
+                onChange={(e) => setDemoForm({...demoForm, expectations: e.target.value})}
+                disabled={isSubmitting}
+              ></textarea>
+              <button type="submit" className="btn-primary" disabled={isSubmitting}>
+                {isSubmitting ? 'Wird übermittelt...' : 'Kostenlosen Zugang anfragen'}
+                {!isSubmitting && <ArrowRight size={18} />}
               </button>
             </form>
+
+            {submitMessage && (
+              <div className={`submit-message ${submitSuccess ? 'success' : 'error'}`}>
+                {submitMessage}
+              </div>
+            )}
 
             <p className="cta-note">
               Wir melden uns innerhalb von 24 Stunden bei dir.

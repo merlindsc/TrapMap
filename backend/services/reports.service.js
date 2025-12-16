@@ -1,6 +1,7 @@
 // ============================================
 // REPORTS SERVICE - KOMPAKT
 // Max 2-3 Seiten, Fotos eingebettet
+// MIT TRAPMAP LOGO LINKS + FIRMEN-LOGO RECHTS
 // ============================================
 
 const { supabase } = require("../config/supabase");
@@ -284,15 +285,22 @@ const loadImage = async (url) => {
 };
 
 // ============================================
+// TRAPMAP LOGO URL (Öffentlich gehostet)
+// ============================================
+const TRAPMAP_LOGO_URL = "https://trap-map.de/trapmap-logo.png";
+
+// ============================================
 // PDF GENERATION - KOMPAKT (Max 2-3 Seiten)
+// MIT TRAPMAP LOGO LINKS + FIRMEN-LOGO RECHTS
 // ============================================
 exports.generatePDF = async (reportData, options = {}) => {
   if (!PDFDocument) throw new Error("pdfkit nicht installiert - npm install pdfkit");
 
   const { object, organisation, boxes, scans, scansWithPhotos, stats, period } = reportData;
   
-  // Logo laden
-  const logoBuffer = organisation?.logo_url ? await loadImage(organisation.logo_url) : null;
+  // Beide Logos laden
+  const trapMapLogoBuffer = await loadImage(TRAPMAP_LOGO_URL);
+  const companyLogoBuffer = organisation?.logo_url ? await loadImage(organisation.logo_url) : null;
   
   // Scan-Fotos laden wenn gewünscht
   const loadedPhotos = [];
@@ -342,21 +350,55 @@ exports.generatePDF = async (reportData, options = {}) => {
       };
 
       // ========================================
-      // HEADER (Kompakt)
+      // HEADER MIT BEIDEN LOGOS
+      // TrapMap links, Firmen-Logo rechts
       // ========================================
       doc.rect(0, 0, doc.page.width, 70).fill(COLORS.primary);
       
-      if (logoBuffer) {
-        try { doc.image(logoBuffer, 40, 12, { height: 45 }); } catch (e) {}
+      // LINKS: TrapMap Logo oder Text
+      if (trapMapLogoBuffer) {
+        try { 
+          doc.image(trapMapLogoBuffer, 40, 12, { height: 45 }); 
+        } catch (e) {
+          // Fallback: Text
+          doc.fontSize(18).fillColor(COLORS.white).font('Helvetica-Bold');
+          doc.text("TrapMap", 40, 20);
+          doc.fontSize(7).font('Helvetica').fillColor("#93c5fd");
+          doc.text("Pest Control Management", 40, 40);
+        }
+      } else {
+        // Kein Logo - Text verwenden
+        doc.fontSize(18).fillColor(COLORS.white).font('Helvetica-Bold');
+        doc.text("TrapMap", 40, 20);
+        doc.fontSize(7).font('Helvetica').fillColor("#93c5fd");
+        doc.text("Pest Control Management", 40, 40);
       }
 
-      doc.fontSize(16).fillColor(COLORS.white);
-      doc.text("Kontroll-Protokoll", logoBuffer ? 150 : 40, 18);
-      doc.fontSize(10).text(object.name, logoBuffer ? 150 : 40, 38);
-      
-      doc.fontSize(9).fillColor(COLORS.white);
-      doc.text(`${formatDate(period.startDate)} - ${formatDate(period.endDate)}`, 400, 25, { align: "right", width: 140 });
-      doc.text(`Erstellt: ${formatDate(new Date())}`, 400, 38, { align: "right", width: 140 });
+      // MITTE: Titel + Objekt
+      doc.fontSize(14).fillColor(COLORS.white).font('Helvetica-Bold');
+      doc.text("Kontroll-Protokoll", 180, 15, { width: 180, align: 'center' });
+      doc.fontSize(10).font('Helvetica');
+      doc.text(object.name.length > 25 ? object.name.substring(0, 25) + "..." : object.name, 180, 33, { width: 180, align: 'center' });
+      doc.fontSize(8).fillColor("#bfdbfe");
+      doc.text(`${formatDate(period.startDate)} - ${formatDate(period.endDate)}`, 180, 48, { width: 180, align: 'center' });
+
+      // RECHTS: Firmen-Logo oder Name
+      if (companyLogoBuffer) {
+        try { 
+          doc.image(companyLogoBuffer, doc.page.width - 130, 10, { height: 50 }); 
+        } catch (e) {
+          // Fallback: Firmenname
+          doc.fontSize(10).fillColor(COLORS.white).font('Helvetica-Bold');
+          doc.text(organisation?.name || "", doc.page.width - 180, 20, { width: 140, align: 'right' });
+        }
+      } else if (organisation?.name) {
+        doc.fontSize(10).fillColor(COLORS.white).font('Helvetica-Bold');
+        doc.text(organisation.name, doc.page.width - 180, 18, { width: 140, align: 'right' });
+        if (organisation.city) {
+          doc.fontSize(8).font('Helvetica').fillColor("#93c5fd");
+          doc.text(organisation.city, doc.page.width - 180, 32, { width: 140, align: 'right' });
+        }
+      }
 
       y = 85;
 
@@ -383,59 +425,72 @@ exports.generatePDF = async (reportData, options = {}) => {
       y += 45;
 
       // ========================================
-      // BOX-ÜBERSICHT (Kompakte Tabelle)
+      // BOX-ÜBERSICHT (Optimierte Tabelle)
       // ========================================
       if (options.includeBoxList !== false) {
-        doc.fontSize(11).fillColor(COLORS.primary).text("Box-Übersicht", 40, y);
+        doc.fontSize(12).fillColor(COLORS.primary).font('Helvetica-Bold').text("Box-Übersicht", 40, y);
+        y += 20;
+
+        // Optimierte Spaltenbreiten (breitere Typ-Spalte)
+        const col1 = 40;   // Nr
+        const col2 = 70;   // Typ (breiter!)
+        const col3 = 220;  // Status  
+        const col4 = 270;  // Scans
+        const col5 = 310;  // Letzte Kontrolle
+        const col6 = 440;  // Techniker
+
+        // Tabellen-Header (größere Schrift)
+        doc.fontSize(8).fillColor(COLORS.gray).font('Helvetica-Bold');
+        doc.text("Nr", col1, y, { width: 25 });
+        doc.text("Boxtyp", col2, y, { width: 145 });
+        doc.text("Status", col3, y, { width: 45 });
+        doc.text("Scans", col4, y, { width: 35, align: "center" });
+        doc.text("Letzte Kontrolle", col5, y, { width: 125 });
+        doc.text("Techniker", col6, y, { width: 100 });
+        
+        doc.moveTo(40, y + 12).lineTo(pageWidth + 40, y + 12).strokeColor(COLORS.lightGray).stroke();
         y += 18;
 
-        // Tabellen-Header
-        doc.fontSize(7).fillColor(COLORS.gray);
-        doc.text("Nr", 42, y, { width: 25 });
-        doc.text("Typ", 70, y, { width: 120 });
-        doc.text("Status", 195, y, { width: 50 });
-        doc.text("Scans", 250, y, { width: 35 });
-        doc.text("Letzte Kontrolle", 290, y, { width: 90 });
-        doc.text("Techniker", 385, y, { width: 130 });
-        
-        doc.moveTo(40, y + 10).lineTo(pageWidth + 40, y + 10).strokeColor(COLORS.lightGray).stroke();
-        y += 14;
-
-        // Tabellen-Zeilen (Kompakt - 14px pro Zeile)
+        // Tabellen-Zeilen (mehr Platz - 18px pro Zeile)
         boxes.forEach((box, i) => {
           // Neue Seite wenn nötig
-          if (y > pageHeight - 80) {
+          if (y > pageHeight - 100) {
             doc.addPage();
             y = 50;
           }
 
-          // Zebra-Streifen
+          // Zebra-Streifen (höher)
           if (i % 2 === 0) {
-            doc.rect(40, y - 2, pageWidth, 14).fill("#fafafa");
+            doc.rect(40, y - 3, pageWidth, 18).fill("#fafafa");
           }
 
           const lastStatus = box.lastScan?.status || "none";
           const techName = box.lastScan?.users 
-            ? `${box.lastScan.users.first_name} ${box.lastScan.users.last_name}`.substring(0, 20)
+            ? `${box.lastScan.users.first_name} ${box.lastScan.users.last_name}`
             : "-";
+          
+          // Box-Typ ohne Abkürzung
+          const boxTypeName = box.box_types?.name || "Unbekannt";
 
-          doc.fontSize(9).fillColor(COLORS.black);
-          doc.text(box.displayNumber?.toString() || "?", 42, y, { width: 25 });
+          // Datenzeile (größere Schrift, mehr Platz)
+          doc.font('Helvetica').fontSize(9).fillColor(COLORS.black);
+          doc.text(box.displayNumber?.toString() || "?", col1 + 2, y + 2, { width: 25 });
           
           doc.fontSize(8).fillColor(COLORS.darkGray);
-          doc.text((box.box_types?.name || "Unbekannt").substring(0, 22), 70, y, { width: 120 });
+          doc.text(boxTypeName, col2 + 2, y + 2, { width: 140, lineBreak: false });
           
-          drawStatusDot(195, y, lastStatus);
-          doc.fontSize(7).fillColor(STATUS_CONFIG[lastStatus]?.color || COLORS.gray);
-          doc.text(STATUS_CONFIG[lastStatus]?.label || "-", 205, y, { width: 40 });
+          drawStatusDot(col3 + 2, y + 4, lastStatus, 8);
+          doc.fontSize(8).fillColor(STATUS_CONFIG[lastStatus]?.color || COLORS.gray);
+          doc.text(STATUS_CONFIG[lastStatus]?.label || "-", col3 + 15, y + 2, { width: 30 });
           
-          doc.fillColor(COLORS.black).text(box.scanCount?.toString() || "0", 250, y, { width: 35, align: "center" });
+          doc.fontSize(8).fillColor(COLORS.black);
+          doc.text(box.scanCount?.toString() || "0", col4, y + 2, { width: 35, align: "center" });
           
           doc.fontSize(7).fillColor(COLORS.gray);
-          doc.text(box.lastScan ? formatDateTime(box.lastScan.scanned_at) : "-", 290, y, { width: 90 });
-          doc.text(techName, 385, y, { width: 130 });
+          doc.text(box.lastScan ? formatDateTime(box.lastScan.scanned_at) : "-", col5 + 2, y + 2, { width: 120 });
+          doc.text(techName.length > 15 ? techName.substring(0, 15) + "..." : techName, col6 + 2, y + 2, { width: 95 });
 
-          y += 14;
+          y += 18; // Mehr Zeilenabstand
         });
       }
 
@@ -449,10 +504,10 @@ exports.generatePDF = async (reportData, options = {}) => {
           y = 50;
         }
 
-        doc.fontSize(11).fillColor(COLORS.primary).text("Zusammenfassung", 40, y);
+        doc.fontSize(11).fillColor(COLORS.primary).font('Helvetica-Bold').text("Zusammenfassung", 40, y);
         y += 16;
 
-        doc.fontSize(9).fillColor(COLORS.darkGray);
+        doc.fontSize(9).fillColor(COLORS.darkGray).font('Helvetica');
         
         const totalIssues = stats.yellowScans + stats.orangeScans + stats.redScans;
         const okRate = stats.totalScans > 0 
@@ -481,7 +536,7 @@ exports.generatePDF = async (reportData, options = {}) => {
           y = 50;
         }
 
-        doc.fontSize(11).fillColor(COLORS.primary).text(`Foto-Dokumentation (${loadedPhotos.length})`, 40, y);
+        doc.fontSize(11).fillColor(COLORS.primary).font('Helvetica-Bold').text(`Foto-Dokumentation (${loadedPhotos.length})`, 40, y);
         y += 18;
 
         const imgSize = 120;
@@ -511,7 +566,7 @@ exports.generatePDF = async (reportData, options = {}) => {
             
             // Info unter Foto
             drawStatusDot(x, y + imgSize - 12, photo.status, 5);
-            doc.fontSize(7).fillColor(COLORS.black);
+            doc.fontSize(7).fillColor(COLORS.black).font('Helvetica');
             doc.text(`Box ${photo.box_number}`, x + 8, y + imgSize - 12, { width: imgSize - 10 });
             doc.fontSize(6).fillColor(COLORS.gray);
             doc.text(formatDateTime(photo.scanned_at), x, y + imgSize - 2, { width: imgSize });
@@ -532,7 +587,7 @@ exports.generatePDF = async (reportData, options = {}) => {
           y = 50;
         }
 
-        doc.fontSize(11).fillColor(COLORS.primary).text(`Zusätzliche Fotos (${customPhotos.length})`, 40, y);
+        doc.fontSize(11).fillColor(COLORS.primary).font('Helvetica-Bold').text(`Zusätzliche Fotos (${customPhotos.length})`, 40, y);
         y += 18;
 
         const imgSize = customPhotos.length <= 4 ? 180 : 120;
@@ -560,7 +615,7 @@ exports.generatePDF = async (reportData, options = {}) => {
             });
             
             if (photo.caption) {
-              doc.fontSize(7).fillColor(COLORS.darkGray);
+              doc.fontSize(7).fillColor(COLORS.darkGray).font('Helvetica');
               doc.text(photo.caption, x, y + imgSize - 15, { width: imgSize });
             }
           } catch (err) {
@@ -579,7 +634,7 @@ exports.generatePDF = async (reportData, options = {}) => {
         const footerY = pageHeight - 35;
         doc.moveTo(40, footerY).lineTo(pageWidth + 40, footerY).strokeColor(COLORS.lightGray).stroke();
         
-        doc.fontSize(7).fillColor(COLORS.gray);
+        doc.fontSize(7).fillColor(COLORS.gray).font('Helvetica');
         doc.text(`${object.name} | ${formatDate(period.startDate)} - ${formatDate(period.endDate)}`, 40, footerY + 8);
         doc.text(`Seite ${i + 1} von ${pages.count}`, pageWidth - 20, footerY + 8, { align: "right", width: 80 });
         doc.text("TrapMap", pageWidth / 2, footerY + 8, { align: "center", width: 80 });
@@ -594,104 +649,289 @@ exports.generatePDF = async (reportData, options = {}) => {
 };
 
 // ============================================
-// GEFAHRENANALYSE PDF (Kompakt)
+// GEFAHRENANALYSE PDF - KORRIGIERT!
+// MIT TRAPMAP LOGO LINKS + FIRMEN-LOGO RECHTS
 // ============================================
 exports.generateGefahrenanalyse = async (formData, organisation) => {
   if (!PDFDocument) throw new Error("pdfkit nicht installiert");
 
-  const logoBuffer = organisation?.logo_url ? await loadImage(organisation.logo_url) : null;
+  console.log("📄 Gefahrenanalyse formData:", JSON.stringify(formData, null, 2));
+
+  // Beide Logos laden
+  const trapMapLogoBuffer = await loadImage(TRAPMAP_LOGO_URL);
+  const companyLogoBuffer = organisation?.logo_url ? await loadImage(organisation.logo_url) : null;
 
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ size: "A4", margin: 50 });
+      const doc = new PDFDocument({ 
+        size: "A4", 
+        margins: { top: 50, bottom: 50, left: 50, right: 50 },
+        bufferPages: true
+      });
       const chunks = [];
       
       doc.on("data", (chunk) => chunks.push(chunk));
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
 
-      // Seitenhöhe Management
-      const PAGE_HEIGHT = 842;
-      const MARGIN = 50;
-      const USABLE_HEIGHT = PAGE_HEIGHT - 100; // Mehr Platz nutzen
+      const pageWidth = doc.page.width - 100;
+      let y = 50;
+
+      // ========================================
+      // HEADER MIT BEIDEN LOGOS
+      // TrapMap links, Firmen-Logo rechts
+      // ========================================
+      doc.rect(0, 0, doc.page.width, 90).fill(COLORS.primary);
       
-      const needsNewPage = (needed) => y + needed > USABLE_HEIGHT;
-      const addPageIfNeeded = (needed) => {
-        if (needsNewPage(needed)) {
-          doc.addPage();
-          y = MARGIN;
+      // LINKS: TrapMap Logo oder Text
+      if (trapMapLogoBuffer) {
+        try { 
+          doc.image(trapMapLogoBuffer, 50, 15, { height: 60 }); 
+        } catch (e) {
+          doc.fontSize(20).fillColor(COLORS.white).font('Helvetica-Bold');
+          doc.text("TrapMap", 50, 25);
+          doc.fontSize(8).font('Helvetica').fillColor("#93c5fd");
+          doc.text("Pest Control Management", 50, 48);
         }
+      } else {
+        doc.fontSize(20).fillColor(COLORS.white).font('Helvetica-Bold');
+        doc.text("TrapMap", 50, 25);
+        doc.fontSize(8).font('Helvetica').fillColor("#93c5fd");
+        doc.text("Pest Control Management", 50, 48);
+      }
+
+      // MITTE: Titel
+      doc.fontSize(16).fillColor(COLORS.white).font('Helvetica-Bold');
+      doc.text("Gefahrenanalyse", 180, 20, { width: 200, align: 'center' });
+      doc.fontSize(8).font('Helvetica');
+      doc.text("zur Notwendigkeit einer", 180, 42, { width: 200, align: 'center' });
+      doc.text("befallsunabhängigen Dauerbeköderung", 180, 52, { width: 200, align: 'center' });
+      doc.fontSize(7).fillColor("#bfdbfe");
+      doc.text("gemäß Biozid-VO (EU) Nr. 528/2012", 180, 65, { width: 200, align: 'center' });
+
+      // RECHTS: Firmen-Logo oder Name
+      if (companyLogoBuffer) {
+        try { 
+          doc.image(companyLogoBuffer, doc.page.width - 140, 15, { height: 60 }); 
+        } catch (e) {
+          if (organisation?.name) {
+            doc.fontSize(11).fillColor(COLORS.white).font('Helvetica-Bold');
+            doc.text(organisation.name, doc.page.width - 190, 25, { width: 140, align: 'right' });
+          }
+        }
+      } else if (organisation?.name) {
+        doc.fontSize(11).fillColor(COLORS.white).font('Helvetica-Bold');
+        doc.text(organisation.name, doc.page.width - 190, 25, { width: 140, align: 'right' });
+        if (organisation.city) {
+          doc.fontSize(9).font('Helvetica').fillColor("#93c5fd");
+          doc.text(organisation.city, doc.page.width - 190, 40, { width: 140, align: 'right' });
+        }
+      }
+      
+      y = 110;
+
+      // ========================================
+      // HELPER: Adress-Box zeichnen
+      // ========================================
+      const drawAddressBox = (title, icon, data, x, boxWidth, startY) => {
+        const boxHeight = 100;
+        
+        // Box Background
+        doc.roundedRect(x, startY, boxWidth, boxHeight, 4)
+           .fillAndStroke("#f8fafc", "#e2e8f0");
+        
+        // Titel
+        doc.fontSize(10).fillColor(COLORS.primary).font('Helvetica-Bold').text(title, x + 10, startY + 8);
+        
+        // Daten
+        doc.fontSize(9).fillColor(COLORS.black).font('Helvetica');
+        let textY = startY + 25;
+        
+        if (data.firma) { 
+          doc.font('Helvetica-Bold').text(data.firma, x + 10, textY, { width: boxWidth - 20 }); 
+          textY += 14; 
+        }
+        doc.font('Helvetica');
+        if (data.strasse) { doc.text(data.strasse, x + 10, textY, { width: boxWidth - 20 }); textY += 12; }
+        if (data.plzOrt) { doc.text(data.plzOrt, x + 10, textY, { width: boxWidth - 20 }); textY += 12; }
+        if (data.verantwortlicher) { 
+          doc.fontSize(8).fillColor(COLORS.gray);
+          doc.text(`Ansprechpartner: ${data.verantwortlicher}`, x + 10, textY, { width: boxWidth - 20 }); 
+          textY += 10; 
+        }
+        if (data.telefon) { 
+          doc.fontSize(8).fillColor(COLORS.gray);
+          doc.text(`Tel: ${data.telefon}`, x + 10, textY, { width: boxWidth - 20 }); 
+        }
+        
+        return boxHeight;
       };
 
-      // Header
-      doc.rect(0, 0, doc.page.width, 100).fill(COLORS.primary);
+      // ========================================
+      // DREI SPALTEN: Dienstleister, Auftraggeber, Objekt
+      // ========================================
+      const colWidth = (pageWidth - 20) / 3;
       
-      if (logoBuffer) {
-        try { doc.image(logoBuffer, 50, 20, { height: 60 }); } catch (e) {}
-      }
-
-      doc.fontSize(18).fillColor(COLORS.white).text("Gefahrenanalyse", logoBuffer ? 180 : 50, 35);
-      doc.fontSize(9).text("zur Notwendigkeit einer befallsunabhängigen Dauerbeköderung", logoBuffer ? 180 : 50, 58);
+      drawAddressBox("Dienstleister", "🏢", formData.dienstleister || {}, 50, colWidth, y);
+      drawAddressBox("Auftraggeber", "👤", formData.auftraggeber || {}, 50 + colWidth + 10, colWidth, y);
+      drawAddressBox("Objekt", "📍", formData.objekt || {}, 50 + (colWidth + 10) * 2, colWidth, y);
       
-      let y = 120;
+      y += 115;
 
-      // Objekt-Info
-      if (formData.objekt) {
-        doc.fontSize(12).fillColor(COLORS.primary).text("Objekt", 50, y);
-        y += 15; // Kompakter
-        
-        doc.fontSize(10).fillColor(COLORS.darkGray);
-        if (formData.objekt.firma) { doc.text(`Firma: ${formData.objekt.firma}`, 50, y); y += 12; }
-        if (formData.objekt.adresse) { doc.text(`Adresse: ${formData.objekt.adresse}`, 50, y); y += 12; }
-        if (formData.objekt.ansprechpartner) { doc.text(`Ansprechpartner: ${formData.objekt.ansprechpartner}`, 50, y); y += 12; }
-        y += 10; // Weniger Abstand
-      }
+      // ========================================
+      // DURCHFÜHRUNG
+      // ========================================
+      doc.roundedRect(50, y, pageWidth, 45, 4).fillAndStroke("#f0fdf4", "#bbf7d0");
+      
+      doc.fontSize(10).fillColor(COLORS.primary).font('Helvetica-Bold').text("Durchführung der Gefahrenanalyse", 60, y + 8);
+      
+      doc.fontSize(9).fillColor(COLORS.black).font('Helvetica');
+      const durchf = formData.durchfuehrung || {};
+      doc.text(`Datum: ${durchf.datum || formatDate(new Date())}`, 60, y + 25);
+      doc.text(`Durchgeführt von: ${durchf.durch || "-"}`, 250, y + 25);
+      
+      y += 55;
 
-      // Bewertung
-      if (formData.bewertung) {
-        const bewertungEntries = Object.entries(formData.bewertung).filter(([key, value]) => value);
-        if (bewertungEntries.length > 0) {
-          doc.fontSize(12).fillColor(COLORS.primary).text("Bewertung", 50, y);
-          y += 15; // Kompakter
-          
-          doc.fontSize(10).fillColor(COLORS.darkGray);
-          bewertungEntries.forEach(([key, value]) => {
-            doc.text(`${key}: ${value}`, 50, y); 
-            y += 12; // Kompakter
-          });
-          y += 10; // Weniger Abstand
+      // ========================================
+      // DOKUMENTATION
+      // ========================================
+      doc.roundedRect(50, y, pageWidth, 50, 4).fillAndStroke("#fefce8", "#fef08a");
+      
+      doc.fontSize(10).fillColor(COLORS.primary).font('Helvetica-Bold').text("Aktuelle Dokumentation", 60, y + 8);
+      
+      const doku = formData.dokumentation || {};
+      doc.fontSize(9).fillColor(COLORS.black).font('Helvetica');
+      
+      // Checkboxen
+      const checkX = 60;
+      let checkY = y + 25;
+      
+      const drawCheck = (label, checked, x) => {
+        doc.rect(x, checkY, 10, 10).stroke(COLORS.gray);
+        if (checked) {
+          doc.fontSize(12).fillColor(COLORS.green).text("✓", x + 1, checkY - 2);
         }
-      }
-
-      // Ergebnis
-      if (formData.ergebnis && formData.ergebnis.trim()) {
-        doc.fontSize(12).fillColor(COLORS.primary).text("Ergebnis", 50, y);
-        y += 15; // Kompakter
-        doc.fontSize(10).fillColor(COLORS.black).text(formData.ergebnis, 50, y, { width: doc.page.width - 100 });
-        y += 30; // Fester, kompakter Abstand
-      }
-
-      // Unterschriften - nur neue Seite wenn wirklich kein Platz
-      if (needsNewPage(100)) {
-        doc.addPage();
-        y = MARGIN;
-      }
-      y += 20; // Weniger Abstand
-      doc.fontSize(9).fillColor(COLORS.gray).text(`Datum: ${formatDate(new Date())}`, 50, y);
-      y += 30; // Kompakter
+        doc.fontSize(8).fillColor(COLORS.black).font('Helvetica').text(label, x + 15, checkY + 1);
+      };
       
-      doc.moveTo(50, y).lineTo(230, y).strokeColor(COLORS.gray).stroke();
-      doc.moveTo(280, y).lineTo(460, y).stroke();
-      y += 8;
-      doc.fontSize(8).text("Unterschrift Schädlingsbekämpfer", 50, y);
-      doc.text("Unterschrift Kunde", 280, y);
+      drawCheck("APC Integral", doku.apcIntegral, checkX);
+      drawCheck("APC DocuWeb", doku.apcDocuWeb, checkX + 100);
+      drawCheck("TrapMap", doku.trapmap, checkX + 200);
+      
+      doc.fontSize(9).text(`Behandlungen jährlich: ${formData.behandlungenJaehrlich || "-"}`, checkX + 320, checkY + 1);
+      
+      y += 60;
 
-      // Footer
+      // ========================================
+      // KRITERIEN (Die 3 Fragen)
+      // ========================================
+      doc.fontSize(11).fillColor(COLORS.primary).font('Helvetica-Bold').text("Voraussetzungen für eine Dauerbeköderung", 50, y);
+      doc.fontSize(8).fillColor(COLORS.gray).font('Helvetica').text("Alle drei Kriterien müssen mit JA beantwortet werden.", 50, y + 14);
+      y += 30;
+
+      const kriterienTexte = [
+        "1. Ausschließlicher Einsatz dauerhaft kontrollierter Köderstellen an Eintritts- und Einniststellen. Verwendung von zugriffgeschützten Köderboxen.",
+        "2. Erhöhte Befallsgefahr durch Nagetiere mit besonderer Gefahr für die Gesundheit oder Sicherheit von Mensch und Tier.",
+        "3. Keine Möglichkeit der Verhinderung des Nagetierbefalls durch verhältnismäßige alternative Maßnahmen (baulich, toxinfrei)."
+      ];
+
+      const kriterien = formData.kriterien || [{}, {}, {}];
+      
+      kriterienTexte.forEach((text, i) => {
+        const isJa = kriterien[i]?.ja === true;
+        const isNein = kriterien[i]?.nein === true;
+        const bgColor = isJa ? "#f0fdf4" : (isNein ? "#fef2f2" : "#f9fafb");
+        const borderColor = isJa ? "#86efac" : (isNein ? "#fecaca" : "#e5e7eb");
+        
+        doc.roundedRect(50, y, pageWidth, 45, 4).fillAndStroke(bgColor, borderColor);
+        
+        doc.fontSize(8).fillColor(COLORS.darkGray).font('Helvetica');
+        doc.text(text, 60, y + 8, { width: pageWidth - 100 });
+        
+        // JA / NEIN Buttons
+        const btnY = y + 28;
+        
+        // JA Button
+        doc.roundedRect(pageWidth - 30, btnY, 35, 14, 2)
+           .fillAndStroke(isJa ? COLORS.green : "#fff", isJa ? COLORS.green : "#d1d5db");
+        doc.fontSize(8).fillColor(isJa ? "#fff" : COLORS.gray).text("JA", pageWidth - 25, btnY + 3);
+        
+        // NEIN Button
+        doc.roundedRect(pageWidth + 10, btnY, 40, 14, 2)
+           .fillAndStroke(isNein ? COLORS.red : "#fff", isNein ? COLORS.red : "#d1d5db");
+        doc.fontSize(8).fillColor(isNein ? "#fff" : COLORS.gray).text("NEIN", pageWidth + 15, btnY + 3);
+        
+        y += 52;
+      });
+
+      // ========================================
+      // EMPFEHLUNG
+      // ========================================
+      y += 5;
+      doc.fontSize(11).fillColor(COLORS.primary).font('Helvetica-Bold').text("Empfehlung", 50, y);
+      y += 18;
+
+      const empfehlungen = [
+        { id: 1, text: "Beibehaltung des aktuellen Inspektionsintervalls (<12 Behandlungen/Jahr). Bei akutem Befall: temporäre Umstellung von NeoTox auf Tox-Beköderung." },
+        { id: 2, text: "Befallsunabhängige Dauerbeköderung mit Rodentiziden. Kontrollintervall: 1-4 Wochen je nach Befallsdruck." }
+      ];
+
+      empfehlungen.forEach((emp) => {
+        const isSelected = formData.empfehlung === emp.id;
+        const bgColor = isSelected ? "#eff6ff" : "#f9fafb";
+        const borderColor = isSelected ? "#3b82f6" : "#e5e7eb";
+        
+        doc.roundedRect(50, y, pageWidth, 35, 4).fillAndStroke(bgColor, borderColor);
+        
+        // Radio Button
+        doc.circle(68, y + 17, 6).stroke(isSelected ? COLORS.secondary : COLORS.gray);
+        if (isSelected) {
+          doc.circle(68, y + 17, 3).fill(COLORS.secondary);
+        }
+        
+        doc.fontSize(8).fillColor(COLORS.darkGray).font('Helvetica');
+        doc.text(emp.text, 85, y + 8, { width: pageWidth - 50 });
+        
+        y += 42;
+      });
+
+      // ========================================
+      // UNTERSCHRIFTEN (Neue Seite wenn nötig)
+      // ========================================
+      if (y > 680) {
+        doc.addPage();
+        y = 50;
+      } else {
+        y += 30;
+      }
+
+      doc.fontSize(10).fillColor(COLORS.primary).font('Helvetica-Bold').text("Unterschriften", 50, y);
+      y += 20;
+
+      // Datum
+      doc.fontSize(9).fillColor(COLORS.gray).font('Helvetica');
+      doc.text(`Ort, Datum: ________________________________`, 50, y);
+      y += 40;
+
+      // Unterschriftenlinien
+      doc.moveTo(50, y).lineTo(250, y).stroke(COLORS.gray);
+      doc.moveTo(300, y).lineTo(500, y).stroke(COLORS.gray);
+      
+      doc.fontSize(8).fillColor(COLORS.gray);
+      doc.text("Unterschrift Schädlingsbekämpfer", 50, y + 5);
+      doc.text("Unterschrift Auftraggeber/Kunde", 300, y + 5);
+
+      // ========================================
+      // FOOTER
+      // ========================================
+      const footerY = doc.page.height - 40;
       doc.fontSize(7).fillColor(COLORS.gray);
-      doc.text("Erstellt mit TrapMap - www.trap-map.de", 50, doc.page.height - 40);
+      doc.text("Erstellt mit TrapMap - www.trap-map.de", 50, footerY);
+      doc.text(`Generiert am ${formatDate(new Date())}`, pageWidth - 50, footerY, { align: "right", width: 150 });
 
       doc.end();
     } catch (err) {
+      console.error("Gefahrenanalyse PDF error:", err);
       reject(err);
     }
   });

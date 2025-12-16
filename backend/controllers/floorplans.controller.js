@@ -186,6 +186,22 @@ exports.getUnplacedBoxes = async (req, res) => {
 };
 
 // ========================================================
+// GET /api/floorplans/object/:objectId/gps
+// ========================================================
+exports.getGpsBoxes = async (req, res) => {
+  try {
+    const orgId = req.user.organisation_id;
+    const { objectId } = req.params;
+    
+    const data = await floorPlansService.getGpsBoxes(objectId, orgId);
+    res.json(data);
+  } catch (err) {
+    console.error("FloorPlans getGpsBoxes Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ========================================================
 // PUT /api/floorplans/:id/boxes/:boxId
 // ========================================================
 exports.placeBox = async (req, res) => {

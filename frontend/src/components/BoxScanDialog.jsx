@@ -1,15 +1,17 @@
 /* ============================================================
-   TRAPMAP - BOX SCAN DIALOG V3
+   TRAPMAP - BOX SCAN DIALOG V4
    Kontrolle + Verlauf + Mini-Karte + Box-Name/Nummer Anzeige
+   + Bestätigungsdialog für "Zurück ins Lager"
    
    FEATURES:
    - Mini-Karte für GPS-Boxen mit Live-Distanz
    - Zeigt Box-Name/Nummer wenn anders als QR-Code
    - Nach Speichern → Scanner wieder aktiv (via onScanCreated)
+   - Bestätigungsdialog für Return to Pool
    ============================================================ */
 
 import { useState, useEffect } from "react";
-import { X, Save, Camera, Clock, CheckCircle, AlertCircle, Edit3, MapPin, Navigation, Maximize2, Hash, Archive } from "lucide-react";
+import { X, Save, Camera, Clock, CheckCircle, AlertCircle, Edit3, MapPin, Navigation, Maximize2, Hash, Archive, AlertTriangle } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -41,35 +43,31 @@ function detectBoxType(box) {
 
 // Automatische Status-Berechnung basierend auf BoxType
 function autoStatus(boxType, consumption, quantity, trapState) {
-  // Schlagfalle
   if (boxType === "schlagfalle") {
-    if (trapState === 0) return "green";   // nicht ausgelöst
-    if (trapState === 1) return "yellow";  // ausgelöst
-    if (trapState === 2) return "red";     // Tier drin
+    if (trapState === 0) return "green";
+    if (trapState === 1) return "yellow";
+    if (trapState === 2) return "red";
   }
 
-  // Köder / Monitoring Nager
   if (boxType === "monitoring_rodent" || boxType === "giftbox") {
     const c = parseInt(consumption) || 0;
     if (c === 0) return "green"; 
-    if (c <= 25) return "yellow";
-    if (c <= 50) return "orange";
+    if (c <= 33) return "yellow";
+    if (c <= 66) return "orange";
     return "red";
   }
 
-  // Insekten
   if (boxType === "monitoring_insect") {
     if (quantity === "none" || quantity === "0") return "green";
     if (quantity === "0-5") return "yellow";
     if (quantity === "5-10") return "orange";
-    return "red"; // 10–20, 20+
+    return "red";
   }
 
-  // Default: consumption-basiert
   const c = parseInt(consumption) || 0;
   if (c === 0) return "green";
-  if (c <= 25) return "yellow";
-  if (c <= 75) return "orange";
+  if (c <= 33) return "yellow";
+  if (c <= 66) return "orange";
   return "red";
 }
 
@@ -88,10 +86,7 @@ const getBoxDisplayInfo = (box) => {
   const displayNumber = box?.display_number || box?.number;
   const boxName = box?.name || box?.box_name;
   
-  // Hat die Box eine eigene Nummer die anders ist als QR?
   const hasCustomNumber = displayNumber && displayNumber.toString() !== qrNumber;
-  
-  // Hat die Box einen Namen?
   const hasName = boxName && boxName.trim().length > 0;
   
   return {
@@ -117,7 +112,6 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-// Distanz formatieren
 function formatDistance(meters) {
   if (meters >= 500) return `${(meters / 1000).toFixed(1)} km`;
   return `${Math.round(meters)}m`;
@@ -169,16 +163,132 @@ function MapFitter({ boxPos, userPos }) {
   return null;
 }
 
+// ============================================
+// BESTÄTIGUNGSDIALOG KOMPONENTE
+// ============================================
+function ConfirmReturnDialog({ box, onConfirm, onCancel, loading }) {
+  const boxInfo = getBoxDisplayInfo(box);
+  
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)",
+      zIndex: 10002, display: "flex", alignItems: "center", justifyContent: "center",
+      padding: 20
+    }}>
+      <div style={{
+        background: "#161b22", borderRadius: 12, width: "100%", maxWidth: 340,
+        border: "1px solid #30363d", overflow: "hidden"
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "16px 20px", background: "#21262d",
+          borderBottom: "1px solid #30363d",
+          display: "flex", alignItems: "center", gap: 12
+        }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10,
+            background: "rgba(239, 68, 68, 0.15)",
+            display: "flex", alignItems: "center", justifyContent: "center"
+          }}>
+            <AlertTriangle size={20} color="#ef4444" />
+          </div>
+          <div>
+            <div style={{ color: "#e6edf3", fontWeight: 600, fontSize: 15 }}>
+              Zurück ins Lager?
+            </div>
+            <div style={{ color: "#8b949e", fontSize: 12 }}>
+              Box #{boxInfo.qrNumber || boxInfo.displayNumber}
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: 20 }}>
+          <p style={{ color: "#c9d1d9", fontSize: 13, lineHeight: 1.5, margin: 0 }}>
+            Die Box wird vollständig zurückgesetzt:
+          </p>
+          <ul style={{ 
+            color: "#8b949e", fontSize: 12, margin: "12px 0", 
+            paddingLeft: 20, lineHeight: 1.8 
+          }}>
+            <li>Objekt-Zuweisung wird entfernt</li>
+            <li>Position wird gelöscht</li>
+            <li>Box-Typ wird zurückgesetzt</li>
+            <li>Beim nächsten Scan → Neu-Einrichtung</li>
+          </ul>
+          <div style={{
+            padding: 10, background: "#0d1117", borderRadius: 6,
+            border: "1px solid #21262d", fontSize: 11, color: "#8b949e"
+          }}>
+            💡 Die Scan-Historie bleibt erhalten.
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding: "12px 20px", background: "#0d1117",
+          borderTop: "1px solid #21262d",
+          display: "flex", gap: 10
+        }}>
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            style={{
+              flex: 1, padding: "10px 16px", borderRadius: 6,
+              border: "1px solid #30363d", background: "transparent",
+              color: "#8b949e", fontSize: 13, cursor: "pointer"
+            }}
+          >
+            Abbrechen
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            style={{
+              flex: 1, padding: "10px 16px", borderRadius: 6,
+              border: "none", background: "#da3633",
+              color: "#fff", fontSize: 13, fontWeight: 600,
+              cursor: loading ? "wait" : "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6
+            }}
+          >
+            {loading ? (
+              <>
+                <div style={{ 
+                  width: 14, height: 14, 
+                  border: "2px solid rgba(255,255,255,0.3)", 
+                  borderTopColor: "#fff",
+                  borderRadius: "50%", 
+                  animation: "spin 1s linear infinite"
+                }} />
+                Wird zurückgesetzt...
+              </>
+            ) : (
+              <>
+                <Archive size={14} />
+                Ja, zurück ins Lager
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// HAUPTKOMPONENTE
+// ============================================
 export default function BoxScanDialog({ 
   box, 
   onClose, 
   onSave,
-  onScanCreated,      // WICHTIG: Scanner nutzt das zum Neustarten!
+  onScanCreated,
   onEdit,
   onAdjustPosition,
   onSetGPS,
   onShowDetails,
-  onReturnToStorage   // NEU: Callback für "Zurück ins Lager"
+  onReturnToStorage
 }) {
   const token = localStorage.getItem("trapmap_token");
   
@@ -188,8 +298,8 @@ export default function BoxScanDialog({
   
   // Form
   const [consumption, setConsumption] = useState("0");
-  const [trapState, setTrapState] = useState(0);        // Für Schlagfallen
-  const [quantity, setQuantity] = useState("none");     // Für Insektenmonitore
+  const [trapState, setTrapState] = useState(0);
+  const [quantity, setQuantity] = useState("none");
   const [status, setStatus] = useState("green");
   const [notes, setNotes] = useState("");
   const [photo, setPhoto] = useState(null);
@@ -204,26 +314,27 @@ export default function BoxScanDialog({
   const [gpsError, setGpsError] = useState(null);
   const [distance, setDistance] = useState(null);
 
-  // Box-Info extrahieren
+  // ============================================
+  // NEU: State für Bestätigungsdialog
+  // ============================================
+  const [showReturnConfirm, setShowReturnConfirm] = useState(false);
+  const [returnLoading, setReturnLoading] = useState(false);
+
+  // Box-Info
   const boxInfo = getBoxDisplayInfo(box);
   const typeName = box?.box_types?.name || box?.box_type_name || "Unbekannt";
-  const boxType = detectBoxType(box); // NEU: BoxType erkennen
+  const boxType = detectBoxType(box);
   
-  // Position Type
   const isFloorplanBox = box?.position_type === 'floorplan' || box?.floor_plan_id;
   const hasGPS = box?.lat && box?.lng && !isFloorplanBox;
   const boxPosition = hasGPS ? [parseFloat(box.lat), parseFloat(box.lng)] : null;
-
-  // Mobile Detection
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-  // GPS Position für Mini-Karte - NUR AUF MOBILE!
+  // GPS Position für Mini-Karte
   useEffect(() => {
     if (!hasGPS) return;
-    
-    // DESKTOP: Kein GPS-Tracking, nur Box-Position zeigen
     if (!isMobile) {
-      setDistance(null); // Keine Distanz auf Desktop
+      setDistance(null);
       return;
     }
     
@@ -248,7 +359,6 @@ export default function BoxScanDialog({
       },
       (err) => {
         console.error("GPS error:", err);
-        // Auf Mobile: Fehler zeigen, aber nicht blockieren
         setGpsError("GPS nicht verfügbar");
         setDistance(null);
       },
@@ -258,7 +368,7 @@ export default function BoxScanDialog({
     return () => navigator.geolocation.clearWatch(watchId);
   }, [hasGPS, box?.lat, box?.lng, isMobile]);
 
-  // Status automatisch berechnen basierend auf BoxType
+  // Status automatisch berechnen
   useEffect(() => {
     const newStatus = autoStatus(boxType, consumption, quantity, trapState);
     setStatus(newStatus);
@@ -304,13 +414,11 @@ export default function BoxScanDialog({
       fd.append("notes", notes);
       if (photo) fd.append("photo", photo);
       
-      // BoxType-spezifische Felder
       if (boxType === "schlagfalle") {
         fd.append("trap_state", trapState);
       } else if (boxType === "monitoring_insect") {
         fd.append("quantity", quantity);
       } else {
-        // Default: consumption für Köder/Nager/Default
         fd.append("consumption", consumption);
       }
 
@@ -323,9 +431,7 @@ export default function BoxScanDialog({
       if (r.ok) {
         setToast({ type: "success", msg: "Kontrolle gespeichert!" });
         
-        // WICHTIG: Kurze Verzögerung, dann Callback aufrufen
         setTimeout(() => { 
-          // onScanCreated ist der primäre Callback für Scanner
           if (onScanCreated) {
             onScanCreated();
           } else if (onSave) {
@@ -338,6 +444,44 @@ export default function BoxScanDialog({
     } catch (e) {
       setToast({ type: "error", msg: e.message });
       setLoading(false);
+    }
+  };
+
+  // ============================================
+  // NEU: Return to Storage Handler
+  // ============================================
+  const handleReturnToStorage = async () => {
+    setReturnLoading(true);
+    try {
+      const r = await fetch(`${API}/boxes/${box.id}/return-to-pool`, {
+        method: "POST",
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      if (r.ok) {
+        setToast({ type: "success", msg: "Box zurück ins Lager!" });
+        setShowReturnConfirm(false);
+        
+        setTimeout(() => {
+          if (onReturnToStorage) {
+            onReturnToStorage(box);
+          } else if (onSave) {
+            onSave();
+          } else {
+            onClose();
+          }
+        }, 600);
+      } else {
+        const err = await r.json();
+        throw new Error(err.error || "Fehler beim Zurücksetzen");
+      }
+    } catch (e) {
+      setToast({ type: "error", msg: e.message });
+    } finally {
+      setReturnLoading(false);
     }
   };
 
@@ -360,7 +504,7 @@ export default function BoxScanDialog({
       {toast && (
         <div style={{
           position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)",
-          padding: "8px 16px", borderRadius: 6, zIndex: 10001,
+          padding: "8px 16px", borderRadius: 6, zIndex: 10003,
           background: toast.type === "success" ? "#238636" : "#da3633",
           color: "#fff", fontSize: 13, fontWeight: 500,
           display: "flex", alignItems: "center", gap: 6
@@ -368,6 +512,18 @@ export default function BoxScanDialog({
           {toast.type === "success" ? <CheckCircle size={14}/> : <AlertCircle size={14}/>}
           {toast.msg}
         </div>
+      )}
+
+      {/* ============================================
+          BESTÄTIGUNGSDIALOG
+          ============================================ */}
+      {showReturnConfirm && (
+        <ConfirmReturnDialog
+          box={box}
+          onConfirm={handleReturnToStorage}
+          onCancel={() => setShowReturnConfirm(false)}
+          loading={returnLoading}
+        />
       )}
 
       {/* Overlay */}
@@ -381,14 +537,13 @@ export default function BoxScanDialog({
           display: "flex", flexDirection: "column"
         }}>
           
-          {/* Header - MIT BOX-NAME/NUMMER ANZEIGE */}
+          {/* Header */}
           <div style={{
             padding: "10px 14px", background: "#161b22",
             borderBottom: "1px solid #21262d",
             display: "flex", alignItems: "center", justifyContent: "space-between"
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {/* Box-Nummer Badge */}
               <div style={{
                 width: 30, height: 30, borderRadius: 6,
                 background: STATUS[box?.current_status]?.color || "#1f6feb",
@@ -399,7 +554,6 @@ export default function BoxScanDialog({
               </div>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3", display: "flex", alignItems: "center", gap: 8 }}>
-                  {/* Zeige Box-Name wenn vorhanden */}
                   {boxInfo.hasName ? boxInfo.boxName : `Box #${boxInfo.displayNumber}`}
                   
                   {onEdit && (
@@ -416,35 +570,26 @@ export default function BoxScanDialog({
                   )}
                 </div>
                 
-                {/* Subtitle: Typ + QR-Info wenn anders als Display */}
                 <div style={{ fontSize: 11, color: "#8b949e", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                   <span>{typeName}</span>
                   
-                  {/* QR-Code Badge - IMMER zeigen wenn vorhanden */}
                   {boxInfo.qrNumber && (
                     <span style={{ 
-                      background: "#30363d", 
-                      padding: "1px 6px", 
-                      borderRadius: 4, 
-                      fontSize: 10,
-                      fontFamily: "monospace",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 3
+                      background: "#30363d", padding: "1px 6px", borderRadius: 4, 
+                      fontSize: 10, fontFamily: "monospace",
+                      display: "flex", alignItems: "center", gap: 3
                     }}>
                       <Hash size={9} />
                       QR {boxInfo.qrNumber}
                     </span>
                   )}
                   
-                  {/* Hinweis wenn Nummer anders als QR */}
                   {boxInfo.hasCustomNumber && (
                     <span style={{ color: "#f0b429", fontSize: 10 }}>
                       (Nr. {boxInfo.displayNumber})
                     </span>
                   )}
                   
-                  {/* Lageplan-Position */}
                   {isFloorplanBox && box?.grid_position && (
                     <span style={{ color: "#8b5cf6" }}>• {box.grid_position}</span>
                   )}
@@ -482,15 +627,12 @@ export default function BoxScanDialog({
           <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
             {tab === "scan" ? (
               <>
-                {/* ========== MINI-KARTE FÜR GPS-BOXEN ========== */}
+                {/* Mini-Karte für GPS-Boxen */}
                 {hasGPS && boxPosition && (
                   <div style={{ marginBottom: 14 }}>
                     <div style={{ 
-                      height: 120, 
-                      borderRadius: 8, 
-                      overflow: "hidden",
-                      border: "1px solid #30363d",
-                      position: "relative"
+                      height: 120, borderRadius: 8, overflow: "hidden",
+                      border: "1px solid #30363d", position: "relative"
                     }}>
                       <MapContainer
                         center={boxPosition}
@@ -530,7 +672,7 @@ export default function BoxScanDialog({
                       )}
                     </div>
 
-                    {/* Distanz-Anzeige - NUR auf Mobile sinnvoll */}
+                    {/* Distanz-Anzeige */}
                     {isMobile ? (
                       <div style={{
                         marginTop: 6, padding: "6px 10px", borderRadius: 6,
@@ -576,7 +718,6 @@ export default function BoxScanDialog({
                         )}
                       </div>
                     ) : (
-                      /* DESKTOP: Keine GPS-Distanz, nur Info */
                       <div style={{
                         marginTop: 6, padding: "6px 10px", borderRadius: 6,
                         background: "#161b22", border: "1px solid #30363d",
@@ -598,123 +739,150 @@ export default function BoxScanDialog({
                     background: "#8b5cf615", border: "1px solid #8b5cf630",
                     borderRadius: 8, display: "flex", alignItems: "center", gap: 10
                   }}>
-                    <MapPin size={18} style={{ color: "#a78bfa" }} />
+                    <MapPin size={16} style={{ color: "#8b5cf6" }} />
                     <div>
-                      <div style={{ fontSize: 11, color: "#8b949e" }}>Lageplan-Position</div>
-                      <div style={{ fontSize: 14, color: "#a78bfa", fontWeight: 700, fontFamily: "monospace" }}>
-                        {box.grid_position}
+                      <div style={{ fontSize: 12, color: "#c4b5fd", fontWeight: 500 }}>
+                        Position: {box.grid_position}
                       </div>
+                      {box.floor_plans?.name && (
+                        <div style={{ fontSize: 10, color: "#8b949e" }}>
+                          {box.floor_plans.name}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
 
-                {/* === BOXTYPE-SPEZIFISCHE FELDER === */}
-                
-                {/* SCHLAGFALLE: Zustand der Falle */}
-                {boxType === "schlagfalle" && (
+                {/* Status-Buttons basierend auf BoxType */}
+                {boxType === "schlagfalle" ? (
+                  /* Schlagfallen: 3 Zustände */
                   <div style={{ marginBottom: 14 }}>
-                    <label style={{ display: "block", marginBottom: 6, fontSize: 11, fontWeight: 500, color: "#8b949e" }}>
-                      Zustand der Falle *
-                    </label>
-                    <select
-                      value={trapState}
-                      onChange={(e) => setTrapState(Number(e.target.value))}
-                      style={{
-                        width: "100%", padding: "12px", background: "#161b22",
-                        border: "1px solid #30363d", borderRadius: 6, color: "#e6edf3",
-                        fontSize: 13, cursor: "pointer"
-                      }}
-                    >
-                      <option value={0}>✓ Nicht ausgelöst</option>
-                      <option value={1}>⚠️ Ausgelöst (leer)</option>
-                      <option value={2}>🐀 Tier gefunden</option>
-                    </select>
-                  </div>
-                )}
-
-                {/* INSEKTENMONITOR: Menge */}
-                {boxType === "monitoring_insect" && (
-                  <div style={{ marginBottom: 14 }}>
-                    <label style={{ display: "block", marginBottom: 6, fontSize: 11, fontWeight: 500, color: "#8b949e" }}>
-                      Insektenmenge *
-                    </label>
-                    <select
-                      value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
-                      style={{
-                        width: "100%", padding: "12px", background: "#161b22",
-                        border: "1px solid #30363d", borderRadius: 6, color: "#e6edf3",
-                        fontSize: 13, cursor: "pointer"
-                      }}
-                    >
-                      <option value="none">✓ Keine</option>
-                      <option value="0-5">○ 0–5 Stück</option>
-                      <option value="5-10">● 5–10 Stück</option>
-                      <option value="10-20">●● 10–20 Stück</option>
-                      <option value="20+">●●● 20+ Stück</option>
-                    </select>
-                  </div>
-                )}
-
-                {/* KÖDER/NAGER/DEFAULT: Verbrauch */}
-                {(boxType === "giftbox" || boxType === "monitoring_rodent" || boxType === "default") && (
-                  <div style={{ marginBottom: 14 }}>
-                    <label style={{ display: "block", marginBottom: 6, fontSize: 11, fontWeight: 500, color: "#8b949e" }}>
-                      Köderverbrauch *
-                    </label>
+                    <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 6, fontWeight: 500 }}>Zustand</div>
                     <div style={{ display: "flex", gap: 6 }}>
-                      {["0", "25", "50", "75", "100"].map(v => (
-                        <button key={v} onClick={() => setConsumption(v)} style={{
-                          flex: 1, padding: "10px 0",
-                          background: consumption === v ? "#21262d" : "transparent",
-                          border: consumption === v ? "2px solid #58a6ff" : "1px solid #30363d",
-                          borderRadius: 6, color: consumption === v ? "#e6edf3" : "#8b949e",
-                          fontSize: 12, fontWeight: consumption === v ? 600 : 400, cursor: "pointer"
-                        }}>
-                          {v}%
+                      {[
+                        { val: 0, label: "OK", icon: "✓", bg: "#238636" },
+                        { val: 1, label: "Ausgelöst", icon: "⚠️", bg: "#9e6a03" },
+                        { val: 2, label: "Tier", icon: "🐀", bg: "#da3633" }
+                      ].map(opt => (
+                        <button
+                          key={opt.val}
+                          onClick={() => setTrapState(opt.val)}
+                          style={{
+                            flex: 1, padding: "10px 8px", borderRadius: 6,
+                            border: trapState === opt.val ? `2px solid ${opt.bg}` : "1px solid #30363d",
+                            background: trapState === opt.val ? `${opt.bg}20` : "#161b22",
+                            color: trapState === opt.val ? opt.bg : "#8b949e",
+                            fontSize: 11, fontWeight: 500, cursor: "pointer",
+                            display: "flex", flexDirection: "column", alignItems: "center", gap: 4
+                          }}
+                        >
+                          <span style={{ fontSize: 16 }}>{opt.icon}</span>
+                          {opt.label}
                         </button>
                       ))}
                     </div>
                   </div>
+                ) : boxType === "monitoring_insect" ? (
+                  /* Insekten-Monitoring: Anzahl-Auswahl */
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 6, fontWeight: 500 }}>Insekten-Anzahl</div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {[
+                        { val: "none", label: "Keine", color: "#238636" },
+                        { val: "0-5", label: "0-5", color: "#9e6a03" },
+                        { val: "5-10", label: "5-10", color: "#bd561d" },
+                        { val: "10-20", label: "10-20", color: "#da3633" },
+                        { val: "20+", label: "20+", color: "#da3633" }
+                      ].map(opt => (
+                        <button
+                          key={opt.val}
+                          onClick={() => setQuantity(opt.val)}
+                          style={{
+                            flex: 1, minWidth: 50, padding: "8px 6px", borderRadius: 6,
+                            border: quantity === opt.val ? `2px solid ${opt.color}` : "1px solid #30363d",
+                            background: quantity === opt.val ? `${opt.color}20` : "#161b22",
+                            color: quantity === opt.val ? opt.color : "#8b949e",
+                            fontSize: 11, fontWeight: 500, cursor: "pointer"
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  /* Standard: Consumption Slider */
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ 
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      marginBottom: 8
+                    }}>
+                      <span style={{ fontSize: 11, color: "#8b949e", fontWeight: 500 }}>Köderaufnahme</span>
+                      <span style={{ 
+                        fontSize: 13, fontWeight: 700, 
+                        color: STATUS[status]?.color || "#8b949e"
+                      }}>
+                        {consumption}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="5"
+                      value={consumption}
+                      onChange={(e) => setConsumption(e.target.value)}
+                      style={{ width: "100%", accentColor: STATUS[status]?.color }}
+                    />
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                      <span style={{ fontSize: 10, color: "#238636" }}>0%</span>
+                      <span style={{ fontSize: 10, color: "#da3633" }}>100%</span>
+                    </div>
+                  </div>
                 )}
 
-                {/* Status */}
+                {/* Status Preview */}
                 <div style={{
-                  background: STATUS[status].color, borderRadius: 6,
-                  padding: "10px 12px", marginBottom: 14,
-                  display: "flex", alignItems: "center", gap: 8,
-                  color: "#fff", fontSize: 12, fontWeight: 500
+                  marginBottom: 14, padding: "10px 12px",
+                  background: `${STATUS[status]?.color}15`,
+                  border: `1px solid ${STATUS[status]?.color}40`,
+                  borderRadius: 8, display: "flex", alignItems: "center", gap: 10
                 }}>
-                  <div style={{ width: 8, height: 8, background: "#fff", borderRadius: "50%" }}/>
-                  Status: {STATUS[status].label}
+                  <div style={{
+                    width: 12, height: 12, borderRadius: "50%",
+                    background: STATUS[status]?.color
+                  }} />
+                  <span style={{ fontSize: 12, color: STATUS[status]?.color, fontWeight: 600 }}>
+                    Status: {STATUS[status]?.label}
+                  </span>
                 </div>
 
                 {/* Notizen */}
                 <div style={{ marginBottom: 14 }}>
-                  <label style={{ display: "block", marginBottom: 6, fontSize: 11, fontWeight: 500, color: "#8b949e" }}>
-                    Notizen
-                  </label>
+                  <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 6, fontWeight: 500 }}>Notizen</div>
                   <textarea
                     value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    placeholder="Bemerkungen zur Kontrolle..."
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Optional: Auffälligkeiten, Maßnahmen..."
                     rows={2}
                     style={{
-                      width: "100%", padding: "10px", background: "#161b22",
-                      border: "1px solid #30363d", borderRadius: 6, color: "#e6edf3",
-                      fontSize: 12, resize: "none", boxSizing: "border-box"
+                      width: "100%", padding: 10, borderRadius: 6,
+                      background: "#161b22", border: "1px solid #30363d",
+                      color: "#e6edf3", fontSize: 12, resize: "vertical",
+                      boxSizing: "border-box"
                     }}
                   />
                 </div>
 
                 {/* Foto */}
                 <div style={{ marginBottom: 14 }}>
-                  <label style={{ display: "block", marginBottom: 6, fontSize: 11, fontWeight: 500, color: "#8b949e" }}>
-                    Foto (optional)
-                  </label>
+                  <div style={{ fontSize: 11, color: "#8b949e", marginBottom: 6, fontWeight: 500 }}>Foto</div>
                   {photoPreview ? (
-                    <div style={{ position: "relative" }}>
-                      <img src={photoPreview} alt="" style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 6 }}/>
+                    <div style={{ position: "relative", display: "inline-block" }}>
+                      <img src={photoPreview} alt="Preview" style={{
+                        maxWidth: "100%", maxHeight: 120, borderRadius: 6,
+                        border: "1px solid #30363d"
+                      }}/>
                       <button onClick={() => { setPhoto(null); setPhotoPreview(null); }} style={{
                         position: "absolute", top: 4, right: 4, background: "#da3633",
                         border: "none", borderRadius: "50%", width: 22, height: 22, cursor: "pointer",
@@ -753,7 +921,6 @@ export default function BoxScanDialog({
                       </button>
                     )}
                     
-                    {/* GPS Button NUR auf Mobile und NUR für GPS-Boxen */}
                     {onSetGPS && !isFloorplanBox && isMobile && (
                       <button
                         onClick={() => onSetGPS(box)}
@@ -789,13 +956,11 @@ export default function BoxScanDialog({
                             day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
                           })}
                         </div>
-                        {/* Consumption Badge */}
                         {s.consumption !== undefined && s.consumption !== null && (
                           <div style={{ fontSize: 11, color: "#8b949e", background: "#21262d", padding: "2px 8px", borderRadius: 4 }}>
                             {s.consumption}%
                           </div>
                         )}
-                        {/* Trap State Badge */}
                         {s.trap_state !== undefined && s.trap_state !== null && (
                           <div style={{ 
                             fontSize: 11, 
@@ -805,7 +970,6 @@ export default function BoxScanDialog({
                             {s.trap_state === 0 ? "✓ OK" : s.trap_state === 1 ? "⚠️ Ausgelöst" : "🐀 Tier"}
                           </div>
                         )}
-                        {/* Quantity Badge */}
                         {s.quantity && s.quantity !== "none" && (
                           <div style={{ fontSize: 11, color: "#8b949e", background: "#21262d", padding: "2px 8px", borderRadius: 4 }}>
                             🪲 {s.quantity}
@@ -855,27 +1019,19 @@ export default function BoxScanDialog({
                 <Save size={14}/> {loading ? "Speichern..." : "Kontrolle speichern"}
               </button>
               
-              {/* Return to Storage Button */}
-              {onReturnToStorage && box?.object_id && (
+              {/* Return to Storage Button - ÖFFNET BESTÄTIGUNGSDIALOG */}
+              {box?.object_id && (
                 <button 
-                  onClick={() => onReturnToStorage(box)} 
+                  onClick={() => setShowReturnConfirm(true)} 
                   disabled={loading}
                   style={{
-                    width: "100%", 
-                    padding: "11px", 
-                    borderRadius: 6, 
+                    width: "100%", padding: "11px", borderRadius: 6, 
                     border: "1px solid #30363d",
-                    background: "transparent", 
-                    color: "#ef4444",
-                    fontSize: 12, 
-                    fontWeight: 500, 
+                    background: "transparent", color: "#ef4444",
+                    fontSize: 12, fontWeight: 500, 
                     cursor: loading ? "not-allowed" : "pointer",
-                    display: "flex", 
-                    alignItems: "center", 
-                    justifyContent: "center", 
-                    gap: 6,
-                    marginTop: 8,
-                    transition: "all 0.2s"
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                    marginTop: 8, transition: "all 0.2s"
                   }}
                   onMouseEnter={(e) => {
                     if (!loading) {

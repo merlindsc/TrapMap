@@ -280,25 +280,83 @@ async function generateAuditReport(objectId, orgId, options = {}) {
       const types = {};
       data.boxes.forEach(b => {
         const name = b.box_types?.name || "Unbekannt";
-        if (!types[name]) types[name] = { count: 0, cat: b.box_types?.category || "-", bait: b.box_types?.bait_type || "-" };
+        const category = b.box_types?.category || "-";
+        let baitInfo = b.box_types?.bait_type || "-";
+        
+        // Bei Köder-Boxen mit Gift: Gift mit anzeigen
+        if ((category === "giftbox" || category === "bait_box") && b.box_types?.bait_substance) {
+          baitInfo = `${baitInfo} (${b.box_types.bait_substance})`;
+        }
+        
+        if (!types[name]) types[name] = { count: 0, cat: category, bait: baitInfo };
         types[name].count++;
       });
 
       doc.fontSize(8).fillColor(GRAY).font("Helvetica-Bold");
       doc.text("Typ", MARGIN, y);
       doc.text("Kategorie", MARGIN + 150, y);
-      doc.text("Köder", MARGIN + 280, y);
+      doc.text("Köder/Gift", MARGIN + 280, y);
       doc.text("Anzahl", MARGIN + 420, y);
       y += 12;
       drawLine();
 
       doc.font("Helvetica").fillColor(BLACK);
       Object.entries(types).forEach(([name, info]) => {
-        doc.text(cut(name, 25), MARGIN, y);
-        doc.text(cut(info.cat, 20), MARGIN + 150, y);
-        doc.text(cut(info.bait, 25), MARGIN + 280, y);
+        doc.text(cut(name, 35), MARGIN, y); // Länger: 25 → 35
+        doc.text(cut(info.cat, 25), MARGIN + 150, y); // Länger: 20 → 25
+        doc.text(cut(info.bait, 30), MARGIN + 280, y); // Länger: 25 → 30
         doc.text(String(info.count), MARGIN + 420, y);
-        y += 11;
+        y += 12; // Mehr Zeilenabstand: 11 → 12
+      });
+    }
+
+    // ========== ERSTEINRICHTUNG ==========
+    
+    if (data.boxes.length > 0) {
+      if (needsNewPage(300)) addPage();
+      
+      doc.fontSize(14).fillColor(BLUE).font("Helvetica-Bold");
+      doc.text("Ersteinrichtung", MARGIN, y);
+      y += 18;
+
+      doc.fontSize(8).fillColor(GRAY).font("Helvetica-Bold");
+      doc.text("Nr", MARGIN, y);
+      doc.text("QR-Code", MARGIN + 30, y);
+      doc.text("Typ", MARGIN + 100, y);
+      doc.text("Köder/Gift", MARGIN + 220, y);
+      doc.text("Position", MARGIN + 350, y);
+      doc.text("Eingerichtet", MARGIN + 430, y);
+      y += 12;
+      drawLine();
+
+      doc.font("Helvetica");
+      data.boxes.forEach(box => {
+        if (needsNewPage(40)) addPage();
+        
+        const boxType = box.box_types?.name || "Unbekannt";
+        const category = box.box_types?.category || "";
+        let baitInfo = box.box_types?.bait_type || "-";
+        
+        // Bei Köder-Boxen mit Gift: Gift mit anzeigen
+        if ((category === "giftbox" || category === "bait_box") && box.box_types?.bait_substance) {
+          baitInfo = `${baitInfo} (${box.box_types.bait_substance})`;
+        }
+        
+        const position = box.lat && box.lng ? "GPS" : 
+                        box.floor_plan_id ? "Lageplan" : 
+                        "Nicht platziert";
+        
+        const setupDate = box.created_at ? formatDate(box.created_at) : "-";
+
+        doc.fillColor(BLACK);
+        doc.text(String(box.number || "-"), MARGIN, y);
+        doc.text(cut(box.qr_code || "-", 12), MARGIN + 30, y);
+        doc.text(cut(boxType, 18), MARGIN + 100, y);
+        doc.text(cut(baitInfo, 20), MARGIN + 220, y);
+        doc.text(position, MARGIN + 350, y);
+        doc.text(setupDate, MARGIN + 430, y);
+        
+        y += 12;
       });
     }
 
@@ -339,13 +397,13 @@ async function generateAuditReport(objectId, orgId, options = {}) {
 
         doc.fillColor(BLACK);
         doc.text(String(box.number || "-"), MARGIN, y);
-        doc.text(cut(box.qr_code, 12), MARGIN + 30, y);
-        doc.text(cut(box.box_types?.name, 16), MARGIN + 100, y);
+        doc.text(cut(box.qr_code, 15), MARGIN + 30, y); // Länger: 12 → 15
+        doc.text(cut(box.box_types?.name, 22), MARGIN + 100, y); // Länger: 16 → 22
         doc.fillColor(status.color).text(status.label, MARGIN + 200, y);
         doc.fillColor(BLACK).text(formatDate(box.last_scan), MARGIN + 270, y);
         doc.fillColor(overdue ? RED : BLACK).text(nextDue, MARGIN + 370, y);
         
-        y += 11;
+        y += 12; // Mehr Zeilenabstand: 11 → 12
       });
     }
 
@@ -381,10 +439,10 @@ async function generateAuditReport(objectId, orgId, options = {}) {
         doc.fillColor(BLACK).text(formatDateTime(scan.scanned_at).slice(0, 16), MARGIN, y);
         doc.text(String(scan.boxes?.number || "-"), MARGIN + 90, y);
         doc.fillColor(status.color).text(status.label, MARGIN + 130, y);
-        doc.fillColor(BLACK).text(cut(tech, 18), MARGIN + 200, y);
-        doc.text(cut(scan.notes || scan.findings || "-", 35), MARGIN + 300, y);
+        doc.fillColor(BLACK).text(cut(tech, 22), MARGIN + 200, y); // Länger: 18 → 22
+        doc.text(cut(scan.notes || scan.findings || "-", 40), MARGIN + 300, y); // Länger: 35 → 40
         
-        y += 10;
+        y += 11; // Mehr Platz: 10 → 11
       }
 
       if (data.scans.length > maxScans) {
@@ -417,12 +475,12 @@ async function generateAuditReport(objectId, orgId, options = {}) {
         const techScans = data.scans.filter(s => s.user_id === tech.id);
         const name = `${tech.first_name || ""} ${tech.last_name || ""}`.trim();
 
-        doc.fillColor(BLACK).text(cut(name, 30), MARGIN, y);
+        doc.fillColor(BLACK).text(cut(name, 35), MARGIN, y); // Länger: 30 → 35
         doc.text(String(techScans.length), MARGIN + 200, y);
         doc.fillColor(GREEN).text(String(techScans.filter(s => s.status === "green").length), MARGIN + 280, y);
         doc.fillColor(ORANGE).text(String(techScans.filter(s => ["yellow", "orange"].includes(s.status)).length), MARGIN + 330, y);
         doc.fillColor(RED).text(String(techScans.filter(s => s.status === "red").length), MARGIN + 400, y);
-        y += 12;
+        y += 13; // Mehr Platz: 12 → 13
       });
     }
 
