@@ -44,6 +44,7 @@ let partnerRoutes = null;
 let adminRoutes = null;
 let auditReportRoutes = null;
 let demoRoutes = null;
+let feedbackRoutes = null;
 
 try { 
   floorplansRoutes = require('./routes/floorplans.routes'); 
@@ -74,6 +75,13 @@ try {
   demoRoutes = require('./routes/demo.routes'); 
   console.log('✅ Demo routes loaded'); 
 } catch (e) {}
+
+try { 
+  feedbackRoutes = require('./routes/feedback.routes'); 
+  console.log('✅ Feedback routes loaded'); 
+} catch (e) {
+  console.log('⚠️ Feedback routes failed to load:', e.message);
+}
 
 // ============================================
 // AUDIT REPORT ROUTES (PDF Generator)
@@ -220,6 +228,7 @@ if (partnerRoutes) {
 }
 if (adminRoutes) app.use('/api/admin', adminRoutes);
 if (demoRoutes) app.use('/api/demo', demoRoutes);
+if (feedbackRoutes) app.use('/api/feedback', feedbackRoutes);
 
 // ============================================
 // AUDIT REPORT ROUTES (PDF Generator)
