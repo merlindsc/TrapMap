@@ -339,15 +339,15 @@ export default function Admin() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white">Super-Admin Dashboard</h1>
-            <p className="text-gray-400 text-sm">TrapMap Systemverwaltung</p>
+            <p className="text-gray-200 text-sm">TrapMap Systemverwaltung</p>
           </div>
         </div>
 
         {/* Header Stats */}
         <div className="hidden md:flex gap-4 text-sm">
-          <div className="text-gray-400">{headerStats.orgs}<span className="text-gray-600">Organisationen</span></div>
-          <div className="text-gray-400">{headerStats.users}<span className="text-gray-600">Benutzer</span></div>
-          <div className="text-gray-400">{headerStats.qr}<span className="text-gray-600">QR-Codes</span></div>
+          <div className="text-white font-medium">{headerStats.orgs} <span className="text-gray-200">Organisationen</span></div>
+          <div className="text-white font-medium">{headerStats.users} <span className="text-gray-200">Benutzer</span></div>
+          <div className="text-white font-medium">{headerStats.qr} <span className="text-gray-200">QR-Codes</span></div>
         </div>
       </div>
 
@@ -372,7 +372,7 @@ export default function Admin() {
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
               activeTab === tab.id
                 ? `${tab.color} text-white`
-                : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
+                : 'bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
             }`}
           >
             <tab.icon size={18} />
@@ -546,7 +546,7 @@ function OrganisationsTab({ organisations, onRefresh, showMessage, headers, json
           Organisationen ({organisations.length})
         </h2>
         <div className="flex gap-2">
-          <button onClick={onRefresh} className="p-2 bg-gray-100 dark:bg-gray-950 hover:bg-gray-200 dark:hover:bg-gray-900 rounded-lg text-gray-600 dark:text-gray-400">
+          <button onClick={onRefresh} className="p-2 bg-gray-100 dark:bg-gray-950 hover:bg-gray-200 dark:hover:bg-gray-900 rounded-lg text-gray-700 dark:text-gray-400">
             <RefreshCw size={18} />
           </button>
           <button
@@ -596,7 +596,7 @@ function OrganisationsTab({ organisations, onRefresh, showMessage, headers, json
                 <span className="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded">#{org.id}</span>
                 <h3 className="font-medium text-white">{org.name}</h3>
               </div>
-              <div className="flex gap-4 mt-1 text-sm text-gray-400">
+              <div className="flex gap-4 mt-1 text-sm text-gray-600 dark:text-gray-400">
                 {org.email && <span className="flex items-center gap-1"><Mail size={12} />{org.email}</span>}
                 {org.city && <span className="flex items-center gap-1"><MapPin size={12} />{org.city}</span>}
               </div>
@@ -612,7 +612,7 @@ function OrganisationsTab({ organisations, onRefresh, showMessage, headers, json
             </div>
           </div>
         ))}
-        {organisations.length === 0 && <p className="text-center text-gray-500 py-8">Keine Organisationen</p>}
+        {organisations.length === 0 && <p className="text-center text-gray-600 dark:text-gray-500 py-8">Keine Organisationen</p>}
       </div>
     </div>
   );
@@ -728,9 +728,9 @@ function UsersTab({ users, organisations, onRefresh, showMessage, headers, jsonH
                 <h3 className="font-medium text-white">{user.email}</h3>
                 {!user.active && <span className="text-xs text-red-400">(Inaktiv)</span>}
               </div>
-              <div className="flex gap-4 mt-1 text-sm text-gray-400">
+              <div className="flex gap-4 mt-1 text-sm text-gray-600 dark:text-gray-400">
                 <span>{user.first_name} {user.last_name}</span>
-                <span className="text-gray-600">|</span>
+                <span className="text-gray-600 dark:text-gray-600">|</span>
                 <span className="text-indigo-400">{user.organisation_name || `Org #${user.organisation_id}`}</span>
               </div>
             </div>
@@ -882,15 +882,15 @@ function SystemTab({ stats, onRefresh }) {
         </h3>
         <div className="grid md:grid-cols-2 gap-4 text-sm">
           <div className="flex justify-between py-2 border-b border-white/5">
-            <span className="text-gray-400">Version</span>
+            <span className="text-gray-600 dark:text-gray-400">Version</span>
             <span className="text-white">TrapMap 1.0.0</span>
           </div>
           <div className="flex justify-between py-2 border-b border-white/5">
-            <span className="text-gray-400">Umgebung</span>
+            <span className="text-gray-600 dark:text-gray-400">Umgebung</span>
             <span className="text-green-400">Production</span>
           </div>
           <div className="flex justify-between py-2 border-b border-white/5">
-            <span className="text-gray-400">API Status</span>
+            <span className="text-gray-600 dark:text-gray-400">API Status</span>
             <span className="text-green-400 flex items-center gap-1"><Activity size={14} /> Online</span>
           </div>
           <div className="flex justify-between py-2 border-b border-white/5">

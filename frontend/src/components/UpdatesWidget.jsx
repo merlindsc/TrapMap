@@ -101,6 +101,7 @@ export default function UpdatesWidget() {
       return newUpdates;
     });
     setShowBadge(false);
+    setIsOpen(false); // Close panel immediately since widget will disappear
   };
 
   const getUpdateIcon = (type) => {
@@ -121,6 +122,11 @@ export default function UpdatesWidget() {
       default: return 'priority-medium';
     }
   };
+
+  // Don't render anything if all updates are read
+  if (unreadCount === 0) {
+    return null;
+  }
 
   return (
     <>
