@@ -357,6 +357,8 @@ export default function Admin() {
                   demoRequests={demoRequests}
                   onRefresh={loadDemoRequests}
                   showMessage={showMessage}
+                  headers={headers}
+                  jsonHeaders={jsonHeaders}
                 />
               )}
               {activeTab === "system" && (
@@ -855,7 +857,7 @@ function StatCard({ icon: Icon, label, value, color }) {
 // ============================================
 // DEMO REQUESTS TAB
 // ============================================
-function DemoRequestsTab({ demoRequests, onRefresh, showMessage }) {
+function DemoRequestsTab({ demoRequests, onRefresh, showMessage, headers, jsonHeaders }) {
   const [creatingAccount, setCreatingAccount] = useState(null);
 
   const handleCreateAccount = async (request) => {
@@ -867,20 +869,9 @@ function DemoRequestsTab({ demoRequests, onRefresh, showMessage }) {
     setCreatingAccount(request.id);
     
     try {
-      const API_ENDPOINT = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-      let token = null;
-      try {
-        token = localStorage.getItem("trapmap_token");
-      } catch (e) {
-        console.error("localStorage nicht verfügbar:", e);
-      }
-      
-      const res = await fetch(`${API_ENDPOINT}/demo/create-account/${request.id}`, {
+      const res = await fetch(`${API}/demo/create-account/${request.id}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: jsonHeaders,
         body: JSON.stringify({ password, trial_days: 90 })
       });
 
@@ -904,19 +895,9 @@ function DemoRequestsTab({ demoRequests, onRefresh, showMessage }) {
     if (!window.confirm(`Demo-Anfrage von ${request.name} löschen?`)) return;
     
     try {
-      const API_ENDPOINT = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-      let token = null;
-      try {
-        token = localStorage.getItem("trapmap_token");
-      } catch (e) {
-        console.error("localStorage nicht verfügbar:", e);
-      }
-      
-      const res = await fetch(`${API_ENDPOINT}/demo/requests/${request.id}`, {
+      const res = await fetch(`${API}/demo/requests/${request.id}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers
       });
 
       if (res.ok) {
