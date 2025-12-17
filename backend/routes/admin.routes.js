@@ -17,9 +17,27 @@ const superAdminOnly = (req, res, next) => {
     "hilfe@die-schaedlingsexperten.de"
   ];
   
-  if (!req.user?.email || !allowedEmails.includes(req.user.email)) {
-    return res.status(403).json({ error: "Keine Berechtigung" });
+  console.log("🔒 Super-Admin Check:");
+  console.log("  - User object:", req.user ? "Present" : "Missing");
+  console.log("  - User email:", req.user?.email || "undefined");
+  console.log("  - Allowed emails:", allowedEmails);
+  
+  if (!req.user) {
+    console.log("❌ Super-Admin Check Failed: No user object");
+    return res.status(403).json({ error: "Keine Berechtigung", message: "Benutzerinformationen fehlen" });
   }
+  
+  if (!req.user.email) {
+    console.log("❌ Super-Admin Check Failed: No email in user object");
+    return res.status(403).json({ error: "Keine Berechtigung", message: "E-Mail-Adresse fehlt" });
+  }
+  
+  if (!allowedEmails.includes(req.user.email)) {
+    console.log("❌ Super-Admin Check Failed: Email not in allowed list");
+    return res.status(403).json({ error: "Keine Berechtigung", message: "Super-Admin Rechte erforderlich" });
+  }
+  
+  console.log("✅ Super-Admin Check Passed");
   next();
 };
 
