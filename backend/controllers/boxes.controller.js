@@ -250,7 +250,6 @@ exports.returnToPool = async (req, res) => {
       return res.status(400).json({ error: result.message });
     }
 
-    console.log(`✅ Box ${req.params.id} ins Lager zurückgesendet von User ${req.user.id}`);
     return res.json(result.data);
   } catch (err) {
     console.error("returnToPool error:", err);
@@ -283,7 +282,6 @@ exports.bulkReturnToPool = async (req, res) => {
       return res.status(400).json({ error: result.message });
     }
 
-    console.log(`✅ ${result.count} Boxen ins Lager zurückgesendet von User ${req.user.id}`);
     return res.json({ 
       success: true, 
       count: result.count,
@@ -316,7 +314,6 @@ exports.archiveObjectBoxes = async (req, res) => {
       return res.status(400).json({ error: result.message });
     }
 
-    console.log(`✅ ${result.count} Boxen von Objekt ${object_id} ins Lager - User ${req.user.id}`);
     return res.json({ 
       success: true, 
       count: result.count,

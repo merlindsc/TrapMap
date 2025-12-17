@@ -55,8 +55,6 @@ exports.uploadImage = async (req, res) => {
     const ext = file.originalname.split('.').pop();
     const fileName = `floorplans/${orgId}/${timestamp}-${randomStr}.${ext}`;
 
-    console.log(`📤 Uploading floor plan image: ${fileName}`);
-
     const { data, error } = await supabase.storage
       .from('floorplans')
       .upload(fileName, file.buffer, {
@@ -72,8 +70,6 @@ exports.uploadImage = async (req, res) => {
     const { data: urlData } = supabase.storage
       .from('floorplans')
       .getPublicUrl(fileName);
-
-    console.log(`✅ Floor plan uploaded: ${urlData.publicUrl}`);
 
     res.json({ 
       url: urlData.publicUrl,
@@ -131,7 +127,6 @@ exports.delete = async (req, res) => {
       const match = url.match(/\/floorplans\/(.+)$/);
       if (match) {
         const filePath = match[1];
-        console.log(`🗑️ Deleting floor plan image: ${filePath}`);
         
         const { error: storageError } = await supabase.storage
           .from('floorplans')
@@ -139,8 +134,6 @@ exports.delete = async (req, res) => {
           
         if (storageError) {
           console.warn("⚠️ Could not delete image from storage:", storageError);
-        } else {
-          console.log("✅ Image deleted from storage");
         }
       }
     }
@@ -229,8 +222,6 @@ exports.createBoxOnPlan = async (req, res) => {
     const { id } = req.params;
     const { pos_x, pos_y, grid_position, number, box_type_id, notes, object_id, control_interval_days } = req.body;
 
-    console.log(`📦 Creating box on plan ${id} at (${pos_x}, ${pos_y}) grid: ${grid_position || 'none'}`);
-
     const { data, error } = await supabase
       .from("boxes")
       .insert({
@@ -262,7 +253,6 @@ exports.createBoxOnPlan = async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
 
-    console.log(`✅ Box ${data.number} created on floor plan`);
     res.status(201).json(data);
   } catch (err) {
     console.error("FloorPlans createBoxOnPlan Error:", err);

@@ -58,10 +58,6 @@ exports.create = async (req, res) => {
     const orgId = req.user.organisation_id;
     const userId = req.user.id;
 
-    console.log("📸 Scan request received");
-    console.log("Body:", req.body);
-    console.log("File:", req.file ? req.file.originalname : "No file");
-
     // Foto hochladen wenn vorhanden
     let photoUrl = null;
     if (req.file) {
@@ -86,7 +82,6 @@ exports.create = async (req, res) => {
             .getPublicUrl(uniqueName);
           
           photoUrl = urlData.publicUrl;
-          console.log(`📷 Scan-Foto hochgeladen: ${photoUrl}`);
         }
       } catch (uploadErr) {
         console.error("📷 Upload Error:", uploadErr);
@@ -98,11 +93,6 @@ exports.create = async (req, res) => {
     // FormData schickt strings, also 'true' prüfen
     // ============================================
     const updateGps = req.body.update_gps === 'true' || req.body.update_gps === true;
-    
-    if (req.body.latitude && req.body.longitude) {
-      console.log(`📍 GPS in Request: ${req.body.latitude}, ${req.body.longitude}`);
-      console.log(`📍 update_gps Flag: ${updateGps}`);
-    }
 
     // Scan-Daten aus Body
     const scanData = {
@@ -122,18 +112,12 @@ exports.create = async (req, res) => {
       update_gps: updateGps
     };
 
-    console.log("📝 Creating scan with data:", {
-      ...scanData,
-      photo_url: photoUrl ? '[uploaded]' : null
-    });
-
     const result = await scansService.create(scanData, orgId);
     
     if (!result.success) {
       return res.status(400).json({ error: result.message });
     }
 
-    console.log("✅ Scan created:", result.data.id);
     return res.status(201).json(result.data);
   } catch (err) {
     console.error("❌ Scan create error:", err);

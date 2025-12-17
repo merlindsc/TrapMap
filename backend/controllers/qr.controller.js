@@ -40,13 +40,10 @@ exports.check = async (req, res) => {
       return res.status(400).json({ error: "Code fehlt" });
     }
 
-    console.log(`🔍 checkCode: ${code}`);
-
     const result = await qrService.checkCode(code);
 
     // Code nicht in DB
     if (!result) {
-      console.log(`❌ Code nicht gefunden: ${code}`);
       return res.json({ 
         found: false,
         box_id: null,
@@ -59,7 +56,6 @@ exports.check = async (req, res) => {
 
     // Code existiert aber keine Box verknüpft
     if (!box) {
-      console.log(`⚠️ Code ohne Box: ${code}`);
       return res.json({
         found: true,
         qr_code: result.id,
@@ -112,8 +108,6 @@ exports.check = async (req, res) => {
       control_interval_days: box.control_interval_days || 30
     };
 
-    console.log(`✅ Code gefunden: box_id=${response.box_id}, object_id=${response.object_id}, object_name=${response.object_name}`);
-    
     res.json(response);
   } catch (err) {
     console.error("QR check error:", err);
@@ -172,11 +166,8 @@ exports.assignToObject = async (req, res) => {
       return res.status(400).json({ error: "box_id und object_id erforderlich" });
     }
 
-    console.log(`📦 assignToObject: box=${box_id}, object=${object_id}, org=${org}`);
-
     const result = await qrService.assignToObject(box_id, object_id, org);
     
-    console.log(`✅ Box ${box_id} zu Objekt ${object_id} zugewiesen`);
     res.json(result);
   } catch (err) {
     console.error("QR assignToObject error:", err);

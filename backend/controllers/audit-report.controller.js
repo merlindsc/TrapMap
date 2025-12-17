@@ -18,8 +18,6 @@ exports.generateReport = async (req, res) => {
       return res.status(400).json({ error: "objectId ist erforderlich" });
     }
 
-    console.log(`📄 Generating Audit Report for Object ${objectId}`);
-
     // Optionen aus Query-Parametern
     const options = {
       dateFrom: req.query.dateFrom || null,
@@ -38,8 +36,6 @@ exports.generateReport = async (req, res) => {
     // Dateiname
     const timestamp = new Date().toISOString().split("T")[0];
     const filename = `Audit-Report-${objectId}-${timestamp}.pdf`;
-
-    console.log(`✅ Audit Report generated: ${filename} (${pdfBuffer.length} bytes)`);
 
     // PDF als Download senden
     res.setHeader("Content-Type", "application/pdf");

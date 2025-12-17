@@ -37,13 +37,6 @@ exports.generateAuditReport = async (req, res) => {
     if (!objectId || !startDate || !endDate) {
       return res.status(400).json({ error: "objectId, startDate und endDate erforderlich" });
     }
-
-    console.log(`📄 ====================================`);
-    console.log(`📄 AUDIT REPORT GENERIERUNG`);
-    console.log(`📄 Object ID: ${objectId}`);
-    console.log(`📄 Zeitraum: ${startDate} bis ${endDate}`);
-    console.log(`📄 Optionen:`, options);
-    console.log(`📄 ====================================`);
     
     // Report-Daten laden
     const dataResult = await reportsService.getReportData(orgId, objectId, startDate, endDate);
@@ -80,7 +73,6 @@ exports.generateAuditReport = async (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(pdfBuffer);
     
-    console.log(`✅ Audit report generated: ${filename}`);
   } catch (err) {
     console.error("generateAuditReport error:", err);
     res.status(500).json({ error: "Fehler beim Generieren: " + err.message });
@@ -135,8 +127,6 @@ exports.generateGefahrenanalyse = async (req, res) => {
   try {
     const formData = req.body;
     
-    console.log(`📄 Generating Gefahrenanalyse`);
-    
     const orgResult = await reportsService.getOrganisation(req.user.organisation_id);
     const organisation = orgResult.success ? orgResult.data : null;
 
@@ -150,7 +140,6 @@ exports.generateGefahrenanalyse = async (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(pdfBuffer);
     
-    console.log(`✅ Gefahrenanalyse generated: ${filename}`);
   } catch (err) {
     console.error("generateGefahrenanalyse error:", err);
     res.status(500).json({ error: "Fehler beim Generieren" });

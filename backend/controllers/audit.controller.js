@@ -455,8 +455,6 @@ exports.updateSettings = async (req, res) => {
 
     if (error) throw error;
 
-    console.log(`✅ Audit settings updated for org ${orgId}`);
-
     res.json({
       success: true,
       data,

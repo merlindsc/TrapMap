@@ -24,7 +24,6 @@ exports.getAll = async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
     
-    console.log(`✅ ${data?.length || 0} BoxTypes geladen für Org ${orgId}`);
     res.json(data || []);
     
   } catch (err) {
