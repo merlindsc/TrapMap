@@ -8,7 +8,8 @@ export const getDashboardStats = async () => {
     token = localStorage.getItem("trapmap_token");
   } catch (error) {
     console.error("localStorage nicht verfügbar:", error);
-    throw new Error("localStorage nicht verfügbar");
+    // Return empty stats if localStorage is unavailable
+    return { objects: 0, boxes: 0, scans_today: 0, scans_week: 0 };
   }
 
   const res = await axios.get(`${API_URL}/dashboard/stats`, {
@@ -24,7 +25,8 @@ export const getRecentScans = async () => {
     token = localStorage.getItem("trapmap_token");
   } catch (error) {
     console.error("localStorage nicht verfügbar:", error);
-    throw new Error("localStorage nicht verfügbar");
+    // Return empty array if localStorage is unavailable
+    return [];
   }
 
   const res = await axios.get(`${API_URL}/dashboard/recent-scans`, {
