@@ -172,24 +172,80 @@ router.put("/organisations/:id", async (req, res) => {
 router.delete("/organisations/:id", async (req, res) => {
   try {
     const { id } = req.params;
+    
+    console.log(`🗑️ Starte Organisation Löschung: ID ${id}`);
 
-    // Abhängige Daten löschen
-    await supabase.from("scans").delete().eq("organisation_id", id);
-    await supabase.from("boxes").delete().eq("organisation_id", id);
-    await supabase.from("objects").delete().eq("organisation_id", id);
-    await supabase.from("users").delete().eq("organisation_id", id);
-    await supabase.from("partners").delete().eq("organisation_id", id).catch(() => {});
+    // Schritt 1: Alle Scans löschen
+    try {
+      const { error: scansError } = await supabase
+        .from("scans")
+        .delete()
+        .eq("organisation_id", id);
+      if (scansError) console.log("Scans delete error:", scansError.message);
+    } catch (err) {
+      console.log("Scans delete catch:", err.message);
+    }
 
+    // Schritt 2: Alle Boxen löschen
+    try {
+      const { error: boxesError } = await supabase
+        .from("boxes")
+        .delete()
+        .eq("organisation_id", id);
+      if (boxesError) console.log("Boxes delete error:", boxesError.message);
+    } catch (err) {
+      console.log("Boxes delete catch:", err.message);
+    }
+
+    // Schritt 3: Alle Objekte löschen
+    try {
+      const { error: objectsError } = await supabase
+        .from("objects")
+        .delete()
+        .eq("organisation_id", id);
+      if (objectsError) console.log("Objects delete error:", objectsError.message);
+    } catch (err) {
+      console.log("Objects delete catch:", err.message);
+    }
+
+    // Schritt 4: Alle Users löschen (außer Super-Admins)
+    try {
+      const { error: usersError } = await supabase
+        .from("users")
+        .delete()
+        .eq("organisation_id", id)
+        .not("email", "in", "(admin@demo.trapmap.de,merlin@trapmap.de,hilfe@die-schaedlingsexperten.de)");
+      if (usersError) console.log("Users delete error:", usersError.message);
+    } catch (err) {
+      console.log("Users delete catch:", err.message);
+    }
+
+    // Schritt 5: Partner löschen (falls vorhanden)
+    try {
+      const { error: partnersError } = await supabase
+        .from("partners")
+        .delete()
+        .eq("organisation_id", id);
+      if (partnersError) console.log("Partners delete error:", partnersError.message);
+    } catch (err) {
+      console.log("Partners delete catch:", err.message);
+    }
+
+    // Schritt 6: Organisation löschen
     const { error } = await supabase
       .from("organisations")
       .delete()
       .eq("id", id);
 
-    if (error) return res.status(400).json({ error: error.message });
+    if (error) {
+      console.log("Organisation delete error:", error.message);
+      return res.status(400).json({ error: error.message });
+    }
     
-    console.log(`🗑️ Organisation gelöscht: ID ${id}`);
-    res.json({ message: "Gelöscht" });
+    console.log(`✅ Organisation erfolgreich gelöscht: ID ${id}`);
+    res.json({ message: "Organisation und alle zugehörigen Daten wurden erfolgreich gelöscht" });
   } catch (err) {
+    console.error("Organisation delete catch:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
