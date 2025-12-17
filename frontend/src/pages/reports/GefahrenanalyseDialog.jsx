@@ -14,9 +14,16 @@ import { X, FileText, Download, Loader, Building2, MapPin, Calendar, ClipboardCh
 const API = import.meta.env.VITE_API_URL;
 
 export default function GefahrenanalyseDialog({ isOpen, onClose }) {
-  const token = localStorage.getItem("trapmap_token");
-  const userStr = localStorage.getItem("trapmap_user");
-  const user = userStr ? JSON.parse(userStr) : null;
+  let token = null;
+  let user = null;
+  
+  try {
+    token = localStorage.getItem("trapmap_token");
+    const userStr = localStorage.getItem("trapmap_user");
+    user = userStr ? JSON.parse(userStr) : null;
+  } catch (error) {
+    console.error("localStorage nicht verfügbar:", error);
+  }
 
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);

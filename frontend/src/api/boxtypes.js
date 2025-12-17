@@ -11,11 +11,16 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 // TOKEN HANDLING (automatisch)
 // -------------------------------------------------------
 function getToken() {
-  return (
-    localStorage.getItem("sb_token") ||
-    localStorage.getItem("trapmap_token") ||
-    null
-  );
+  try {
+    return (
+      localStorage.getItem("sb_token") ||
+      localStorage.getItem("trapmap_token") ||
+      null
+    );
+  } catch (error) {
+    console.warn("localStorage nicht verfügbar - Token kann nicht geladen werden:", error);
+    return null;
+  }
 }
 
 function authHeader() {

@@ -25,13 +25,19 @@ const SUPER_ADMINS = [
 
 export default function Admin() {
   let token = null;
+  let tokenAvailable = false;
+  
   try {
     token = localStorage.getItem("trapmap_token");
+    tokenAvailable = !!token;
+    if (!token) {
+      console.warn("⚠️ Kein Token verfügbar - Benutzer ist möglicherweise nicht eingeloggt");
+    }
   } catch (error) {
     console.error("❌ localStorage nicht verfügbar:", error);
   }
   
-  const headers = { Authorization: `Bearer ${token}` };
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
   const jsonHeaders = { ...headers, "Content-Type": "application/json" };
 
   // Tab State
@@ -61,6 +67,7 @@ export default function Admin() {
     try {
       console.log("📊 Loading header stats from:", `${API}/admin/stats`);
       console.log("🔑 Auth token present:", !!token);
+      console.log("🔑 Token value:", token ? `${token.substring(0, 20)}...` : "null");
       
       const res = await fetch(`${API}/admin/stats`, { headers });
       
@@ -74,10 +81,18 @@ export default function Admin() {
           users: data.users || 0,
           qr: data.boxes || 0
         });
+      } else if (res.status === 403) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("❌ 403 Forbidden:", errorData);
+        showMessage("error", "Zugriff verweigert. Sie haben keine Super-Admin-Berechtigung oder Ihre Sitzung ist abgelaufen. Bitte erneut anmelden.");
+      } else if (res.status === 401) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("❌ 401 Unauthorized:", errorData);
+        showMessage("error", "Nicht authentifiziert. Bitte erneut anmelden.");
       } else {
         const errorText = await res.text();
         console.error("❌ Stats load failed:", res.status, errorText);
-        showMessage("error", `Fehler beim Laden der Statistiken: ${res.status}`);
+        showMessage("error", `Fehler beim Laden der Statistiken (${res.status}): ${errorText}`);
       }
     } catch (err) {
       console.error("❌ Stats error:", err);
@@ -133,10 +148,20 @@ export default function Admin() {
         const data = await res.json();
         console.log("🏢 Organisations data received:", data.length, "items");
         setOrganisations(Array.isArray(data) ? data : []);
+      } else if (res.status === 403) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("❌ 403 Forbidden:", errorData);
+        showMessage("error", "Zugriff verweigert. Sie haben keine Super-Admin-Berechtigung oder Ihre Sitzung ist abgelaufen. Bitte erneut anmelden.");
+        setOrganisations([]);
+      } else if (res.status === 401) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("❌ 401 Unauthorized:", errorData);
+        showMessage("error", "Nicht authentifiziert. Bitte erneut anmelden.");
+        setOrganisations([]);
       } else {
         const errorText = await res.text();
         console.error("❌ Organisations load failed:", res.status, errorText);
-        showMessage("error", `Fehler beim Laden der Organisationen: ${res.status}`);
+        showMessage("error", `Fehler beim Laden der Organisationen (${res.status})`);
         setOrganisations([]);
       }
     } catch (err) {
@@ -156,10 +181,20 @@ export default function Admin() {
         const data = await res.json();
         console.log("👥 Users data received:", data.length, "items");
         setUsers(Array.isArray(data) ? data : []);
+      } else if (res.status === 403) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("❌ 403 Forbidden:", errorData);
+        showMessage("error", "Zugriff verweigert. Sie haben keine Super-Admin-Berechtigung oder Ihre Sitzung ist abgelaufen. Bitte erneut anmelden.");
+        setUsers([]);
+      } else if (res.status === 401) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("❌ 401 Unauthorized:", errorData);
+        showMessage("error", "Nicht authentifiziert. Bitte erneut anmelden.");
+        setUsers([]);
       } else {
         const errorText = await res.text();
         console.error("❌ Users load failed:", res.status, errorText);
-        showMessage("error", `Fehler beim Laden der Benutzer: ${res.status}`);
+        showMessage("error", `Fehler beim Laden der Benutzer (${res.status})`);
         setUsers([]);
       }
     } catch (err) {
@@ -179,10 +214,20 @@ export default function Admin() {
         const data = await res.json();
         console.log("🤝 Partners data received:", data.length, "items");
         setPartners(Array.isArray(data) ? data : []);
+      } else if (res.status === 403) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("❌ 403 Forbidden:", errorData);
+        showMessage("error", "Zugriff verweigert. Sie haben keine Super-Admin-Berechtigung oder Ihre Sitzung ist abgelaufen. Bitte erneut anmelden.");
+        setPartners([]);
+      } else if (res.status === 401) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("❌ 401 Unauthorized:", errorData);
+        showMessage("error", "Nicht authentifiziert. Bitte erneut anmelden.");
+        setPartners([]);
       } else {
         const errorText = await res.text();
         console.error("❌ Partners load failed:", res.status, errorText);
-        showMessage("error", `Fehler beim Laden der Partner: ${res.status}`);
+        showMessage("error", `Fehler beim Laden der Partner (${res.status})`);
         setPartners([]);
       }
     } catch (err) {
@@ -202,10 +247,18 @@ export default function Admin() {
         const data = await res.json();
         console.log("⚙️ System stats data received:", data);
         setStats(data);
+      } else if (res.status === 403) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("❌ 403 Forbidden:", errorData);
+        showMessage("error", "Zugriff verweigert. Sie haben keine Super-Admin-Berechtigung oder Ihre Sitzung ist abgelaufen. Bitte erneut anmelden.");
+      } else if (res.status === 401) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("❌ 401 Unauthorized:", errorData);
+        showMessage("error", "Nicht authentifiziert. Bitte erneut anmelden.");
       } else {
         const errorText = await res.text();
         console.error("❌ System stats load failed:", res.status, errorText);
-        showMessage("error", `Fehler beim Laden der Systemstatistiken: ${res.status}`);
+        showMessage("error", `Fehler beim Laden der Systemstatistiken (${res.status})`);
       }
     } catch (err) {
       console.error("❌ System stats error:", err);
@@ -223,10 +276,20 @@ export default function Admin() {
         const data = await res.json();
         console.log("📝 Demo requests data received:", data.length, "items");
         setDemoRequests(data);
+      } else if (res.status === 403) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("❌ 403 Forbidden:", errorData);
+        showMessage("error", "Zugriff verweigert. Sie haben keine Berechtigung oder Ihre Sitzung ist abgelaufen. Bitte erneut anmelden.");
+        setDemoRequests([]);
+      } else if (res.status === 401) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("❌ 401 Unauthorized:", errorData);
+        showMessage("error", "Nicht authentifiziert. Bitte erneut anmelden.");
+        setDemoRequests([]);
       } else {
         const errorText = await res.text();
         console.error("❌ Demo requests load failed:", res.status, errorText);
-        showMessage("error", `Fehler beim Laden der Demo-Anfragen: ${res.status}`);
+        showMessage("error", `Fehler beim Laden der Demo-Anfragen (${res.status})`);
         setDemoRequests([]);
       }
     } catch (error) {

@@ -14,8 +14,14 @@ import {
 const API = import.meta.env.VITE_API_URL;
 
 export default function SuperAdminQROrders() {
-  const token = localStorage.getItem("trapmap_token");
-  const headers = { Authorization: `Bearer ${token}` };
+  let token = null;
+  try {
+    token = localStorage.getItem("trapmap_token");
+  } catch (error) {
+    console.error("❌ localStorage nicht verfügbar:", error);
+  }
+  
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
   // Data State
   const [organisations, setOrganisations] = useState([]);
