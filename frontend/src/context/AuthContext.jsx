@@ -9,19 +9,28 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('trapmap_token');
-    const savedUser = localStorage.getItem('trapmap_user');
+    try {
+      const savedToken = localStorage.getItem('trapmap_token');
+      const savedUser = localStorage.getItem('trapmap_user');
 
-    if (savedToken && savedUser) {
-      try {
-        setToken(savedToken);
-        setUser(JSON.parse(savedUser));
-        console.log("Session restored");
-      } catch (error) {
-        console.error("Failed to restore session:", error);
-        localStorage.removeItem('trapmap_token');
-        localStorage.removeItem('trapmap_user');
+      if (savedToken && savedUser) {
+        try {
+          setToken(savedToken);
+          setUser(JSON.parse(savedUser));
+          console.log("Session restored");
+        } catch (error) {
+          console.error("Failed to restore session:", error);
+          try {
+            localStorage.removeItem('trapmap_token');
+            localStorage.removeItem('trapmap_user');
+          } catch (e) {
+            // localStorage nicht verfügbar
+          }
+        }
       }
+    } catch (error) {
+      // localStorage nicht verfügbar (z.B. Inkognito-Modus)
+      console.warn("localStorage nicht verfügbar:", error);
     }
 
     setLoading(false);
@@ -46,10 +55,14 @@ export const AuthProvider = ({ children }) => {
         setToken(response.token);
         setUser(response.user);
 
-        localStorage.setItem('trapmap_token', response.token);
-        localStorage.setItem('trapmap_user', JSON.stringify(response.user));
-
-        console.log("Session saved");
+        try {
+          localStorage.setItem('trapmap_token', response.token);
+          localStorage.setItem('trapmap_user', JSON.stringify(response.user));
+          console.log("Session saved");
+        } catch (error) {
+          console.warn("Failed to save session to localStorage:", error);
+          // Session ist trotzdem im State gespeichert
+        }
         
         return true;
       }
@@ -66,13 +79,32 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     console.log("Logging out");
     
-    setUser(null);
-    setToken(null);
+    try {
+      // State sofort zurücksetzen
+      setUser(null);
+      setToken(null);
 
-    localStorage.removeItem('trapmap_token');
-    localStorage.removeItem('trapmap_user');
+      // localStorage bereinigen
+      try {
+        localStorage.removeItem('trapmap_token');
+        localStorage.removeItem('trapmap_user');
+        localStorage.removeItem('trapmap_refresh_token');
+      } catch (error) {
+        console.warn("Failed to clear localStorage:", error);
+      }
 
-    apiLogout();
+      // API logout aufrufen
+      apiLogout();
+
+      // Zur Login-Seite weiterleiten
+      console.log("Redirecting to login page");
+      window.location.href = '/login';
+      
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Fallback: Auch bei Fehler zur Login-Seite weiterleiten
+      window.location.href = '/login';
+    }
   };
 
   return (

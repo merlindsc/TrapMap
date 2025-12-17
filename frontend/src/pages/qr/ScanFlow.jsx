@@ -28,8 +28,16 @@ export default function ScanFlowV2() {
 
   const videoRef = useRef(null);
   const controlsRef = useRef(null);
-  const token = localStorage.getItem("trapmap_token");
-  const user = JSON.parse(localStorage.getItem("trapmap_user") || "{}");
+  
+  let token = null;
+  let user = {};
+  
+  try {
+    token = localStorage.getItem("trapmap_token");
+    user = JSON.parse(localStorage.getItem("trapmap_user") || "{}");
+  } catch (error) {
+    console.error("localStorage nicht verfügbar:", error);
+  }
 
   // Scanner State
   const [scanning, setScanning] = useState(true);

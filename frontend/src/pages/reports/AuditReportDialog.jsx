@@ -231,7 +231,12 @@ const TEMPLATES = [
 // HAUPTKOMPONENTE
 // ============================================
 export default function AuditReportDialog({ isOpen, onClose }) {
-  const token = localStorage.getItem("trapmap_token");
+  let token = null;
+  try {
+    token = localStorage.getItem("trapmap_token");
+  } catch (error) {
+    console.error("localStorage nicht verfügbar:", error);
+  }
   
   const [options, setOptions] = useState({ ...DEFAULT_OPTIONS });
   const [openGroups, setOpenGroups] = useState(["header", "title", "boxtypes"]);

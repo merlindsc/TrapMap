@@ -19,17 +19,25 @@ import {
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import trapMapLogo from "../assets/trapmap-logo-200.png";
 
-const API = import.meta.env.VITE_API_URL;
+const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 export default function PartnerDashboard() {
   const navigate = useNavigate();
-  const token = localStorage.getItem("trapmap_token");
-  const headers = { Authorization: `Bearer ${token}` };
+  
+  let token = null;
+  let partnerDataInit = {};
+  
+  try {
+    token = localStorage.getItem("trapmap_token");
+    partnerDataInit = JSON.parse(localStorage.getItem("trapmap_partner") || "{}");
+  } catch (error) {
+    console.error("localStorage nicht verfügbar:", error);
+  }
+  
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
   // Partner-Daten aus localStorage
-  const [partnerData, setPartnerData] = useState(
-    JSON.parse(localStorage.getItem("trapmap_partner") || "{}")
-  );
+  const [partnerData, setPartnerData] = useState(partnerDataInit);
 
   // State
   const [loading, setLoading] = useState(true);
@@ -83,10 +91,16 @@ export default function PartnerDashboard() {
       
       if (!res.ok) {
         if (res.status === 401) {
+          console.log("Unauthorized: Redirecting to login");
           setLoggingOut(true);
-          localStorage.removeItem("trapmap_token");
-          localStorage.removeItem("trapmap_user_type");
-          localStorage.removeItem("trapmap_partner");
+          try {
+            localStorage.removeItem("trapmap_token");
+            localStorage.removeItem("trapmap_user_type");
+            localStorage.removeItem("trapmap_partner");
+            localStorage.removeItem("trapmap_refresh_token");
+          } catch (error) {
+            console.warn("Failed to clear localStorage:", error);
+          }
           window.location.href = "/partner/login";
           return;
         }
@@ -131,11 +145,28 @@ export default function PartnerDashboard() {
   // LOGOUT
   // ============================================
   const handleLogout = () => {
-    setLoggingOut(true);
-    localStorage.removeItem("trapmap_token");
-    localStorage.removeItem("trapmap_user_type");
-    localStorage.removeItem("trapmap_partner");
-    window.location.href = "/partner/login";
+    try {
+      setLoggingOut(true);
+      
+      // localStorage bereinigen
+      try {
+        localStorage.removeItem("trapmap_token");
+        localStorage.removeItem("trapmap_user_type");
+        localStorage.removeItem("trapmap_partner");
+        localStorage.removeItem("trapmap_refresh_token");
+      } catch (error) {
+        console.warn("Failed to clear localStorage:", error);
+      }
+      
+      // Zur Partner-Login-Seite weiterleiten
+      console.log("Redirecting to partner login page");
+      window.location.href = "/partner/login";
+      
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Fallback: Auch bei Fehler zur Login-Seite weiterleiten
+      window.location.href = "/partner/login";
+    }
   };
 
   // ============================================

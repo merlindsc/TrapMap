@@ -41,7 +41,16 @@ export default function Dashboard() {
 
   async function loadDashboard() {
     try {
-      const token = localStorage.getItem("trapmap_token");
+      let token = null;
+      try {
+        token = localStorage.getItem("trapmap_token");
+      } catch (error) {
+        console.error("localStorage nicht verfügbar:", error);
+        setError("Keine Authentifizierung verfügbar. Bitte neu anmelden.");
+        setLoading(false);
+        return;
+      }
+      
       const headers = { Authorization: `Bearer ${token}` };
 
       // Parallel laden

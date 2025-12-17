@@ -107,10 +107,16 @@ const LoadingFallback = () => (
 // PARTNER CHECK - VOR useAuth!
 // ============================================
 function isPartnerLoggedIn() {
-  const userType = localStorage.getItem("trapmap_user_type");
-  const partnerData = localStorage.getItem("trapmap_partner");
-  const token = localStorage.getItem("trapmap_token");
-  return userType === "partner" && partnerData && token;
+  try {
+    const userType = localStorage.getItem("trapmap_user_type");
+    const partnerData = localStorage.getItem("trapmap_partner");
+    const token = localStorage.getItem("trapmap_token");
+    return userType === "partner" && partnerData && token;
+  } catch (error) {
+    // localStorage nicht verfügbar (z.B. Inkognito-Modus)
+    console.warn("localStorage nicht verfügbar:", error);
+    return false;
+  }
 }
 
 // ============================================
