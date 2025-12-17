@@ -111,7 +111,6 @@ export default function LandingPage() {
           <div className="nav-links">
             <a href="#features">Features</a>
             <a href="#individuell">Für Profis</a>
-            <a href="#preise">Preise</a>
             <a href="#kontakt">Kontakt</a>
           </div>
 
@@ -132,7 +131,6 @@ export default function LandingPage() {
           <div className="mobile-menu">
             <a href="#features" onClick={() => setMobileMenuOpen(false)}>Features</a>
             <a href="#individuell" onClick={() => setMobileMenuOpen(false)}>Für Profis</a>
-            <a href="#preise" onClick={() => setMobileMenuOpen(false)}>Preise</a>
             <a href="#kontakt" onClick={() => setMobileMenuOpen(false)}>Kontakt</a>
             <Link to="/login" onClick={() => setMobileMenuOpen(false)}>Anmelden</Link>
             <a href="#testen" className="mobile-cta" onClick={() => setMobileMenuOpen(false)}>
@@ -377,128 +375,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ============================================
-          PREISE & PAKETE
-          ============================================ */}
-      <section id="preise" className="pricing-section">
-        <div className="section-container">
-          <div className="section-header">
-            <h2>Transparente Preise für jeden Bedarf</h2>
-            <p>Wählen Sie das passende Paket für Ihr Unternehmen</p>
-          </div>
 
-          <div className="pricing-grid">
-            {/* STARTER PAKET */}
-            <div className="pricing-card starter">
-              <div className="pricing-header">
-                <h3>Starter</h3>
-                <p>Für kleinere Betriebe</p>
-                <div className="price">
-                  <span className="amount">29€</span>
-                  <span className="period">/Monat</span>
-                </div>
-              </div>
-              <div className="pricing-features">
-                <div className="feature">
-                  <Check size={16} />
-                  Bis zu 100 Boxen
-                </div>
-                <div className="feature">
-                  <Check size={16} />
-                  5 Objekte
-                </div>
-                <div className="feature">
-                  <Check size={16} />
-                  Grundreporting
-                </div>
-                <div className="feature">
-                  <Check size={16} />
-                  E-Mail Support
-                </div>
-                <div className="feature">
-                  <Check size={16} />
-                  Mobile App
-                </div>
-              </div>
-              <button className="pricing-cta">Jetzt testen</button>
-            </div>
-
-            {/* PROFESSIONAL PAKET */}
-            <div className="pricing-card professional popular">
-              <div className="popular-badge">Beliebt</div>
-              <div className="pricing-header">
-                <h3>Professional</h3>
-                <p>Für Schädlingsbekämpfer</p>
-                <div className="price">
-                  <span className="amount">79€</span>
-                  <span className="period">/Monat</span>
-                </div>
-              </div>
-              <div className="pricing-features">
-                <div className="feature">
-                  <Check size={16} />
-                  Unbegrenzte Boxen
-                </div>
-                <div className="feature">
-                  <Check size={16} />
-                  Unbegrenzte Objekte
-                </div>
-                <div className="feature">
-                  <Check size={16} />
-                  Erweiterte Reports
-                </div>
-                <div className="feature">
-                  <Check size={16} />
-                  Kunden-Accounts (Viewer)
-                </div>
-                <div className="feature">
-                  <Check size={16} />
-                  Telefon Support
-                </div>
-                <div className="feature">
-                  <Check size={16} />
-                  API Zugang
-                </div>
-              </div>
-              <button className="pricing-cta primary">Jetzt testen</button>
-            </div>
-
-            {/* ENTERPRISE PAKET */}
-            <div className="pricing-card enterprise">
-              <div className="pricing-header">
-                <h3>Enterprise</h3>
-                <p>Für große Unternehmen</p>
-                <div className="price">
-                  <span className="amount">Auf Anfrage</span>
-                </div>
-              </div>
-              <div className="pricing-features">
-                <div className="feature">
-                  <Check size={16} />
-                  Alles aus Professional
-                </div>
-                <div className="feature">
-                  <Check size={16} />
-                  White-Label Lösung
-                </div>
-                <div className="feature">
-                  <Check size={16} />
-                  Dedicated Support
-                </div>
-                <div className="feature">
-                  <Check size={16} />
-                  Custom Integrationen
-                </div>
-                <div className="feature">
-                  <Check size={16} />
-                  On-Premise Option
-                </div>
-              </div>
-              <button className="pricing-cta">Kontakt aufnehmen</button>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* ============================================
           ACCOUNT-TYPEN ERKLÄRUNG
@@ -580,96 +457,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ============================================
-          PREISE & PAKETE
-          ============================================ */}
-      <section id="preise" className="pricing-section">
-        <div className="section-container">
-          <div className="section-header">
-            <span className="section-badge">Preise</span>
-            <h2>Faire Preise für jede Größe</h2>
-            <p>Keine versteckten Kosten. Monatlich kündbar.</p>
-          </div>
 
-          <div className="beta-banner">
-            <Sparkles size={20} />
-            <div>
-              <strong>Bis 01.02.2026 kostenlos testen!</strong>
-              <span>Melde dich an, probier es aus, gib uns Feedback. Wir passen TrapMap an deine Bedürfnisse an.</span>
-            </div>
-          </div>
-
-          <div className="pricing-grid">
-            <PricingCard
-              name="Einzelkämpfer"
-              price="25"
-              description="Für Solo-Schädlingsbekämpfer"
-              features={[
-                "1 Admin-Account",
-                "3 Objekte",
-                "50 Boxen",
-                "QR-Code Scanning",
-                "Digitale Lagepläne",
-                "Automatische Reports",
-                "E-Mail Support"
-              ]}
-              note="Kein Partner-Account"
-            />
-            <PricingCard
-              name="3er Flat"
-              price="65"
-              description="Für kleine Teams"
-              popular
-              features={[
-                "1 Admin + 2 Techniker",
-                "5 Objekte",
-                "150 Boxen",
-                "Alle Features",
-                "Foto-Dokumentation",
-                "Intervall-Überwachung",
-                "Priority Support"
-              ]}
-              note="Kein Partner-Account"
-            />
-            <PricingCard
-              name="10er Runde"
-              price="190"
-              description="Für wachsende Betriebe"
-              features={[
-                "10 User (Admin/Techniker)",
-                "20 Objekte",
-                "650 Boxen",
-                "Alle Features",
-                "2 Partner-Accounts",
-                "Individuelle Anpassungen",
-                "Telefon-Support"
-              ]}
-            />
-            <PricingCard
-              name="Enterprise"
-              price="Individuell"
-              description="Für große Organisationen"
-              features={[
-                "Unbegrenzte User",
-                "Unbegrenzte Objekte",
-                "Unbegrenzte Boxen",
-                "Unbegrenzte Partner",
-                "Eigenes Branding möglich",
-                "Dedizierter Ansprechpartner",
-                "SLA-Garantie"
-              ]}
-              enterprise
-            />
-          </div>
-
-          <div className="pricing-cta">
-            <Phone size={18} />
-            <span>
-              Fragen zu den Paketen? Ruf einfach an: <a href="tel:+4915202637089">0152 / 026 370 89</a>
-            </span>
-          </div>
-        </div>
-      </section>
 
       {/* ============================================
           CTA / TESTEN
@@ -758,7 +546,6 @@ export default function LandingPage() {
             <div className="footer-col">
               <h4>Produkt</h4>
               <a href="#features">Features</a>
-              <a href="#preise">Preise</a>
               <a href="#testen">Kostenlos testen</a>
             </div>
             <div className="footer-col">
@@ -813,34 +600,3 @@ function FeatureCard({ icon: Icon, title, description }) {
   );
 }
 
-function PricingCard({ name, price, description, features, popular, enterprise, note }) {
-  return (
-    <div className={`pricing-card ${popular ? 'popular' : ''}`}>
-      {popular && <div className="popular-badge">Beliebt</div>}
-      <h3>{name}</h3>
-      <p className="pricing-desc">{description}</p>
-      <div className="pricing-price">
-        {enterprise ? (
-          <span className="price-custom">{price}</span>
-        ) : (
-          <>
-            <span className="price-amount">{price}€</span>
-            <span className="price-period">/Monat</span>
-          </>
-        )}
-      </div>
-      <ul className="pricing-features">
-        {features.map((feature, i) => (
-          <li key={i}>
-            <Check size={16} />
-            {feature}
-          </li>
-        ))}
-      </ul>
-      {note && <p className="pricing-note-small">{note}</p>}
-      <a href="#testen" className={`pricing-btn ${popular ? 'primary' : ''}`}>
-        {enterprise ? 'Kontakt aufnehmen' : 'Kostenlos testen'}
-      </a>
-    </div>
-  );
-}
