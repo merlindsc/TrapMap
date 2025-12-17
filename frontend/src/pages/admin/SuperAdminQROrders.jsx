@@ -190,20 +190,20 @@ export default function SuperAdminQROrders() {
   }
 
   return (
-    <div style={styles.container}>
+    <div className="p-6 max-w-7xl mx-auto">
       {/* HEADER */}
-      <div style={styles.header}>
+      <div className="flex justify-between items-start mb-6">
         <div>
-          <h1 style={styles.title}>
+          <h1 className="flex items-center gap-3 text-2xl font-bold text-gray-900 dark:text-white m-0">
             <QrCode size={32} />
             QR-Code Bestellsystem
           </h1>
-          <p style={styles.subtitle}>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">
             Ein-Klick Versand an Organisationen
           </p>
         </div>
 
-        <button style={styles.refreshButton} onClick={loadData}>
+        <button className="flex items-center gap-2 px-4 py-2 bg-gray-700 dark:bg-gray-600 hover:bg-gray-600 dark:hover:bg-gray-500 text-white rounded-lg" onClick={loadData}>
           <RefreshCw size={18} />
           Aktualisieren
         </button>
@@ -211,7 +211,7 @@ export default function SuperAdminQROrders() {
 
       {/* ERFOLGS-MELDUNG */}
       {result && (
-        <div style={styles.successBanner}>
+        <div className="flex items-center gap-4 p-4 bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-500/30 text-green-800 dark:text-green-400 rounded-xl mb-6">
           <CheckCircle size={24} />
           <div>
             <strong>Bestellung erfolgreich versendet!</strong>
@@ -221,61 +221,61 @@ export default function SuperAdminQROrders() {
               Gesamtpreis: {(result.order?.price || 0).toFixed(2)} €
             </p>
           </div>
-          <button onClick={() => setResult(null)} style={styles.closeButton}>×</button>
+          <button onClick={() => setResult(null)} className="ml-auto text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200 text-xl font-bold">×</button>
         </div>
       )}
 
       {/* FEHLER-MELDUNG */}
       {error && (
-        <div style={styles.errorBanner}>
+        <div className="flex items-center gap-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-500/30 text-red-800 dark:text-red-400 rounded-xl mb-6">
           <AlertCircle size={24} />
           <span>{error}</span>
-          <button onClick={() => setError(null)} style={styles.closeButton}>×</button>
+          <button onClick={() => setError(null)} className="ml-auto text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 text-xl font-bold">×</button>
         </div>
       )}
 
       {/* STATISTIK CARDS */}
-      <div style={styles.statsGrid}>
-        <div style={styles.statCard}>
-          <Building2 size={24} style={{ color: "#6366f1" }} />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center gap-4">
+          <Building2 size={24} className="text-indigo-500" />
           <div>
-            <span style={styles.statValue}>{organisations.length}</span>
-            <span style={styles.statLabel}>Organisationen</span>
+            <span className="block text-2xl font-bold text-gray-900 dark:text-white">{organisations.length}</span>
+            <span className="block text-sm text-gray-600 dark:text-gray-400">Organisationen</span>
           </div>
         </div>
 
-        <div style={styles.statCard}>
-          <QrCode size={24} style={{ color: "#10b981" }} />
+        <div className="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center gap-4">
+          <QrCode size={24} className="text-green-500" />
           <div>
-            <span style={styles.statValue}>
+            <span className="block text-2xl font-bold text-gray-900 dark:text-white">
               {organisations.reduce((sum, o) => sum + (o.qr_codes_ordered || 0), 0)}
             </span>
-            <span style={styles.statLabel}>Codes generiert</span>
+            <span className="block text-sm text-gray-600 dark:text-gray-400">Codes generiert</span>
           </div>
         </div>
 
-        <div style={styles.statCard}>
-          <Package size={24} style={{ color: "#f59e0b" }} />
+        <div className="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center gap-4">
+          <Package size={24} className="text-amber-500" />
           <div>
-            <span style={styles.statValue}>
+            <span className="block text-2xl font-bold text-gray-900 dark:text-white">
               {organisations.reduce((sum, o) => sum + (o.usedCodes || 0), 0)}
             </span>
-            <span style={styles.statLabel}>Codes verwendet</span>
+            <span className="block text-sm text-gray-600 dark:text-gray-400">Codes verwendet</span>
           </div>
         </div>
 
-        <div style={styles.statCard}>
-          <FileText size={24} style={{ color: "#8b5cf6" }} />
+        <div className="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center gap-4">
+          <FileText size={24} className="text-purple-500" />
           <div>
-            <span style={styles.statValue}>{orders.length}</span>
-            <span style={styles.statLabel}>Bestellungen</span>
+            <span className="block text-2xl font-bold text-gray-900 dark:text-white">{orders.length}</span>
+            <span className="block text-sm text-gray-600 dark:text-gray-400">Bestellungen</span>
           </div>
         </div>
       </div>
 
       {/* NEUE BESTELLUNG BUTTON */}
       <button 
-        style={styles.newOrderButton}
+        className="flex items-center justify-center gap-2 w-full p-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors mb-6"
         onClick={() => setShowOrderForm(!showOrderForm)}
       >
         <Plus size={20} />
@@ -285,7 +285,7 @@ export default function SuperAdminQROrders() {
 
       {/* BESTELLFORMULAR */}
       {showOrderForm && (
-        <div style={styles.orderForm}>
+        <div className="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-700 mb-6">
           <h3>📦 Neue QR-Code Bestellung</h3>
 
           {/* Organisation auswählen */}

@@ -541,7 +541,7 @@ function OrganisationsTab({ organisations, onRefresh, showMessage, headers, json
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
           <Building2 size={20} className="text-indigo-400" />
           Organisationen ({organisations.length})
         </h2>
@@ -562,7 +562,7 @@ function OrganisationsTab({ organisations, onRefresh, showMessage, headers, json
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-gray-50 dark:bg-gray-950 rounded-lg p-4 mb-6 border border-gray-200 dark:border-white/10">
           {/* Titel zeigt Create vs Edit */}
-          <h3 className="text-white font-medium mb-4 flex items-center gap-2">
+          <h3 className="text-gray-900 dark:text-white font-medium mb-4 flex items-center gap-2">
             {editingOrg ? (
               <><Edit2 size={18} className="text-blue-400" /> Organisation bearbeiten</>
             ) : (
@@ -594,7 +594,7 @@ function OrganisationsTab({ organisations, onRefresh, showMessage, headers, json
             <div className="flex-1">
               <div className="flex items-center gap-3">
                 <span className="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded">#{org.id}</span>
-                <h3 className="font-medium text-white">{org.name}</h3>
+                <h3 className="font-medium text-gray-900 dark:text-white">{org.name}</h3>
               </div>
               <div className="flex gap-4 mt-1 text-sm text-gray-600 dark:text-gray-400">
                 {org.email && <span className="flex items-center gap-1"><Mail size={12} />{org.email}</span>}
@@ -678,12 +678,12 @@ function UsersTab({ users, organisations, onRefresh, showMessage, headers, jsonH
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
           <Users size={20} className="text-blue-400" />
           Alle Benutzer ({users.length})
         </h2>
         <div className="flex gap-2">
-          <button onClick={onRefresh} className="p-2 bg-[#0d0d1a] hover:bg-[#252542] rounded-lg text-gray-400"><RefreshCw size={18} /></button>
+          <button onClick={onRefresh} className="p-2 bg-gray-100 dark:bg-gray-950 hover:bg-gray-200 dark:hover:bg-gray-900 rounded-lg text-gray-700 dark:text-gray-400"><RefreshCw size={18} /></button>
           <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
             <UserPlus size={18} />Neuer Benutzer
           </button>
@@ -721,11 +721,11 @@ function UsersTab({ users, organisations, onRefresh, showMessage, headers, jsonH
 
       <div className="space-y-2">
         {users.map(user => (
-          <div key={user.id} className={`flex items-center justify-between p-4 rounded-lg border ${user.active ? 'bg-gray-950 dark:bg-black border-white/5' : 'bg-red-900/10 border-red-500/20'}`}>
+          <div key={user.id} className={`flex items-center justify-between p-4 rounded-lg border ${user.active ? 'bg-gray-50 dark:bg-gray-950 border-gray-200 dark:border-white/5' : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-500/20'}`}>
             <div className="flex-1">
               <div className="flex items-center gap-3">
                 <span className={`text-xs px-2 py-0.5 rounded ${getRoleStyle(user.role)}`}>{user.role}</span>
-                <h3 className="font-medium text-white">{user.email}</h3>
+                <h3 className="font-medium text-gray-900 dark:text-white">{user.email}</h3>
                 {!user.active && <span className="text-xs text-red-400">(Inaktiv)</span>}
               </div>
               <div className="flex gap-4 mt-1 text-sm text-gray-600 dark:text-gray-400">
@@ -742,7 +742,7 @@ function UsersTab({ users, organisations, onRefresh, showMessage, headers, jsonH
             </div>
           </div>
         ))}
-        {users.length === 0 && <p className="text-center text-gray-500 py-8">Keine Benutzer</p>}
+        {users.length === 0 && <p className="text-center text-gray-600 dark:text-gray-500 py-8">Keine Benutzer</p>}
       </div>
     </div>
   );
@@ -790,7 +790,7 @@ function PartnersTab({ partners, organisations, onRefresh, showMessage, headers,
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
           <UserCheck size={20} className="text-amber-400" />
           Externe Partner ({partners.length})
         </h2>
@@ -830,14 +830,14 @@ function PartnersTab({ partners, organisations, onRefresh, showMessage, headers,
 
       <div className="space-y-2">
         {partners.map(partner => (
-          <div key={partner.id} className={`flex items-center justify-between p-4 rounded-lg border ${partner.is_active !== false ? 'bg-[#0d0d1a] border-white/5' : 'bg-red-900/10 border-red-500/20'}`}>
+          <div key={partner.id} className={`flex items-center justify-between p-4 rounded-lg border ${partner.is_active !== false ? 'bg-gray-50 dark:bg-gray-950 border-gray-200 dark:border-white/5' : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-500/20'}`}>
             <div className="flex-1">
               <div className="flex items-center gap-3">
                 <UserCheck size={16} className="text-amber-400" />
-                <h3 className="font-medium text-white">{partner.name}</h3>
-                {partner.company && <span className="text-sm text-gray-400">({partner.company})</span>}
+                <h3 className="font-medium text-gray-900 dark:text-white">{partner.name}</h3>
+                {partner.company && <span className="text-sm text-gray-600 dark:text-gray-400">({partner.company})</span>}
               </div>
-              <div className="flex gap-4 mt-1 text-sm text-gray-400">
+              <div className="flex gap-4 mt-1 text-sm text-gray-600 dark:text-gray-400">
                 <span className="flex items-center gap-1"><Mail size={12} />{partner.email}</span>
                 {partner.phone && <span className="flex items-center gap-1"><Phone size={12} />{partner.phone}</span>}
                 <span className="text-indigo-400">{partner.organisation_name || `Org #${partner.organisation_id}`}</span>
@@ -846,7 +846,7 @@ function PartnersTab({ partners, organisations, onRefresh, showMessage, headers,
             <button onClick={() => handleDelete(partner)} className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg"><Trash2 size={18} /></button>
           </div>
         ))}
-        {partners.length === 0 && <p className="text-center text-gray-500 py-8">Keine Partner angelegt</p>}
+        {partners.length === 0 && <p className="text-center text-gray-600 dark:text-gray-500 py-8">Keine Partner angelegt</p>}
       </div>
     </div>
   );
@@ -859,11 +859,11 @@ function SystemTab({ stats, onRefresh }) {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-          <Settings size={20} className="text-gray-400" />
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+          <Settings size={20} className="text-gray-600 dark:text-gray-400" />
           System-Übersicht
         </h2>
-        <button onClick={onRefresh} className="p-2 bg-[#0d0d1a] hover:bg-[#252542] rounded-lg text-gray-400"><RefreshCw size={18} /></button>
+        <button onClick={onRefresh} className="p-2 bg-gray-100 dark:bg-gray-950 hover:bg-gray-200 dark:hover:bg-gray-900 rounded-lg text-gray-700 dark:text-gray-400"><RefreshCw size={18} /></button>
       </div>
 
       <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
@@ -875,26 +875,26 @@ function SystemTab({ stats, onRefresh }) {
         <StatCard icon={BarChart3} label="Scans" value={stats?.scans || 0} color="pink" />
       </div>
 
-      <div className="bg-[#0d0d1a] rounded-lg p-6 border border-white/10">
-        <h3 className="text-white font-medium mb-4 flex items-center gap-2">
-          <Server size={18} className="text-gray-400" />
+      <div className="bg-white dark:bg-gray-900 rounded-lg p-6 border border-gray-200 dark:border-white/10">
+        <h3 className="text-gray-900 dark:text-white font-medium mb-4 flex items-center gap-2">
+          <Server size={18} className="text-gray-600 dark:text-gray-400" />
           System-Information
         </h3>
         <div className="grid md:grid-cols-2 gap-4 text-sm">
-          <div className="flex justify-between py-2 border-b border-white/5">
+          <div className="flex justify-between py-2 border-b border-gray-200 dark:border-white/5">
             <span className="text-gray-600 dark:text-gray-400">Version</span>
-            <span className="text-white">TrapMap 1.0.0</span>
+            <span className="text-gray-900 dark:text-white">TrapMap 1.0.0</span>
           </div>
-          <div className="flex justify-between py-2 border-b border-white/5">
+          <div className="flex justify-between py-2 border-b border-gray-200 dark:border-white/5">
             <span className="text-gray-600 dark:text-gray-400">Umgebung</span>
             <span className="text-green-400">Production</span>
           </div>
-          <div className="flex justify-between py-2 border-b border-white/5">
+          <div className="flex justify-between py-2 border-b border-gray-200 dark:border-white/5">
             <span className="text-gray-600 dark:text-gray-400">API Status</span>
             <span className="text-green-400 flex items-center gap-1"><Activity size={14} /> Online</span>
           </div>
-          <div className="flex justify-between py-2 border-b border-white/5">
-            <span className="text-gray-400">Datenbank</span>
+          <div className="flex justify-between py-2 border-b border-gray-200 dark:border-white/5">
+            <span className="text-gray-600 dark:text-gray-400">Datenbank</span>
             <span className="text-green-400">Supabase</span>
           </div>
         </div>
@@ -914,12 +914,12 @@ function StatCard({ icon: Icon, label, value, color }) {
   };
 
   return (
-    <div className="bg-[#0d0d1a] rounded-lg p-4 border border-white/10">
+    <div className="bg-white dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-white/10">
       <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${colors[color]} flex items-center justify-center mb-3`}>
         <Icon size={20} className="text-white" />
       </div>
-      <div className="text-2xl font-bold text-white">{value}</div>
-      <div className="text-sm text-gray-400">{label}</div>
+      <div className="text-2xl font-bold text-gray-900 dark:text-white">{value}</div>
+      <div className="text-sm text-gray-600 dark:text-gray-400">{label}</div>
     </div>
   );
 }
