@@ -91,10 +91,16 @@ export default function PartnerDashboard() {
       
       if (!res.ok) {
         if (res.status === 401) {
+          console.log("Unauthorized: Redirecting to login");
           setLoggingOut(true);
-          localStorage.removeItem("trapmap_token");
-          localStorage.removeItem("trapmap_user_type");
-          localStorage.removeItem("trapmap_partner");
+          try {
+            localStorage.removeItem("trapmap_token");
+            localStorage.removeItem("trapmap_user_type");
+            localStorage.removeItem("trapmap_partner");
+            localStorage.removeItem("trapmap_refresh_token");
+          } catch (error) {
+            console.warn("Failed to clear localStorage:", error);
+          }
           window.location.href = "/partner/login";
           return;
         }
@@ -139,11 +145,28 @@ export default function PartnerDashboard() {
   // LOGOUT
   // ============================================
   const handleLogout = () => {
-    setLoggingOut(true);
-    localStorage.removeItem("trapmap_token");
-    localStorage.removeItem("trapmap_user_type");
-    localStorage.removeItem("trapmap_partner");
-    window.location.href = "/partner/login";
+    try {
+      setLoggingOut(true);
+      
+      // localStorage bereinigen
+      try {
+        localStorage.removeItem("trapmap_token");
+        localStorage.removeItem("trapmap_user_type");
+        localStorage.removeItem("trapmap_partner");
+        localStorage.removeItem("trapmap_refresh_token");
+      } catch (error) {
+        console.warn("Failed to clear localStorage:", error);
+      }
+      
+      // Zur Partner-Login-Seite weiterleiten
+      console.log("Redirecting to partner login page");
+      window.location.href = "/partner/login";
+      
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Fallback: Auch bei Fehler zur Login-Seite weiterleiten
+      window.location.href = "/partner/login";
+    }
   };
 
   // ============================================
