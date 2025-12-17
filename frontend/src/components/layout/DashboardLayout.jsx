@@ -11,6 +11,7 @@ import Sidebar from "./Sidebar";
 import { Bars3Icon, SunIcon, MoonIcon } from "@heroicons/react/24/outline";
 import { LogOut } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
+import Modal from "../ui/Modal";
 import "./DashboardLayout.css";
 import trapMapLogo from "../../assets/trapmap-logo-200.png";
 
@@ -97,6 +98,7 @@ export default function DashboardLayout({ children }) {
   const { theme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -112,6 +114,19 @@ export default function DashboardLayout({ children }) {
   useEffect(() => {
     if (isMobile) setSidebarOpen(false);
   }, [pathname, isMobile]);
+
+  const handleLogoutClick = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const handleLogoutConfirm = () => {
+    setShowLogoutConfirm(false);
+    logout();
+  };
+
+  const handleLogoutCancel = () => {
+    setShowLogoutConfirm(false);
+  };
 
   return (
     <div className="dashboard-layout">
@@ -145,17 +160,26 @@ export default function DashboardLayout({ children }) {
               <Bars3Icon className="hamburger-icon" />
             </button>
             <img src={trapMapLogo} alt="TrapMap" className="mobile-header-logo" />
-            <button 
-              className="mobile-theme-toggle"
-              onClick={toggleTheme}
-              aria-label={theme === 'dark' ? 'Zum hellen Modus wechseln' : 'Zum dunklen Modus wechseln'}
-            >
-              {theme === 'dark' ? (
-                <SunIcon className="theme-icon" />
-              ) : (
-                <MoonIcon className="theme-icon" />
-              )}
-            </button>
+            <div className="mobile-header-actions">
+              <button 
+                className="mobile-theme-toggle"
+                onClick={toggleTheme}
+                aria-label={theme === 'dark' ? 'Zum hellen Modus wechseln' : 'Zum dunklen Modus wechseln'}
+              >
+                {theme === 'dark' ? (
+                  <SunIcon className="theme-icon" />
+                ) : (
+                  <MoonIcon className="theme-icon" />
+                )}
+              </button>
+              <button 
+                className="mobile-logout-btn"
+                onClick={handleLogoutClick}
+                aria-label="Abmelden"
+              >
+                <LogOut className="logout-icon" />
+              </button>
+            </div>
           </header>
         )}
 
@@ -182,7 +206,7 @@ export default function DashboardLayout({ children }) {
                 </div>
               )}
 
-              <button className="logout-btn" onClick={logout}>
+              <button className="logout-btn" onClick={handleLogoutClick}>
                 <LogOut size={16} />
                 <span>Logout</span>
               </button>
@@ -195,6 +219,34 @@ export default function DashboardLayout({ children }) {
           {children}
         </main>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      <Modal 
+        isOpen={showLogoutConfirm} 
+        onClose={handleLogoutCancel}
+        title="Logout bestätigen"
+      >
+        <div className="logout-confirm-content">
+          <p className="logout-confirm-text">
+            Möchten Sie sich wirklich abmelden?
+          </p>
+          <div className="logout-confirm-actions">
+            <button 
+              className="btn-cancel"
+              onClick={handleLogoutCancel}
+            >
+              Abbrechen
+            </button>
+            <button 
+              className="btn-confirm-logout"
+              onClick={handleLogoutConfirm}
+            >
+              <LogOut size={16} />
+              Abmelden
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
