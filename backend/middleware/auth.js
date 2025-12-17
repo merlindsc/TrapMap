@@ -21,11 +21,15 @@ const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
 
-    console.log("🔐 Auth Middleware:");
-    console.log("  - Authorization Header:", authHeader ? `Present (${authHeader.substring(0, 20)}...)` : "Missing");
+    const isDebug = process.env.NODE_ENV !== 'production';
+    
+    if (isDebug) {
+      console.log("🔐 Auth Middleware:");
+      console.log("  - Authorization Header:", authHeader ? `Present (${authHeader.substring(0, 20)}...)` : "Missing");
+    }
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log("❌ Auth Failed: No token provided");
+      if (isDebug) console.log("❌ Auth Failed: No token provided");
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'No token provided'
@@ -33,25 +37,27 @@ const authenticate = async (req, res, next) => {
     }
 
     const token = authHeader.substring(7);
-    console.log("  - Token extracted:", token ? `${token.substring(0, 20)}...` : "empty");
+    if (isDebug) console.log("  - Token extracted:", token ? `${token.substring(0, 20)}...` : "empty");
     
     const decoded = verify(token);
 
     if (!decoded) {
-      console.log("❌ Auth Failed: Invalid or expired token");
+      if (isDebug) console.log("❌ Auth Failed: Invalid or expired token");
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Invalid or expired token'
       });
     }
 
-    console.log("  - Token decoded successfully");
-    console.log("  - Decoded payload:", JSON.stringify({
-      user_id: decoded.user_id || decoded.id,
-      role: decoded.role,
-      organisation_id: decoded.organisation_id,
-      email: decoded.email
-    }));
+    if (isDebug) {
+      console.log("  - Token decoded successfully");
+      console.log("  - Decoded payload:", JSON.stringify({
+        user_id: decoded.user_id || decoded.id,
+        role: decoded.role,
+        organisation_id: decoded.organisation_id,
+        email: decoded.email
+      }));
+    }
 
     req.user = {
       id: decoded.user_id || decoded.id,
@@ -60,7 +66,7 @@ const authenticate = async (req, res, next) => {
       email: decoded.email
     };
 
-    console.log("✅ Auth Successful - User attached to request");
+    if (isDebug) console.log("✅ Auth Successful - User attached to request");
     next();
   } catch (error) {
     console.error('❌ Auth middleware error:', error.message);
