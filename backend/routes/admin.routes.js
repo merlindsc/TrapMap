@@ -175,78 +175,118 @@ router.delete("/organisations/:id", async (req, res) => {
     
     console.log(`🗑️ Starte Organisation Löschung: ID ${id}`);
 
-    // Schritt 1: Alle Scans löschen
-    try {
-      const { error: scansError } = await supabase
-        .from("scans")
-        .delete()
-        .eq("organisation_id", id);
-      if (scansError) console.log("Scans delete error:", scansError.message);
-    } catch (err) {
-      console.log("Scans delete catch:", err.message);
+    // Erst prüfen ob Organisation existiert
+    const { data: orgExists, error: checkError } = await supabase
+      .from("organisations")
+      .select("id, name")
+      .eq("id", id)
+      .single();
+
+    if (checkError || !orgExists) {
+      console.log("Organisation nicht gefunden:", checkError?.message);
+      return res.status(404).json({ error: "Organisation nicht gefunden" });
     }
+
+    console.log(`🏢 Organisation gefunden: ${orgExists.name}`);
+
+    // Schritt 1: Alle Scans löschen
+    console.log("🔄 Lösche Scans...");
+    const { error: scansError, count: scansCount } = await supabase
+      .from("scans")
+      .delete()
+      .eq("organisation_id", id);
+    
+    if (scansError) {
+      console.error("❌ Fehler beim Löschen von Scans:", scansError.message);
+      return res.status(500).json({ error: `Fehler beim Löschen von Scans: ${scansError.message}` });
+    }
+    console.log(`✅ ${scansCount || 0} Scans gelöscht`);
 
     // Schritt 2: Alle Boxen löschen
-    try {
-      const { error: boxesError } = await supabase
-        .from("boxes")
-        .delete()
-        .eq("organisation_id", id);
-      if (boxesError) console.log("Boxes delete error:", boxesError.message);
-    } catch (err) {
-      console.log("Boxes delete catch:", err.message);
+    console.log("🔄 Lösche Boxen...");
+    const { error: boxesError, count: boxesCount } = await supabase
+      .from("boxes")
+      .delete()
+      .eq("organisation_id", id);
+    
+    if (boxesError) {
+      console.error("❌ Fehler beim Löschen von Boxen:", boxesError.message);
+      return res.status(500).json({ error: `Fehler beim Löschen von Boxen: ${boxesError.message}` });
     }
+    console.log(`✅ ${boxesCount || 0} Boxen gelöscht`);
 
     // Schritt 3: Alle Objekte löschen
-    try {
-      const { error: objectsError } = await supabase
-        .from("objects")
-        .delete()
-        .eq("organisation_id", id);
-      if (objectsError) console.log("Objects delete error:", objectsError.message);
-    } catch (err) {
-      console.log("Objects delete catch:", err.message);
+    console.log("🔄 Lösche Objekte...");
+    const { error: objectsError, count: objectsCount } = await supabase
+      .from("objects")
+      .delete()
+      .eq("organisation_id", id);
+    
+    if (objectsError) {
+      console.error("❌ Fehler beim Löschen von Objekten:", objectsError.message);
+      return res.status(500).json({ error: `Fehler beim Löschen von Objekten: ${objectsError.message}` });
     }
+    console.log(`✅ ${objectsCount || 0} Objekte gelöscht`);
 
     // Schritt 4: Alle Users löschen (außer Super-Admins)
-    try {
-      const { error: usersError } = await supabase
-        .from("users")
-        .delete()
-        .eq("organisation_id", id)
-        .not("email", "in", "(admin@demo.trapmap.de,merlin@trapmap.de,hilfe@die-schaedlingsexperten.de)");
-      if (usersError) console.log("Users delete error:", usersError.message);
-    } catch (err) {
-      console.log("Users delete catch:", err.message);
+    console.log("🔄 Lösche Benutzer...");
+    const { error: usersError, count: usersCount } = await supabase
+      .from("users")
+      .delete()
+      .eq("organisation_id", id)
+      .not("email", "in", "(admin@demo.trapmap.de,merlin@trapmap.de,hilfe@die-schaedlingsexperten.de)");
+    
+    if (usersError) {
+      console.error("❌ Fehler beim Löschen von Benutzern:", usersError.message);
+      return res.status(500).json({ error: `Fehler beim Löschen von Benutzern: ${usersError.message}` });
     }
+    console.log(`✅ ${usersCount || 0} Benutzer gelöscht`);
 
     // Schritt 5: Partner löschen (falls vorhanden)
-    try {
-      const { error: partnersError } = await supabase
-        .from("partners")
-        .delete()
-        .eq("organisation_id", id);
-      if (partnersError) console.log("Partners delete error:", partnersError.message);
-    } catch (err) {
-      console.log("Partners delete catch:", err.message);
+    console.log("🔄 Lösche Partner...");
+    const { error: partnersError, count: partnersCount } = await supabase
+      .from("partners")
+      .delete()
+      .eq("organisation_id", id);
+    
+    if (partnersError) {
+      console.error("❌ Fehler beim Löschen von Partnern:", partnersError.message);
+      return res.status(500).json({ error: `Fehler beim Löschen von Partnern: ${partnersError.message}` });
     }
+    console.log(`✅ ${partnersCount || 0} Partner gelöscht`);
 
     // Schritt 6: Organisation löschen
-    const { error } = await supabase
+    console.log("🔄 Lösche Organisation...");
+    const { error: orgError, count: orgCount } = await supabase
       .from("organisations")
       .delete()
       .eq("id", id);
 
-    if (error) {
-      console.log("Organisation delete error:", error.message);
-      return res.status(400).json({ error: error.message });
+    if (orgError) {
+      console.error("❌ Fehler beim Löschen der Organisation:", orgError.message);
+      return res.status(500).json({ error: `Fehler beim Löschen der Organisation: ${orgError.message}` });
     }
-    
-    console.log(`✅ Organisation erfolgreich gelöscht: ID ${id}`);
-    res.json({ message: "Organisation und alle zugehörigen Daten wurden erfolgreich gelöscht" });
+
+    if (!orgCount || orgCount === 0) {
+      console.error("❌ Organisation wurde nicht gelöscht (count=0)");
+      return res.status(500).json({ error: "Organisation konnte nicht gelöscht werden" });
+    }
+
+    console.log(`✅ Organisation erfolgreich gelöscht: ID ${id}, Name: ${orgExists.name}`);
+    res.json({ 
+      message: "Organisation und alle zugehörigen Daten wurden erfolgreich gelöscht",
+      deleted: {
+        organisation: orgExists.name,
+        scans: scansCount || 0,
+        boxes: boxesCount || 0,
+        objects: objectsCount || 0,
+        users: usersCount || 0,
+        partners: partnersCount || 0
+      }
+    });
   } catch (err) {
-    console.error("Organisation delete catch:", err.message);
-    res.status(500).json({ error: err.message });
+    console.error("❌ Organisation delete catch:", err.message, err.stack);
+    res.status(500).json({ error: `Unerwarteter Fehler: ${err.message}` });
   }
 });
 
