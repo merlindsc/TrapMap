@@ -8,7 +8,7 @@ import { Link } from "react-router-dom";
 import {
   QrCode, Shield, MapPin, Clock, FileCheck,
   Check, Menu, X, Camera, Settings, Users, Sliders,
-  Phone, Mail, ArrowRight, Sparkles, Timer, UserCheck
+  Phone, Mail, ArrowRight, Sparkles, Timer, UserCheck, Radio
 } from "lucide-react";
 import trapMapLogo from "../../assets/trapmap-logo-200.png";
 import "./LandingPage.css";
