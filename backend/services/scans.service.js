@@ -10,8 +10,6 @@ const { supabase } = require("../config/supabase");
 // ============================================
 exports.getHistoryForBox = async (boxId, orgId) => {
   try {
-    console.log("📍 Loading scans for box:", boxId);
-
     const { data, error } = await supabase
       .from("scans")
       .select(`
@@ -44,8 +42,6 @@ exports.getHistoryForBox = async (boxId, orgId) => {
 // ============================================
 exports.getHistoryForObject = async (objectId, orgId) => {
   try {
-    console.log("📍 Loading scans for object:", objectId);
-
     const { data: boxes, error: boxErr } = await supabase
       .from("boxes")
       .select("id")
@@ -60,7 +56,6 @@ exports.getHistoryForObject = async (objectId, orgId) => {
     const boxIds = boxes.map((b) => b.id);
 
     if (boxIds.length === 0) {
-      console.log("ℹ️ No boxes for this object.");
       return { success: true, data: [] };
     }
 
@@ -102,8 +97,6 @@ exports.getHistoryForObject = async (objectId, orgId) => {
 // ============================================
 exports.create = async (payload, orgId) => {
   try {
-    console.log("🟢 Creating scan with payload:", payload);
-
     // Validierung
     if (!payload.box_id) {
       return { success: false, message: "box_id ist erforderlich" };
@@ -150,8 +143,6 @@ exports.create = async (payload, orgId) => {
       scan.latitude = parseFloat(payload.latitude);
       scan.longitude = parseFloat(payload.longitude);
     }
-
-    console.log("📝 Insert scan:", scan);
 
     const { data, error } = await supabase
       .from("scans")
@@ -215,8 +206,6 @@ exports.create = async (payload, orgId) => {
 
     if (boxError) {
       console.error("⚠️ Warning: Could not update box status:", boxError);
-    } else {
-      console.log("✅ Box status updated to:", payload.status);
     }
 
     return { success: true, data };

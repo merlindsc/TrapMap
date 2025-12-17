@@ -76,8 +76,6 @@ exports.update = async (id, organisationId, updates) => {
 // ============================================
 exports.remove = async (id, organisationId) => {
   try {
-    console.log(`🗑️ Deleting object ${id} and cleaning up floor plan images...`);
-
     // 1. Get all floor plans for this object to find images
     const { data: floorPlans, error: fpError } = await supabase
       .from("layouts")
@@ -105,8 +103,6 @@ exports.remove = async (id, organisationId) => {
       }
 
       if (filePaths.length > 0) {
-        console.log(`🗑️ Deleting ${filePaths.length} floor plan images from storage...`);
-        
         const { error: storageError } = await supabase.storage
           .from('floorplans')
           .remove(filePaths);
@@ -114,8 +110,6 @@ exports.remove = async (id, organisationId) => {
         if (storageError) {
           console.warn("⚠️ Could not delete some images from storage:", storageError);
           // Continue anyway - don't block deletion
-        } else {
-          console.log(`✅ Deleted ${filePaths.length} images from storage`);
         }
       }
     }
@@ -129,7 +123,6 @@ exports.remove = async (id, organisationId) => {
 
     if (error) return { success: false, message: error.message };
 
-    console.log(`✅ Object ${id} deleted successfully`);
     return { success: true };
 
   } catch (err) {

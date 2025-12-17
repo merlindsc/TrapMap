@@ -231,7 +231,6 @@ exports.returnToPool = async (box_id, organisation_id) => {
 
   if (error) throw new Error(error.message);
   
-  console.log(`📦 Box ${box_id} vollständig zurückgesetzt und ins Lager verschoben`);
   return { success: true };
 };
 

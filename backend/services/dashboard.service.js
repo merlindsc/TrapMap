@@ -149,8 +149,6 @@ exports.getStats = async (organisation_id) => {
   const orange = statuses.filter(b => b.current_status === "orange").length;
   const red = statuses.filter(b => b.current_status === "red").length;
 
-  console.log(`📊 Dashboard Stats: boxes=${boxesResult.data?.length || 0}, today=${todayScans.count || 0}, green=${green}, yellow=${yellow}, orange=${orange}, red=${red}`);
-
   return {
     boxes: boxesResult.data?.length || 0,
     scansToday: todayScans.count || 0,

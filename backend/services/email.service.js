@@ -78,7 +78,6 @@ const sendInvitationEmail = async (to, { name, email, tempPassword, orgName }) =
       return { success: false, error: error.message };
     }
 
-    console.log(`✅ Einladungs-Email gesendet an: ${to}`);
     return { success: true, id: data.id };
   } catch (error) {
     console.error('Email service error:', error);
@@ -142,7 +141,6 @@ const sendPasswordResetEmail = async (to, { name, resetToken }) => {
       return { success: false, error: error.message };
     }
 
-    console.log(`✅ Password-Reset-Email gesendet an: ${to}`);
     return { success: true, id: data.id };
   } catch (error) {
     console.error('Email service error:', error);

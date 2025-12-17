@@ -73,7 +73,6 @@ exports.create = async (floorPlanData, organisationId) => {
     throw new Error(error.message);
   }
 
-  console.log(`✅ Lageplan erstellt: ${data.name} (ID: ${data.id})`);
   return data;
 };
 
@@ -142,7 +141,6 @@ exports.delete = async (id, organisationId) => {
     throw new Error(error.message);
   }
 
-  console.log(`🗑️ Lageplan gelöscht: ID ${id}`);
   return { success: true };
 };
 
@@ -282,7 +280,6 @@ exports.getGpsBoxes = async (objectId, organisationId) => {
     box_type_category: box.box_types?.category || null
   }));
 
-  console.log(`📍 Found ${flattenedData.length} GPS boxes for object ${objectId}`);
   return flattenedData;
 };
 
@@ -315,7 +312,6 @@ exports.placeBox = async (floorPlanId, boxId, posX, posY, gridPosition, organisa
     throw new Error(error.message);
   }
 
-  console.log(`📍 Box ${boxId} auf Lageplan ${floorPlanId} platziert`);
   return data;
 };
 
@@ -342,6 +338,5 @@ exports.removeBoxFromPlan = async (boxId, organisationId) => {
     throw new Error(error.message);
   }
 
-  console.log(`📤 Box ${boxId} von Lageplan entfernt`);
   return data;
 };

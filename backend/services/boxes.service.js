@@ -392,8 +392,6 @@ exports.bulkAssignToObject = async (boxIds, objectId, organisationId, userId) =>
       });
     }
 
-    console.log(`✅ ${data.length} Boxen Objekt ${objectId} zugewiesen`);
-
     return { 
       success: true, 
       data,
@@ -454,8 +452,6 @@ exports.returnToPool = async (boxId, organisationId, userId) => {
       old_object_id: oldBox.object_id,
       old_box_type_id: oldBox.box_type_id
     });
-
-    console.log(`✅ Box ${boxId} (QR: ${oldBox.qr_code}) zurück ins Lager`);
 
     return { success: true, data };
   } catch (err) {
@@ -523,8 +519,6 @@ exports.bulkReturnToPool = async (boxIds, organisationId, userId) => {
       });
     }
 
-    console.log(`✅ ${data.length} Boxen zurück ins Lager`);
-
     return { 
       success: true, 
       data,
@@ -589,8 +583,6 @@ exports.archiveObjectBoxes = async (objectId, organisationId, userId) => {
         reason: "object_archived"
       });
     }
-
-    console.log(`✅ ${data.length} Boxen von Objekt ${objectId} zurück ins Lager`);
 
     return { 
       success: true, 
@@ -769,8 +761,6 @@ exports.renumberObject = async (objectId, organisationId, userId) => {
         })
         .eq("id", sorted[i].id);
     }
-
-    console.log(`✅ ${boxes.length} Boxen in Objekt ${objectId} neu nummeriert`);
 
     return { success: true, count: boxes.length };
   } catch (err) {
