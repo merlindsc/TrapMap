@@ -28,6 +28,13 @@ export default function Admin() {
   const headers = { Authorization: `Bearer ${token}` };
   const jsonHeaders = { ...headers, "Content-Type": "application/json" };
 
+  // Debug log on mount
+  useEffect(() => {
+    console.log("🔧 Super Admin Dashboard initialized");
+    console.log("📡 API URL:", API);
+    console.log("🔑 Token present:", !!token);
+  }, []);
+
   // Tab State
   const [activeTab, setActiveTab] = useState("qr");
 
@@ -65,10 +72,16 @@ export default function Admin() {
         console.error("Stats load failed:", res.status, res.statusText);
         const errorData = await res.json().catch(() => ({}));
         console.error("Error details:", errorData);
+        
+        // Show user-friendly error for auth issues
+        if (res.status === 401 || res.status === 403) {
+          showMessage("error", "Keine Berechtigung für Super-Admin Dashboard");
+        }
       }
     } catch (err) {
       console.error("Stats error:", err);
       console.error("API URL:", API);
+      showMessage("error", "Verbindung zum Server fehlgeschlagen");
     }
   };
 
@@ -119,6 +132,11 @@ export default function Admin() {
       console.error("Failed to load organisations:", res.status, res.statusText);
       const errorData = await res.json().catch(() => ({}));
       console.error("Error details:", errorData);
+      if (res.status === 401 || res.status === 403) {
+        showMessage("error", "Keine Berechtigung für Organisationen");
+      } else {
+        showMessage("error", "Fehler beim Laden der Organisationen");
+      }
     }
   };
 
@@ -131,6 +149,11 @@ export default function Admin() {
       console.error("Failed to load users:", res.status, res.statusText);
       const errorData = await res.json().catch(() => ({}));
       console.error("Error details:", errorData);
+      if (res.status === 401 || res.status === 403) {
+        showMessage("error", "Keine Berechtigung für Benutzer");
+      } else {
+        showMessage("error", "Fehler beim Laden der Benutzer");
+      }
     }
   };
 
@@ -143,6 +166,11 @@ export default function Admin() {
       console.error("Failed to load partners:", res.status, res.statusText);
       const errorData = await res.json().catch(() => ({}));
       console.error("Error details:", errorData);
+      if (res.status === 401 || res.status === 403) {
+        showMessage("error", "Keine Berechtigung für Partner");
+      } else {
+        showMessage("error", "Fehler beim Laden der Partner");
+      }
     }
   };
 
