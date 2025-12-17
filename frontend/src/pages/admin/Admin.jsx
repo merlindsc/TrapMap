@@ -61,9 +61,14 @@ export default function Admin() {
           users: data.users || 0,
           qr: data.boxes || 0
         });
+      } else {
+        console.error("Stats load failed:", res.status, res.statusText);
+        const errorData = await res.json().catch(() => ({}));
+        console.error("Error details:", errorData);
       }
     } catch (err) {
       console.error("Stats error:", err);
+      console.error("API URL:", API);
     }
   };
 
@@ -110,6 +115,10 @@ export default function Admin() {
     if (res.ok) {
       const data = await res.json();
       setOrganisations(Array.isArray(data) ? data : []);
+    } else {
+      console.error("Failed to load organisations:", res.status, res.statusText);
+      const errorData = await res.json().catch(() => ({}));
+      console.error("Error details:", errorData);
     }
   };
 
@@ -118,6 +127,10 @@ export default function Admin() {
     if (res.ok) {
       const data = await res.json();
       setUsers(Array.isArray(data) ? data : []);
+    } else {
+      console.error("Failed to load users:", res.status, res.statusText);
+      const errorData = await res.json().catch(() => ({}));
+      console.error("Error details:", errorData);
     }
   };
 
@@ -126,6 +139,10 @@ export default function Admin() {
     if (res.ok) {
       const data = await res.json();
       setPartners(Array.isArray(data) ? data : []);
+    } else {
+      console.error("Failed to load partners:", res.status, res.statusText);
+      const errorData = await res.json().catch(() => ({}));
+      console.error("Error details:", errorData);
     }
   };
 
@@ -134,6 +151,10 @@ export default function Admin() {
     if (res.ok) {
       const data = await res.json();
       setStats(data);
+    } else {
+      console.error("Failed to load system stats:", res.status, res.statusText);
+      const errorData = await res.json().catch(() => ({}));
+      console.error("Error details:", errorData);
     }
   };
 
