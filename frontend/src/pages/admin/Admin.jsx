@@ -859,6 +859,7 @@ function StatCard({ icon: Icon, label, value, color }) {
 // ============================================
 function DemoRequestsTab({ demoRequests, onRefresh, showMessage, headers, jsonHeaders }) {
   const [creatingAccount, setCreatingAccount] = useState(null);
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
   const handleCreateAccount = async (request) => {
     const password = prompt(`Demo-Account für ${request.name} erstellen.\n\nPasswort eingeben (oder leer lassen für automatisch generiertes):`) || 
@@ -869,7 +870,7 @@ function DemoRequestsTab({ demoRequests, onRefresh, showMessage, headers, jsonHe
     setCreatingAccount(request.id);
     
     try {
-      const res = await fetch(`${API}/demo/create-account/${request.id}`, {
+      const res = await fetch(`${API_URL}/demo/create-account/${request.id}`, {
         method: 'POST',
         headers: jsonHeaders,
         body: JSON.stringify({ password, trial_days: 90 })
@@ -895,7 +896,7 @@ function DemoRequestsTab({ demoRequests, onRefresh, showMessage, headers, jsonHe
     if (!window.confirm(`Demo-Anfrage von ${request.name} löschen?`)) return;
     
     try {
-      const res = await fetch(`${API}/demo/requests/${request.id}`, {
+      const res = await fetch(`${API_URL}/demo/requests/${request.id}`, {
         method: 'DELETE',
         headers
       });
