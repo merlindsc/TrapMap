@@ -8,9 +8,13 @@ const api = axios.create({
 
 // Token automatisch anhängen
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("trapmap_token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  try {
+    const token = localStorage.getItem("trapmap_token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  } catch (error) {
+    console.warn("localStorage nicht verfügbar - Token kann nicht geladen werden:", error);
   }
   return config;
 });

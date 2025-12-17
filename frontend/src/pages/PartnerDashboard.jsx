@@ -23,13 +23,21 @@ const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 export default function PartnerDashboard() {
   const navigate = useNavigate();
-  const token = localStorage.getItem("trapmap_token");
-  const headers = { Authorization: `Bearer ${token}` };
+  
+  let token = null;
+  let partnerDataInit = {};
+  
+  try {
+    token = localStorage.getItem("trapmap_token");
+    partnerDataInit = JSON.parse(localStorage.getItem("trapmap_partner") || "{}");
+  } catch (error) {
+    console.error("localStorage nicht verfügbar:", error);
+  }
+  
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
   // Partner-Daten aus localStorage
-  const [partnerData, setPartnerData] = useState(
-    JSON.parse(localStorage.getItem("trapmap_partner") || "{}")
-  );
+  const [partnerData, setPartnerData] = useState(partnerDataInit);
 
   // State
   const [loading, setLoading] = useState(true);

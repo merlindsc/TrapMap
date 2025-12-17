@@ -27,7 +27,13 @@ const API = import.meta.env.VITE_API_URL;
 
 export default function BoxPool() {
   const navigate = useNavigate();
-  const token = localStorage.getItem("trapmap_token");
+  
+  let token = null;
+  try {
+    token = localStorage.getItem("trapmap_token");
+  } catch (error) {
+    console.error("localStorage nicht verfügbar:", error);
+  }
 
   const [boxes, setBoxes] = useState([]);
   const [objects, setObjects] = useState([]);
