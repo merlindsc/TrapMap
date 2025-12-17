@@ -79,17 +79,32 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     console.log("Logging out");
     
-    setUser(null);
-    setToken(null);
-
     try {
-      localStorage.removeItem('trapmap_token');
-      localStorage.removeItem('trapmap_user');
-    } catch (error) {
-      console.warn("Failed to clear localStorage:", error);
-    }
+      // State sofort zurücksetzen
+      setUser(null);
+      setToken(null);
 
-    apiLogout();
+      // localStorage bereinigen
+      try {
+        localStorage.removeItem('trapmap_token');
+        localStorage.removeItem('trapmap_user');
+        localStorage.removeItem('trapmap_refresh_token');
+      } catch (error) {
+        console.warn("Failed to clear localStorage:", error);
+      }
+
+      // API logout aufrufen
+      apiLogout();
+
+      // Zur Login-Seite weiterleiten
+      console.log("Redirecting to login page");
+      window.location.href = '/login';
+      
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Fallback: Auch bei Fehler zur Login-Seite weiterleiten
+      window.location.href = '/login';
+    }
   };
 
   return (
