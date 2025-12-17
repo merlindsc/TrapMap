@@ -12,6 +12,9 @@ const ALLOWED_LOCAL_ORIGINS = [
 
 const config = {
   nodeEnv: process.env.NODE_ENV || "development",
+  
+  // Server Port: Default is 5000
+  // Set PORT=5000 in your .env file or deployment platform
   port: parseInt(process.env.PORT || "5000", 10),
 
   // CORS – fallback zu lokalen Origins

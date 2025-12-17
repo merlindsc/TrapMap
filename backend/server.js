@@ -272,6 +272,9 @@ app.use((err, req, res, next) => {
 // START SERVER
 // ============================================
 
+// PORT Configuration: Defaults to 5000
+// Can be overridden via PORT environment variable in .env file
+// For production deployments, ensure PORT is set to 5000
 const PORT = config.port || 5000;
 
 app.listen(PORT, () => {
