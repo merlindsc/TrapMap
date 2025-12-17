@@ -400,7 +400,7 @@ async function sendWelcomeEmail(request, password) {
     
     <p><strong>Wichtige Hinweise:</strong></p>
     <ul>
-      <li>Ihr Demo-Account ist bis zum 01.02.2026 kostenlos nutzbar</li>
+      <li>Ihr Demo-Account ist bis zum 01.03.2026 kostenlos nutzbar</li>
       <li>Sie haben vollen Zugriff auf alle TrapMap Funktionen</li>
       <li>Ändern Sie Ihr Passwort nach dem ersten Login</li>
       <li>Bei Fragen stehen wir Ihnen gerne zur Verfügung</li>

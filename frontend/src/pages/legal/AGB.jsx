@@ -90,7 +90,7 @@ export default function AGB() {
         <section className="legal-section">
           <h2>§ 4 Kostenlose Testphase</h2>
           <p>
-            (1) Der Anbieter bietet eine kostenlose Testphase bis zum 01.02.2026 an. Während dieser 
+            (1) Der Anbieter bietet eine kostenlose Testphase bis zum 01.03.2026 an. Während dieser 
             Zeit kann die Software kostenlos und unverbindlich getestet werden.
           </p>
           <p>
@@ -104,7 +104,7 @@ export default function AGB() {
           </p>
           <p>
             (4) Der Anbieter kann die Testphase jederzeit beenden oder die Konditionen ändern, 
-            wobei bestehende Testzugänge bis zum 01.02.2026 davon unberührt bleiben.
+            wobei bestehende Testzugänge bis zum 01.03.2026 davon unberührt bleiben.
           </p>
         </section>
 

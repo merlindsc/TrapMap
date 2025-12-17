@@ -40,7 +40,7 @@ router.post('/request', async (req, res) => {
 
     res.json({ 
       success: true, 
-      message: 'Demo-Anfrage erfolgreich übermittelt. Wir melden uns innerhalb von 24 Stunden bei Ihnen.',
+      message: 'Demo-Account wurde erfolgreich erstellt! Schauen Sie in Ihren Postkorb für die Login-Daten.',
       id: result.id
     });
 

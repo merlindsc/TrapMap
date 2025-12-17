@@ -546,7 +546,7 @@ function OrganisationsTab({ organisations, onRefresh, showMessage, headers, json
           Organisationen ({organisations.length})
         </h2>
         <div className="flex gap-2">
-          <button onClick={onRefresh} className="p-2 bg-gray-100 dark:bg-gray-950 hover:bg-gray-200 dark:hover:bg-gray-900 rounded-lg text-gray-700 dark:text-gray-400">
+          <button onClick={onRefresh} className="p-2 bg-card hover:bg-muted rounded-lg text-muted hover:text-primary">
             <RefreshCw size={18} />
           </button>
           <button
@@ -560,9 +560,9 @@ function OrganisationsTab({ organisations, onRefresh, showMessage, headers, json
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-gray-50 dark:bg-gray-950 rounded-lg p-4 mb-6 border border-gray-200 dark:border-white/10">
+        <form onSubmit={handleSubmit} className="bg-card rounded-lg p-4 mb-6 border border-theme">
           {/* Titel zeigt Create vs Edit */}
-          <h3 className="text-gray-900 dark:text-white font-medium mb-4 flex items-center gap-2">
+          <h3 className="text-primary font-medium mb-4 flex items-center gap-2">
             {editingOrg ? (
               <><Edit2 size={18} className="text-blue-400" /> Organisation bearbeiten</>
             ) : (
@@ -570,31 +570,31 @@ function OrganisationsTab({ organisations, onRefresh, showMessage, headers, json
             )}
           </h3>
           <div className="grid md:grid-cols-2 gap-4 mb-4">
-            <input type="text" placeholder="Name *" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-white/10 rounded-lg px-4 py-2 text-gray-900 dark:text-white" required />
-            <input type="email" placeholder="E-Mail" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-white/10 rounded-lg px-4 py-2 text-gray-900 dark:text-white" />
+            <input type="text" placeholder="Name *" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="bg-card border border-theme rounded-lg px-4 py-2 text-primary" required />
+            <input type="email" placeholder="E-Mail" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="bg-card border border-theme rounded-lg px-4 py-2 text-primary" />
             <input type="text" placeholder="Stra\u00dfe" value={form.address} onChange={e => setForm({...form, address: e.target.value})} className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-white/10 rounded-lg px-4 py-2 text-gray-900 dark:text-white" />
             <div className="flex gap-2">
-              <input type="text" placeholder="PLZ" value={form.zip} onChange={e => setForm({...form, zip: e.target.value})} className="w-24 bg-white dark:bg-gray-900 border border-gray-300 dark:border-white/10 rounded-lg px-4 py-2 text-gray-900 dark:text-white" />
-              <input type="text" placeholder="Ort" value={form.city} onChange={e => setForm({...form, city: e.target.value})} className="flex-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-white/10 rounded-lg px-4 py-2 text-gray-900 dark:text-white" />
+              <input type="text" placeholder="PLZ" value={form.zip} onChange={e => setForm({...form, zip: e.target.value})} className="w-24 bg-card border border-theme rounded-lg px-4 py-2 text-primary" />
+              <input type="text" placeholder="Ort" value={form.city} onChange={e => setForm({...form, city: e.target.value})} className="flex-1 bg-card border border-theme rounded-lg px-4 py-2 text-primary" />
             </div>
-            <input type="tel" placeholder="Telefon" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="bg-white dark:bg-gray-900 border border-gray-300 dark:border-white/10 rounded-lg px-4 py-2 text-gray-900 dark:text-white" />
+            <input type="tel" placeholder="Telefon" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="bg-card border border-theme rounded-lg px-4 py-2 text-primary" />
           </div>
           <div className="flex gap-2">
             <button type="submit" disabled={saving} className={`px-4 py-2 text-white rounded-lg disabled:opacity-50 ${editingOrg ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}`}>
               {saving ? <Loader size={18} className="animate-spin" /> : (editingOrg ? "Speichern" : "Erstellen")}
             </button>
-            <button type="button" onClick={resetForm} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">Abbrechen</button>
+            <button type="button" onClick={resetForm} className="px-4 py-2 bg-muted hover:bg-muted-dark text-primary rounded-lg">Abbrechen</button>
           </div>
         </form>
       )}
 
       <div className="space-y-2">
         {organisations.map(org => (
-          <div key={org.id} className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-950 rounded-lg border border-gray-200 dark:border-white/5 hover:border-gray-300 dark:hover:border-white/10">
+          <div key={org.id} className="flex items-center justify-between p-4 bg-card rounded-lg border border-theme hover:border-muted">
             <div className="flex-1">
               <div className="flex items-center gap-3">
                 <span className="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded">#{org.id}</span>
-                <h3 className="font-medium text-gray-900 dark:text-white">{org.name}</h3>
+                <h3 className="font-medium text-primary">{org.name}</h3>
               </div>
               <div className="flex gap-4 mt-1 text-sm text-gray-600 dark:text-gray-400">
                 {org.email && <span className="flex items-center gap-1"><Mail size={12} />{org.email}</span>}
@@ -612,7 +612,7 @@ function OrganisationsTab({ organisations, onRefresh, showMessage, headers, json
             </div>
           </div>
         ))}
-        {organisations.length === 0 && <p className="text-center text-gray-600 dark:text-gray-500 py-8">Keine Organisationen</p>}
+        {organisations.length === 0 && <p className="text-center text-muted py-8">Keine Organisationen</p>}
       </div>
     </div>
   );
@@ -683,7 +683,7 @@ function UsersTab({ users, organisations, onRefresh, showMessage, headers, jsonH
           Alle Benutzer ({users.length})
         </h2>
         <div className="flex gap-2">
-          <button onClick={onRefresh} className="p-2 bg-gray-100 dark:bg-gray-950 hover:bg-gray-200 dark:hover:bg-gray-900 rounded-lg text-gray-700 dark:text-gray-400"><RefreshCw size={18} /></button>
+          <button onClick={onRefresh} className="p-2 bg-card hover:bg-muted rounded-lg text-muted hover:text-primary"><RefreshCw size={18} /></button>
           <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
             <UserPlus size={18} />Neuer Benutzer
           </button>
@@ -693,22 +693,22 @@ function UsersTab({ users, organisations, onRefresh, showMessage, headers, jsonH
       {showForm && (
         <form onSubmit={handleCreate} className="bg-[#0d0d1a] rounded-lg p-4 mb-6 border border-white/10">
           <div className="grid md:grid-cols-2 gap-4 mb-4">
-            <select value={form.organisation_id} onChange={e => setForm({...form, organisation_id: e.target.value})} className="bg-gray-900 dark:bg-gray-950 border border-white/10 dark:border-white/20 rounded-lg px-4 py-2 text-white" required>
+            <select value={form.organisation_id} onChange={e => setForm({...form, organisation_id: e.target.value})} className="bg-card border border-theme rounded-lg px-4 py-2 text-primary" required>
               <option value="">Organisation wählen *</option>
               {organisations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
             </select>
-            <select value={form.role} onChange={e => setForm({...form, role: e.target.value})} className="bg-gray-900 dark:bg-gray-950 border border-white/10 dark:border-white/20 rounded-lg px-4 py-2 text-white">
+            <select value={form.role} onChange={e => setForm({...form, role: e.target.value})} className="bg-card border border-theme rounded-lg px-4 py-2 text-primary">
               {roles.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
-            <input type="email" placeholder="E-Mail *" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="bg-gray-900 dark:bg-gray-950 border border-white/10 dark:border-white/20 rounded-lg px-4 py-2 text-white" required />
+            <input type="email" placeholder="E-Mail *" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="bg-card border border-theme rounded-lg px-4 py-2 text-primary" required />
             <div className="relative">
-              <input type={showPassword ? "text" : "password"} placeholder="Passwort *" value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="w-full bg-gray-900 dark:bg-gray-950 border border-white/10 dark:border-white/20 rounded-lg px-4 py-2 pr-10 text-white" required />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+              <input type={showPassword ? "text" : "password"} placeholder="Passwort *" value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="w-full bg-card border border-theme rounded-lg px-4 py-2 pr-10 text-primary" required />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-primary">
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
-            <input type="text" placeholder="Vorname" value={form.first_name} onChange={e => setForm({...form, first_name: e.target.value})} className="bg-gray-900 dark:bg-gray-950 border border-white/10 dark:border-white/20 rounded-lg px-4 py-2 text-white" />
-            <input type="text" placeholder="Nachname" value={form.last_name} onChange={e => setForm({...form, last_name: e.target.value})} className="bg-gray-900 dark:bg-gray-950 border border-white/10 dark:border-white/20 rounded-lg px-4 py-2 text-white" />
+            <input type="text" placeholder="Vorname" value={form.first_name} onChange={e => setForm({...form, first_name: e.target.value})} className="bg-card border border-theme rounded-lg px-4 py-2 text-primary" />
+            <input type="text" placeholder="Nachname" value={form.last_name} onChange={e => setForm({...form, last_name: e.target.value})} className="bg-card border border-theme rounded-lg px-4 py-2 text-primary" />
           </div>
           <div className="flex gap-2">
             <button type="submit" disabled={saving} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50">
@@ -721,16 +721,16 @@ function UsersTab({ users, organisations, onRefresh, showMessage, headers, jsonH
 
       <div className="space-y-2">
         {users.map(user => (
-          <div key={user.id} className={`flex items-center justify-between p-4 rounded-lg border ${user.active ? 'bg-gray-50 dark:bg-gray-950 border-gray-200 dark:border-white/5' : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-500/20'}`}>
+          <div key={user.id} className={`flex items-center justify-between p-4 rounded-lg border ${user.active ? 'bg-card border-theme' : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-500/20'}`}>
             <div className="flex-1">
               <div className="flex items-center gap-3">
                 <span className={`text-xs px-2 py-0.5 rounded ${getRoleStyle(user.role)}`}>{user.role}</span>
-                <h3 className="font-medium text-gray-900 dark:text-white">{user.email}</h3>
+                <h3 className="font-medium text-primary">{user.email}</h3>
                 {!user.active && <span className="text-xs text-red-400">(Inaktiv)</span>}
               </div>
               <div className="flex gap-4 mt-1 text-sm text-gray-600 dark:text-gray-400">
                 <span>{user.first_name} {user.last_name}</span>
-                <span className="text-gray-600 dark:text-gray-600">|</span>
+                <span className="text-muted">|</span>
                 <span className="text-indigo-400">{user.organisation_name || `Org #${user.organisation_id}`}</span>
               </div>
             </div>
@@ -742,7 +742,7 @@ function UsersTab({ users, organisations, onRefresh, showMessage, headers, jsonH
             </div>
           </div>
         ))}
-        {users.length === 0 && <p className="text-center text-gray-600 dark:text-gray-500 py-8">Keine Benutzer</p>}
+        {users.length === 0 && <p className="text-center text-muted py-8">Keine Benutzer</p>}
       </div>
     </div>
   );
@@ -790,54 +790,54 @@ function PartnersTab({ partners, organisations, onRefresh, showMessage, headers,
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-primary flex items-center gap-2">
           <UserCheck size={20} className="text-amber-400" />
           Externe Partner ({partners.length})
         </h2>
         <div className="flex gap-2">
-          <button onClick={onRefresh} className="p-2 bg-[#0d0d1a] hover:bg-[#252542] rounded-lg text-gray-400"><RefreshCw size={18} /></button>
+          <button onClick={onRefresh} className="p-2 bg-muted hover:bg-muted-hover rounded-lg text-muted"><RefreshCw size={18} /></button>
           <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg">
             <Plus size={18} />Neuer Partner
           </button>
         </div>
       </div>
 
-      <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 mb-6 text-amber-200 text-sm">
+      <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 mb-6 text-amber-600 dark:text-amber-200 text-sm">
         <strong>Partner</strong> sind externe Kunden-Mitarbeiter die nur ihre zugewiesenen Objekte sehen und Kontrollen durchführen können.
       </div>
 
       {showForm && (
-        <form onSubmit={handleCreate} className="bg-[#0d0d1a] rounded-lg p-4 mb-6 border border-white/10">
+        <form onSubmit={handleCreate} className="bg-card border border-theme rounded-lg p-4 mb-6">
           <div className="grid md:grid-cols-2 gap-4 mb-4">
-            <select value={form.organisation_id} onChange={e => setForm({...form, organisation_id: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" required>
+            <select value={form.organisation_id} onChange={e => setForm({...form, organisation_id: e.target.value})} className="bg-card border border-theme rounded-lg px-4 py-2 text-primary" required>
               <option value="">Organisation wählen *</option>
               {organisations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
             </select>
-            <input type="text" placeholder="Firma (z.B. BMW)" value={form.company} onChange={e => setForm({...form, company: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
-            <input type="text" placeholder="Name *" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" required />
-            <input type="email" placeholder="E-Mail *" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" required />
-            <input type="password" placeholder="Passwort *" value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" required />
-            <input type="tel" placeholder="Telefon" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="bg-[#1a1a2e] border border-white/10 rounded-lg px-4 py-2 text-white" />
+            <input type="text" placeholder="Firma (z.B. BMW)" value={form.company} onChange={e => setForm({...form, company: e.target.value})} className="bg-card border border-theme rounded-lg px-4 py-2 text-primary" />
+            <input type="text" placeholder="Name *" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="bg-card border border-theme rounded-lg px-4 py-2 text-primary" required />
+            <input type="email" placeholder="E-Mail *" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="bg-card border border-theme rounded-lg px-4 py-2 text-primary" required />
+            <input type="password" placeholder="Passwort *" value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="bg-card border border-theme rounded-lg px-4 py-2 text-primary" required />
+            <input type="tel" placeholder="Telefon" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="bg-card border border-theme rounded-lg px-4 py-2 text-primary" />
           </div>
           <div className="flex gap-2">
             <button type="submit" disabled={saving} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg disabled:opacity-50">
               {saving ? <Loader size={18} className="animate-spin" /> : "Erstellen"}
             </button>
-            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">Abbrechen</button>
+            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 bg-muted hover:bg-muted-hover text-primary rounded-lg">Abbrechen</button>
           </div>
         </form>
       )}
 
       <div className="space-y-2">
         {partners.map(partner => (
-          <div key={partner.id} className={`flex items-center justify-between p-4 rounded-lg border ${partner.is_active !== false ? 'bg-gray-50 dark:bg-gray-950 border-gray-200 dark:border-white/5' : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-500/20'}`}>
+          <div key={partner.id} className={`flex items-center justify-between p-4 rounded-lg border ${partner.is_active !== false ? 'bg-card border-theme' : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-500/20'}`}>
             <div className="flex-1">
               <div className="flex items-center gap-3">
                 <UserCheck size={16} className="text-amber-400" />
-                <h3 className="font-medium text-gray-900 dark:text-white">{partner.name}</h3>
-                {partner.company && <span className="text-sm text-gray-600 dark:text-gray-400">({partner.company})</span>}
+                <h3 className="font-medium text-primary">{partner.name}</h3>
+                {partner.company && <span className="text-sm text-muted">({partner.company})</span>}
               </div>
-              <div className="flex gap-4 mt-1 text-sm text-gray-600 dark:text-gray-400">
+              <div className="flex gap-4 mt-1 text-sm text-muted">
                 <span className="flex items-center gap-1"><Mail size={12} />{partner.email}</span>
                 {partner.phone && <span className="flex items-center gap-1"><Phone size={12} />{partner.phone}</span>}
                 <span className="text-indigo-400">{partner.organisation_name || `Org #${partner.organisation_id}`}</span>
@@ -846,7 +846,7 @@ function PartnersTab({ partners, organisations, onRefresh, showMessage, headers,
             <button onClick={() => handleDelete(partner)} className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg"><Trash2 size={18} /></button>
           </div>
         ))}
-        {partners.length === 0 && <p className="text-center text-gray-600 dark:text-gray-500 py-8">Keine Partner angelegt</p>}
+        {partners.length === 0 && <p className="text-center text-muted py-8">Keine Partner angelegt</p>}
       </div>
     </div>
   );

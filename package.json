@@ -15,6 +15,7 @@
     "author": "TrapMap Team",
     "license": "MIT",
     "dependencies": {
+        "@capacitor/core": "^8.0.0",
         "@supabase/supabase-js": "^2.38.4",
         "bcryptjs": "^2.4.3",
         "cors": "^2.8.5",
@@ -31,6 +32,7 @@
         "resend": "^6.6.0"
     },
     "devDependencies": {
+        "@capacitor/cli": "^8.0.0",
         "nodemon": "^3.0.2"
     },
     "engines": {

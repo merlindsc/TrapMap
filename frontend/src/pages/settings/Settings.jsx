@@ -207,16 +207,16 @@ export default function Settings() {
             <p className="text-primary">{user?.first_name} {user?.last_name}</p>
           </div>
           <div>
-            <span className="text-gray-400">E-Mail:</span>
-            <p className="text-white">{user?.email}</p>
+            <span className="text-muted">E-Mail:</span>
+            <p className="text-primary">{user?.email}</p>
           </div>
           <div>
-            <span className="text-gray-400">Rolle:</span>
-            <p className="text-white capitalize">{user?.role}</p>
+            <span className="text-muted">Rolle:</span>
+            <p className="text-primary capitalize">{user?.role}</p>
           </div>
           <div>
-            <span className="text-gray-400">Organisation:</span>
-            <p className="text-white">{orgData.name || `ID: ${user?.organisation_id}`}</p>
+            <span className="text-muted">Organisation:</span>
+            <p className="text-primary">{orgData.name || `ID: ${user?.organisation_id}`}</p>
           </div>
         </div>
       </div>
@@ -244,7 +244,7 @@ export default function Settings() {
               <button
                 type="button"
                 onClick={() => togglePasswordVisibility('current')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-primary"
               >
                 {showPasswords.current ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -267,7 +267,7 @@ export default function Settings() {
               <button
                 type="button"
                 onClick={() => togglePasswordVisibility('new')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-primary"
               >
                 {showPasswords.new ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -290,7 +290,7 @@ export default function Settings() {
               <button
                 type="button"
                 onClick={() => togglePasswordVisibility('confirm')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-primary"
               >
                 {showPasswords.confirm ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -341,7 +341,7 @@ export default function Settings() {
 
           <div className="grid md:grid-cols-3 gap-4">
             <div className="md:col-span-2">
-              <label className="block text-sm text-gray-400 mb-1">
+              <label className="block text-sm text-muted mb-1">
                 <MapPin size={14} className="inline mr-1" />
                 Straße
               </label>
@@ -354,7 +354,7 @@ export default function Settings() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">PLZ</label>
+              <label className="block text-sm text-muted mb-1">PLZ</label>
               <input
                 type="text"
                 value={orgData.zip}
@@ -366,19 +366,19 @@ export default function Settings() {
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Ort</label>
+            <label className="block text-sm text-muted mb-1">Ort</label>
             <input
               type="text"
               value={orgData.city}
               onChange={(e) => setOrgData(prev => ({ ...prev, city: e.target.value }))}
-              className="w-full bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg px-4 py-2 text-white"
+              className="w-full bg-card border border-theme rounded-lg px-4 py-2 text-primary"
               placeholder="Hamburg"
             />
           </div>
 
           <div className="grid md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">
+              <label className="block text-sm text-muted mb-1">
                 <Phone size={14} className="inline mr-1" />
                 Telefon
               </label>
@@ -391,7 +391,7 @@ export default function Settings() {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">
+              <label className="block text-sm text-muted mb-1">
                 <Mail size={14} className="inline mr-1" />
                 E-Mail
               </label>
@@ -399,19 +399,19 @@ export default function Settings() {
                 type="email"
                 value={orgData.email}
                 onChange={(e) => setOrgData(prev => ({ ...prev, email: e.target.value }))}
-                className="w-full bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg px-4 py-2 text-white"
+                className="w-full bg-card border border-theme rounded-lg px-4 py-2 text-primary"
                 placeholder="info@firma.de"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Ansprechpartner / Verantwortlicher</label>
+            <label className="block text-sm text-muted mb-1">Ansprechpartner / Verantwortlicher</label>
             <input
               type="text"
               value={orgData.contact_name}
               onChange={(e) => setOrgData(prev => ({ ...prev, contact_name: e.target.value }))}
-              className="w-full bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg px-4 py-2 text-white"
+              className="w-full bg-card border border-theme rounded-lg px-4 py-2 text-primary"
               placeholder="Max Mustermann"
             />
           </div>
@@ -449,7 +449,7 @@ export default function Settings() {
 
         {logoUrl && (
           <div className="mb-4 p-4 bg-card rounded-lg border border-theme">
-            <p className="text-xs text-gray-500 mb-2">Aktuelles Logo:</p>
+            <p className="text-xs text-muted mb-2">Aktuelles Logo:</p>
             <img 
               src={logoUrl} 
               alt="Firmenlogo" 
@@ -480,7 +480,7 @@ export default function Settings() {
           />
         </label>
 
-        <p className="text-xs text-gray-500 mt-2">
+        <p className="text-xs text-muted mt-2">
           PNG, JPG oder GIF • Max. 2MB • Empfohlen: 200x80 Pixel
         </p>
       </div>

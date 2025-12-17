@@ -25,6 +25,9 @@ const GRAY = "#6b7280";
 const LIGHT_GRAY = "#f3f4f6";
 const BLACK = "#1f2937";
 
+// TRAPMAP LOGO URL - Use local public logo
+const TRAPMAP_LOGO_URL = "http://localhost:5173/logo.png";
+
 // Status-Mapping
 const STATUS_MAP = {
   green: { color: GREEN, label: "OK" },
@@ -51,6 +54,45 @@ const cut = (str, len) => {
   if (!str) return "-";
   const s = String(str);
   return s.length > len ? s.slice(0, len - 1) + "…" : s;
+};
+
+// Image loading helper function
+const loadImage = async (url) => {
+  if (!url) return null;
+  try {
+    const proto = url.startsWith('https') ? require('https') : require('http');
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => resolve(null), 10000);
+      
+      proto.get(url, (res) => {
+        if (res.statusCode === 301 || res.statusCode === 302) {
+          loadImage(res.headers.location).then(resolve);
+          clearTimeout(timeout);
+          return;
+        }
+        if (res.statusCode !== 200) {
+          clearTimeout(timeout);
+          return resolve(null);
+        }
+        const chunks = [];
+        res.on('data', (d) => chunks.push(d));
+        res.on('end', () => {
+          clearTimeout(timeout);
+          resolve(Buffer.concat(chunks));
+        });
+        res.on('error', () => {
+          clearTimeout(timeout);
+          resolve(null);
+        });
+      }).on('error', () => {
+        clearTimeout(timeout);
+        resolve(null);
+      });
+    });
+  } catch (e) {
+    console.log(`Image loading failed for ${url}:`, e.message);
+    return null;
+  }
 };
 
 // ============================================
@@ -115,17 +157,38 @@ async function loadData(objectId, orgId, options = {}) {
 async function generateAuditReport(objectId, orgId, options = {}) {
   const data = await loadData(objectId, orgId, options);
   
-  // Organisations-Logo laden falls verfügbar
-  let orgLogoBuffer = null;
-  if (data.org?.logo_url) {
-    try {
-      const response = await fetch(data.org.logo_url);
-      if (response.ok) {
-        orgLogoBuffer = Buffer.from(await response.arrayBuffer());
+  // TrapMap Logo laden - try local file first, then URL
+  let trapMapLogoBuffer = null;
+  try {
+    // Try to load from local public folder
+    const logoPath = path.join(__dirname, "../../frontend/public/logo.png");
+    if (fs.existsSync(logoPath)) {
+      console.log("📷 Loading TrapMap logo from local file:", logoPath);
+      trapMapLogoBuffer = fs.readFileSync(logoPath);
+      console.log("📷 TrapMap logo loaded from local file, size:", trapMapLogoBuffer.length, "bytes");
+    } else {
+      // Fallback to URL
+      console.log("📷 Local logo not found, loading from URL:", TRAPMAP_LOGO_URL);
+      trapMapLogoBuffer = await loadImage(TRAPMAP_LOGO_URL);
+      if (trapMapLogoBuffer) {
+        console.log("📷 TrapMap logo loaded from URL, size:", trapMapLogoBuffer.length, "bytes");
       }
-    } catch (e) {
-      console.log("Organisation logo loading failed:", e.message);
     }
+  } catch (e) {
+    console.log("📷 TrapMap logo loading failed:", e.message);
+  }
+  
+  if (!trapMapLogoBuffer) {
+    console.log("📷 TrapMap logo not available from any source");
+  }
+
+  // Organisations-Logo laden falls verfügbar
+  console.log("📷 Loading organization logo from:", data.org?.logo_url);
+  const orgLogoBuffer = data.org?.logo_url ? await loadImage(data.org.logo_url) : null;
+  if (orgLogoBuffer) {
+    console.log("📷 Organization logo loaded successfully, size:", orgLogoBuffer.length, "bytes");
+  } else if (data.org?.logo_url) {
+    console.log("📷 Organization logo loading failed");
   }
   
   return new Promise((resolve, reject) => {
@@ -140,7 +203,7 @@ async function generateAuditReport(objectId, orgId, options = {}) {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    let y = MARGIN;
+    let y = 85; // Start nach Header
     let pageNum = 1;
 
     // Helper
@@ -149,15 +212,15 @@ async function generateAuditReport(objectId, orgId, options = {}) {
     const addPage = () => {
       doc.addPage();
       pageNum++;
-      y = MARGIN;
       
       // Logos auf jeder Seite
       addLogosToPage();
       
+      // Seitenzahl und Linie unterhalb des Headers
       doc.fontSize(8).fillColor(GRAY);
-      doc.text(`${data.obj.name} | Seite ${pageNum}`, MARGIN, 42);
-      doc.moveTo(MARGIN, 50).lineTo(PAGE_WIDTH - MARGIN, 50).strokeColor(LIGHT_GRAY).stroke();
-      y = 60; // Optimaler Abstand nach Logos
+      doc.text(`${data.obj.name} | Seite ${pageNum}`, MARGIN, 65);
+      doc.moveTo(MARGIN, 75).lineTo(PAGE_WIDTH - MARGIN, 75).strokeColor(LIGHT_GRAY).stroke();
+      y = 85; // Start nach Header und Linie
     };
 
     const drawLine = () => {
@@ -168,25 +231,61 @@ async function generateAuditReport(objectId, orgId, options = {}) {
     // Logo-Funktion für alle Seiten
     const addLogosToPage = () => {
       try {
-        // TrapMap Logo oben links (erstmal als Text)
-        doc.fontSize(12).fillColor(BLUE).font("Helvetica-Bold");
-        doc.text("TRAPMAP", MARGIN, 15);
+        // Blauen Header-Hintergrund hinzufügen
+        doc.rect(0, 0, PAGE_WIDTH, 60).fill(BLUE);
         
-        // Kleine Linie unter TrapMap
-        doc.fontSize(8).fillColor(GRAY).font("Helvetica");
-        doc.text("Schädlingsmonitoring", MARGIN, 28);
+        // TrapMap Logo oben links
+        if (trapMapLogoBuffer) {
+          console.log("📷 Rendering TrapMap logo to PDF");
+          try {
+            doc.image(trapMapLogoBuffer, MARGIN, 8, { height: 44 });
+          } catch (e) {
+            console.log("📷 TrapMap logo image failed, using text fallback");
+            // Fallback: Text wenn Logo-Rendering fehlschlägt
+            doc.fontSize(14).fillColor("#ffffff").font("Helvetica-Bold");
+            doc.text("TRAPMAP", MARGIN, 18);
+            doc.fontSize(8).fillColor("#93c5fd").font("Helvetica");
+            doc.text("Schädlingsmonitoring", MARGIN, 35);
+          }
+        } else {
+          console.log("📷 TrapMap logo buffer not available, using text fallback");
+          // Fallback: Text wenn Logo nicht geladen werden konnte
+          doc.fontSize(14).fillColor("#ffffff").font("Helvetica-Bold");
+          doc.text("TRAPMAP", MARGIN, 18);
+          doc.fontSize(8).fillColor("#93c5fd").font("Helvetica");
+          doc.text("Schädlingsmonitoring", MARGIN, 35);
+        }
 
-        // Organisations-Info oben rechts
-        doc.fontSize(10).fillColor(BLACK).font("Helvetica-Bold");
-        doc.text(data.org?.name || "Organisation", PAGE_WIDTH - 150, 15, { width: 130, align: 'right' });
-        
-        if (data.org?.address || data.org?.city) {
-          doc.fontSize(8).fillColor(GRAY).font("Helvetica");
-          const address = [data.org?.address, data.org?.city].filter(Boolean).join(", ");
-          doc.text(address, PAGE_WIDTH - 150, 28, { width: 130, align: 'right' });
+        // Organisations-Logo oben rechts
+        if (orgLogoBuffer) {
+          console.log("📷 Rendering organization logo to PDF");
+          try {
+            doc.image(orgLogoBuffer, PAGE_WIDTH - 120, 8, { height: 44 });
+          } catch (e) {
+            console.log("📷 Organization logo image failed, using text fallback");
+            // Fallback bei Rendering-Fehler
+            doc.fontSize(12).fillColor("#ffffff").font("Helvetica-Bold");
+            doc.text(data.org?.name || "Organisation", PAGE_WIDTH - 150, 18, { width: 130, align: 'right' });
+            
+            if (data.org?.address || data.org?.city) {
+              doc.fontSize(8).fillColor("#93c5fd").font("Helvetica");
+              const address = [data.org?.address, data.org?.city].filter(Boolean).join(", ");
+              doc.text(address, PAGE_WIDTH - 150, 35, { width: 130, align: 'right' });
+            }
+          }
+        } else {
+          // Organisations-Info als Text wenn kein Logo
+          doc.fontSize(12).fillColor("#ffffff").font("Helvetica-Bold");
+          doc.text(data.org?.name || "Organisation", PAGE_WIDTH - 150, 18, { width: 130, align: 'right' });
+          
+          if (data.org?.address || data.org?.city) {
+            doc.fontSize(8).fillColor("#93c5fd").font("Helvetica");
+            const address = [data.org?.address, data.org?.city].filter(Boolean).join(", ");
+            doc.text(address, PAGE_WIDTH - 150, 35, { width: 130, align: 'right' });
+          }
         }
       } catch (e) {
-        console.error("Logo loading error:", e.message);
+        console.error("Logo rendering error:", e.message);
       }
     };
 
@@ -195,13 +294,14 @@ async function generateAuditReport(objectId, orgId, options = {}) {
     // Logos auch auf der ersten Seite
     addLogosToPage();
     
-    doc.fontSize(24).fillColor(BLUE).font("Helvetica-Bold");
+    // Title nach dem Header
+    doc.fontSize(20).fillColor(BLUE).font("Helvetica-Bold");
     doc.text("AUDIT-REPORT", MARGIN, y);
-    y += 35;
-    
-    doc.fontSize(12).fillColor(GRAY).font("Helvetica");
-    doc.text("Schädlingsmonitoring", MARGIN, y);
     y += 30;
+    
+    doc.fontSize(10).fillColor(GRAY).font("Helvetica");
+    doc.text("Schädlingsmonitoring", MARGIN, y);
+    y += 25;
 
     // Objekt-Box
     doc.rect(MARGIN, y, CONTENT_WIDTH, 80).fillColor(LIGHT_GRAY).fill();

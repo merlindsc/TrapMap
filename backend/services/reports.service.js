@@ -298,8 +298,24 @@ exports.generatePDF = async (reportData, options = {}) => {
 
   const { object, organisation, boxes, scans, scansWithPhotos, stats, period } = reportData;
   
-  // Beide Logos laden
-  const trapMapLogoBuffer = await loadImage(TRAPMAP_LOGO_URL);
+  // TrapMap Logo laden - local file first, then URL
+  let trapMapLogoBuffer = null;
+  try {
+    const logoPath = require('path').join(__dirname, "../../frontend/public/logo.png");
+    if (require('fs').existsSync(logoPath)) {
+      trapMapLogoBuffer = require('fs').readFileSync(logoPath);
+      console.log("📷 TrapMap logo loaded from local file, size:", trapMapLogoBuffer.length, "bytes");
+    } else {
+      trapMapLogoBuffer = await loadImage(TRAPMAP_LOGO_URL);
+      if (trapMapLogoBuffer) {
+        console.log("📷 TrapMap logo loaded from URL, size:", trapMapLogoBuffer.length, "bytes");
+      }
+    }
+  } catch (e) {
+    console.log("📷 TrapMap logo loading failed:", e.message);
+  }
+  
+  // Company Logo laden
   const companyLogoBuffer = organisation?.logo_url ? await loadImage(organisation.logo_url) : null;
   
   // Scan-Fotos laden wenn gewünscht
@@ -657,8 +673,24 @@ exports.generateGefahrenanalyse = async (formData, organisation) => {
 
   console.log("📄 Gefahrenanalyse formData:", JSON.stringify(formData, null, 2));
 
-  // Beide Logos laden
-  const trapMapLogoBuffer = await loadImage(TRAPMAP_LOGO_URL);
+  // TrapMap Logo laden - local file first, then URL
+  let trapMapLogoBuffer = null;
+  try {
+    const logoPath = require('path').join(__dirname, "../../frontend/public/logo.png");
+    if (require('fs').existsSync(logoPath)) {
+      trapMapLogoBuffer = require('fs').readFileSync(logoPath);
+      console.log("📷 Gefahrenanalyse: TrapMap logo loaded from local file, size:", trapMapLogoBuffer.length, "bytes");
+    } else {
+      trapMapLogoBuffer = await loadImage(TRAPMAP_LOGO_URL);
+      if (trapMapLogoBuffer) {
+        console.log("📷 Gefahrenanalyse: TrapMap logo loaded from URL, size:", trapMapLogoBuffer.length, "bytes");
+      }
+    }
+  } catch (e) {
+    console.log("📷 Gefahrenanalyse: TrapMap logo loading failed:", e.message);
+  }
+  
+  // Company Logo laden
   const companyLogoBuffer = organisation?.logo_url ? await loadImage(organisation.logo_url) : null;
 
   return new Promise((resolve, reject) => {

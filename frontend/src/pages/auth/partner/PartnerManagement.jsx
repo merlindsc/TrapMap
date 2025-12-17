@@ -200,7 +200,7 @@ export default function PartnerManagement() {
   // ============================================
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center p-15 text-gray-500 dark:text-gray-600">
+      <div className="flex flex-col items-center justify-center p-15 text-muted">
         <Loader size={32} className="animate-spin" />
         <p>Lade Partner...</p>
       </div>
@@ -208,15 +208,15 @@ export default function PartnerManagement() {
   }
 
   return (
-    <div className="p-6 text-white dark:text-gray-100">
+    <div className="p-6 text-primary">
       {/* HEADER */}
       <div className="flex justify-between items-start mb-6 flex-wrap gap-4">
         <div>
-          <h2 className="flex items-center gap-2.5 text-2xl font-bold m-0">
+          <h2 className="flex items-center gap-2.5 text-2xl font-bold m-0 text-primary">
             <Users size={24} />
             Partner-Verwaltung
           </h2>
-          <p className="text-gray-500 dark:text-gray-600 mt-1 text-sm">
+          <p className="text-muted mt-1 text-sm">
             Externe Kunden können hier Zugang zu ihren Objekten erhalten
           </p>
         </div>
@@ -245,10 +245,10 @@ export default function PartnerManagement() {
 
       {/* PARTNER LISTE */}
       {partners.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 px-5 py-15 bg-gray-800 dark:bg-gray-900 rounded-xl text-center">
-          <Users size={48} color="#6b7280" />
-          <h3>Noch keine Partner</h3>
-          <p>Erstellen Sie Partner-Zugänge für Ihre Kunden</p>
+        <div className="flex flex-col items-center gap-3 px-5 py-15 bg-card border border-theme rounded-xl text-center">
+          <Users size={48} className="text-muted" />
+          <h3 className="text-primary">Noch keine Partner</h3>
+          <p className="text-muted">Erstellen Sie Partner-Zugänge für Ihre Kunden</p>
           <button className="flex items-center gap-2 px-4.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 border-none rounded-lg text-white text-sm font-semibold cursor-pointer" onClick={openCreateDialog}>
             <Plus size={18} />
             Ersten Partner erstellen
@@ -257,12 +257,12 @@ export default function PartnerManagement() {
       ) : (
         <div className="flex flex-col gap-3">
           {partners.map(partner => (
-            <div key={partner.id} className="bg-gray-800 dark:bg-gray-900 rounded-xl p-4">
+            <div key={partner.id} className="bg-card border border-theme rounded-xl p-4">
               <div className="flex justify-between items-start mb-3">
                 <div className="flex flex-col gap-1">
-                  <strong className="text-base">{partner.name}</strong>
+                  <strong className="text-base text-primary">{partner.name}</strong>
                   {partner.company && (
-                    <span className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-600">
+                    <span className="flex items-center gap-1.5 text-sm text-muted">
                       <Building2 size={14} />
                       {partner.company}
                     </span>
@@ -270,13 +270,13 @@ export default function PartnerManagement() {
                 </div>
                 <div className="flex gap-1">
                   <button 
-                    className="p-2 bg-gray-700 dark:bg-gray-800 hover:bg-gray-600 dark:hover:bg-gray-700 border-none rounded-md text-gray-400 dark:text-gray-500 cursor-pointer"
+                    className="p-2 bg-muted hover:bg-muted-hover border-none rounded-md text-muted cursor-pointer"
                     onClick={() => openEditDialog(partner)}
                   >
                     <Edit2 size={16} />
                   </button>
                   <button 
-                    className="p-2 bg-gray-700 dark:bg-gray-800 hover:bg-gray-600 dark:hover:bg-gray-700 border-none rounded-md text-red-500 cursor-pointer"
+                    className="p-2 bg-muted hover:bg-muted-hover border-none rounded-md text-red-500 cursor-pointer"
                     onClick={() => handleDelete(partner)}
                   >
                     <Trash2 size={16} />
@@ -284,32 +284,32 @@ export default function PartnerManagement() {
                 </div>
               </div>
 
-              <div className="flex gap-4 text-sm text-gray-500 dark:text-gray-600 mb-3">
+              <div className="flex gap-4 text-sm text-muted mb-3">
                 <span className="flex items-center gap-1.5"><Mail size={14} /> {partner.email}</span>
                 {partner.phone && <span className="flex items-center gap-1.5"><Phone size={14} /> {partner.phone}</span>}
               </div>
 
               <div className="mb-3">
-                <span className="text-xs text-gray-600 dark:text-gray-700 mb-1.5 block">Zugewiesene Objekte:</span>
+                <span className="text-xs text-muted mb-1.5 block">Zugewiesene Objekte:</span>
                 {partner.objects?.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
                     {partner.objects.map(obj => (
-                      <span key={obj.id} className="px-2.5 py-1 bg-gray-700 dark:bg-gray-800 rounded text-xs">
+                      <span key={obj.id} className="px-2.5 py-1 bg-muted rounded text-xs text-primary">
                         {obj.name}
                       </span>
                     ))}
                   </div>
                 ) : (
-                  <span className="text-xs text-gray-600 dark:text-gray-700 italic">Keine Objekte zugewiesen</span>
+                  <span className="text-xs text-muted italic">Keine Objekte zugewiesen</span>
                 )}
               </div>
 
-              <div className="flex items-center gap-3 pt-3 border-t border-gray-700 dark:border-gray-800">
+              <div className="flex items-center gap-3 pt-3 border-t border-theme">
                 <span className={`px-2.5 py-1 rounded text-xs ${partner.is_active ? 'bg-green-950 dark:bg-green-900/50 text-green-400' : 'bg-red-950 dark:bg-red-900/50 text-red-400'}`}>
                   {partner.is_active ? "Aktiv" : "Inaktiv"}
                 </span>
                 {partner.last_login && (
-                  <span className="text-xs text-gray-600 dark:text-gray-700">
+                  <span className="text-xs text-muted">
                     Letzter Login: {new Date(partner.last_login).toLocaleDateString("de-DE")}
                   </span>
                 )}
@@ -322,60 +322,60 @@ export default function PartnerManagement() {
       {/* DIALOG */}
       {showDialog && (
         <div className="fixed top-0 left-0 right-0 bottom-0 bg-black/70 flex items-center justify-center p-5 z-[1000]" onClick={() => setShowDialog(false)}>
-          <div className="bg-gray-800 dark:bg-gray-900 rounded-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-5">
+          <div className="bg-card border border-theme rounded-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-5 text-primary">
               {editPartner ? "Partner bearbeiten" : "Neuen Partner erstellen"}
             </h3>
 
             {/* Form */}
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
-                <label>Name *</label>
+                <label className="text-primary">Name *</label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={e => setForm({...form, name: e.target.value})}
                   placeholder="Max Mustermann"
-                  className="px-3 py-2.5 bg-gray-950 dark:bg-black border border-gray-700 dark:border-gray-800 rounded-md text-white text-sm"
+                  className="px-3 py-2.5 bg-card border border-theme rounded-md text-primary text-sm"
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label>Firma</label>
+                <label className="text-primary">Firma</label>
                 <input
                   type="text"
                   value={form.company}
                   onChange={e => setForm({...form, company: e.target.value})}
                   placeholder="BMW AG"
-                  className="px-3 py-2.5 bg-gray-950 dark:bg-black border border-gray-700 dark:border-gray-800 rounded-md text-white text-sm"
+                  className="px-3 py-2.5 bg-card border border-theme rounded-md text-primary text-sm"
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label>E-Mail *</label>
+                <label className="text-primary">E-Mail *</label>
                 <input
                   type="email"
                   value={form.email}
                   onChange={e => setForm({...form, email: e.target.value})}
                   placeholder="max@firma.de"
-                  className="px-3 py-2.5 bg-gray-950 dark:bg-black border border-gray-700 dark:border-gray-800 rounded-md text-white text-sm disabled:opacity-50"
+                  className="px-3 py-2.5 bg-card border border-theme rounded-md text-primary text-sm disabled:opacity-50"
                   disabled={!!editPartner}
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label>Telefon</label>
+                <label className="text-primary">Telefon</label>
                 <input
                   type="tel"
                   value={form.phone}
                   onChange={e => setForm({...form, phone: e.target.value})}
                   placeholder="+49 123 456789"
-                  className="px-3 py-2.5 bg-gray-950 dark:bg-black border border-gray-700 dark:border-gray-800 rounded-md text-white text-sm"
+                  className="px-3 py-2.5 bg-card border border-theme rounded-md text-primary text-sm"
                 />
               </div>
 
               <div className="flex flex-col gap-1.5 col-span-2">
-                <label>
+                <label className="text-primary">
                   {editPartner ? "Neues Passwort (leer lassen für unverändert)" : "Passwort *"}
                 </label>
                 <div className="relative">
@@ -384,11 +384,11 @@ export default function PartnerManagement() {
                     value={form.password}
                     onChange={e => setForm({...form, password: e.target.value})}
                     placeholder="••••••••"
-                    className="w-full px-3 py-2.5 pr-10 bg-gray-950 dark:bg-black border border-gray-700 dark:border-gray-800 rounded-md text-white text-sm"
+                    className="w-full px-3 py-2.5 pr-10 bg-card border border-theme rounded-md text-primary text-sm"
                   />
                   <button
                     type="button"
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 bg-transparent border-none text-gray-600 dark:text-gray-700 cursor-pointer"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 bg-transparent border-none text-muted cursor-pointer"
                     onClick={() => setShowPassword(!showPassword)}
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -399,24 +399,24 @@ export default function PartnerManagement() {
 
             {/* Objekte auswählen */}
             <div className="mt-5">
-              <label>Objekte zuweisen</label>
-              <p className="text-xs text-gray-600 dark:text-gray-700 mt-1 mb-2.5">
+              <label className="text-primary">Objekte zuweisen</label>
+              <p className="text-xs text-muted mt-1 mb-2.5">
                 Der Partner kann nur die ausgewählten Objekte sehen und dort Kontrollen durchführen.
               </p>
-              <div className="flex flex-col gap-2 max-h-[200px] overflow-y-auto p-3 bg-gray-950 dark:bg-black rounded-lg">
+              <div className="flex flex-col gap-2 max-h-[200px] overflow-y-auto p-3 bg-card border border-theme rounded-lg">
                 {objects.map(obj => (
-                  <label key={obj.id} className="flex items-center gap-2.5 cursor-pointer text-sm">
+                  <label key={obj.id} className="flex items-center gap-2.5 cursor-pointer text-sm text-primary">
                     <input
                       type="checkbox"
                       checked={form.objectIds.includes(obj.id)}
                       onChange={() => toggleObject(obj.id)}
                     />
                     <span>{obj.name}</span>
-                    <span className="ml-auto text-xs text-gray-600 dark:text-gray-700">{obj.city}</span>
+                    <span className="ml-auto text-xs text-muted">{obj.city}</span>
                   </label>
                 ))}
                 {objects.length === 0 && (
-                  <p className="text-gray-600 dark:text-gray-700 text-sm text-center p-5">Keine Objekte vorhanden</p>
+                  <p className="text-muted text-sm text-center p-5">Keine Objekte vorhanden</p>
                 )}
               </div>
             </div>
@@ -424,7 +424,7 @@ export default function PartnerManagement() {
             {/* Buttons */}
             <div className="flex gap-3 mt-6">
               <button 
-                className="flex-1 px-3 py-3 bg-gray-700 dark:bg-gray-800 hover:bg-gray-600 dark:hover:bg-gray-700 border-none rounded-lg text-white text-sm cursor-pointer"
+                className="flex-1 px-3 py-3 bg-muted hover:bg-muted-hover border-none rounded-lg text-primary text-sm cursor-pointer"
                 onClick={() => setShowDialog(false)}
               >
                 Abbrechen

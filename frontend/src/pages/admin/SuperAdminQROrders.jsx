@@ -194,16 +194,16 @@ export default function SuperAdminQROrders() {
       {/* HEADER */}
       <div className="flex justify-between items-start mb-6">
         <div>
-          <h1 className="flex items-center gap-3 text-2xl font-bold text-gray-900 dark:text-white m-0">
+          <h1 className="flex items-center gap-3 text-2xl font-bold text-primary m-0">
             <QrCode size={32} />
             QR-Code Bestellsystem
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
+          <p className="text-muted mt-2">
             Ein-Klick Versand an Organisationen
           </p>
         </div>
 
-        <button className="flex items-center gap-2 px-4 py-2 bg-gray-700 dark:bg-gray-600 hover:bg-gray-600 dark:hover:bg-gray-500 text-white rounded-lg" onClick={loadData}>
+        <button className="flex items-center gap-2 px-4 py-2 bg-muted hover:bg-muted-dark text-primary rounded-lg" onClick={loadData}>
           <RefreshCw size={18} />
           Aktualisieren
         </button>
@@ -236,39 +236,39 @@ export default function SuperAdminQROrders() {
 
       {/* STATISTIK CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center gap-4">
+        <div className="bg-card p-6 rounded-xl border border-theme flex items-center gap-4">
           <Building2 size={24} className="text-indigo-500" />
           <div>
-            <span className="block text-2xl font-bold text-gray-900 dark:text-white">{organisations.length}</span>
-            <span className="block text-sm text-gray-600 dark:text-gray-400">Organisationen</span>
+            <span className="block text-2xl font-bold text-primary">{organisations.length}</span>
+            <span className="block text-sm text-muted">Organisationen</span>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center gap-4">
+        <div className="bg-card p-6 rounded-xl border border-theme flex items-center gap-4">
           <QrCode size={24} className="text-green-500" />
           <div>
-            <span className="block text-2xl font-bold text-gray-900 dark:text-white">
+            <span className="block text-2xl font-bold text-primary">
               {organisations.reduce((sum, o) => sum + (o.qr_codes_ordered || 0), 0)}
             </span>
-            <span className="block text-sm text-gray-600 dark:text-gray-400">Codes generiert</span>
+            <span className="block text-sm text-muted">Codes generiert</span>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center gap-4">
+        <div className="bg-card p-6 rounded-xl border border-theme flex items-center gap-4">
           <Package size={24} className="text-amber-500" />
           <div>
-            <span className="block text-2xl font-bold text-gray-900 dark:text-white">
-              {organisations.reduce((sum, o) => sum + (o.usedCodes || 0), 0)}
+            <span className="block text-2xl font-bold text-primary">
+              {organisations.reduce((sum, org) => sum + (org.used_codes || 0), 0)}
             </span>
-            <span className="block text-sm text-gray-600 dark:text-gray-400">Codes verwendet</span>
+            <span className="block text-sm text-muted">Codes verwendet</span>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center gap-4">
+        <div className="bg-card p-6 rounded-xl border border-theme flex items-center gap-4">
           <FileText size={24} className="text-purple-500" />
           <div>
-            <span className="block text-2xl font-bold text-gray-900 dark:text-white">{orders.length}</span>
-            <span className="block text-sm text-gray-600 dark:text-gray-400">Bestellungen</span>
+            <span className="block text-2xl font-bold text-primary">{orders.length}</span>
+            <span className="block text-sm text-muted">Bestellungen</span>
           </div>
         </div>
       </div>
@@ -285,7 +285,7 @@ export default function SuperAdminQROrders() {
 
       {/* BESTELLFORMULAR */}
       {showOrderForm && (
-        <div className="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-700 mb-6">
+        <div className="bg-card p-6 rounded-xl border border-theme mb-6">
           <h3>📦 Neue QR-Code Bestellung</h3>
 
           {/* Organisation auswählen */}
@@ -579,7 +579,7 @@ export default function SuperAdminQROrders() {
 }
 
 // ============================================
-// STYLES
+// STYLES - Responsive colors using CSS custom properties
 // ============================================
 const styles = {
   container: {
@@ -593,7 +593,7 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     height: "400px",
-    color: "#9ca3af"
+    color: "var(--text-muted, #64748b)"
   },
   spinner: {
     animation: "spin 1s linear infinite"
@@ -610,10 +610,11 @@ const styles = {
     gap: "12px",
     fontSize: "28px",
     fontWeight: "bold",
-    margin: 0
+    margin: 0,
+    color: "var(--text-primary, #1e293b)"
   },
   subtitle: {
-    color: "#9ca3af",
+    color: "var(--text-muted, #64748b)",
     marginTop: "8px"
   },
   refreshButton: {
@@ -621,10 +622,10 @@ const styles = {
     alignItems: "center",
     gap: "8px",
     padding: "10px 16px",
-    background: "#374151",
+    background: "var(--bg-muted, #e2e8f0)",
     border: "none",
     borderRadius: "8px",
-    color: "#fff",
+    color: "var(--text-primary, #1e293b)",
     cursor: "pointer"
   },
   successBanner: {
@@ -666,18 +667,20 @@ const styles = {
     alignItems: "center",
     gap: "16px",
     padding: "20px",
-    background: "#1f2937",
-    borderRadius: "12px"
+    background: "var(--bg-card, #f8fafc)",
+    borderRadius: "12px",
+    border: "1px solid var(--border-color, #e2e8f0)"
   },
   statValue: {
     display: "block",
     fontSize: "28px",
-    fontWeight: "bold"
+    fontWeight: "bold",
+    color: "var(--text-primary, #1e293b)"
   },
   statLabel: {
     display: "block",
     fontSize: "13px",
-    color: "#9ca3af"
+    color: "var(--text-muted, #64748b)"
   },
   newOrderButton: {
     display: "flex",
@@ -696,10 +699,11 @@ const styles = {
     marginBottom: "16px"
   },
   orderForm: {
-    background: "#1f2937",
+    background: "var(--bg-card, #f8fafc)",
     borderRadius: "12px",
     padding: "24px",
-    marginBottom: "24px"
+    marginBottom: "24px",
+    border: "1px solid var(--border-color, #e2e8f0)"
   },
   formGroup: {
     marginBottom: "20px"
@@ -707,27 +711,28 @@ const styles = {
   select: {
     width: "100%",
     padding: "12px 16px",
-    background: "#111827",
-    border: "1px solid #374151",
+    background: "var(--bg-card, #f8fafc)",
+    border: "1px solid var(--border-color, #e2e8f0)",
     borderRadius: "8px",
-    color: "#fff",
+    color: "var(--text-primary, #1e293b)",
     fontSize: "16px",
     marginTop: "8px"
   },
   input: {
     width: "100%",
     padding: "12px 16px",
-    background: "#111827",
-    border: "1px solid #374151",
+    background: "var(--bg-card, #f8fafc)",
+    border: "1px solid var(--border-color, #e2e8f0)",
     borderRadius: "8px",
-    color: "#fff",
+    color: "var(--text-primary, #1e293b)",
     fontSize: "16px",
     marginTop: "8px",
     boxSizing: "border-box"
   },
   orgInfo: {
     padding: "16px",
-    background: "#111827",
+    background: "var(--bg-card, #f8fafc)",
+    border: "1px solid var(--border-color, #e2e8f0)",
     borderRadius: "8px",
     marginBottom: "16px"
   },
@@ -740,15 +745,16 @@ const styles = {
   quantityBtn: {
     flex: 1,
     padding: "10px",
-    background: "#374151",
-    border: "1px solid #374151",
+    background: "var(--bg-muted, #e2e8f0)",
+    border: "1px solid var(--border-color, #e2e8f0)",
     borderRadius: "6px",
-    color: "#fff",
+    color: "var(--text-primary, #1e293b)",
     cursor: "pointer",
     fontWeight: "600"
   },
   pricingCard: {
-    background: "#111827",
+    background: "var(--bg-card, #f8fafc)",
+    border: "1px solid var(--border-color, #e2e8f0)",
     borderRadius: "8px",
     padding: "16px",
     marginBottom: "16px"
@@ -757,7 +763,8 @@ const styles = {
     display: "flex",
     justifyContent: "space-between",
     padding: "8px 0",
-    borderBottom: "1px solid #374151"
+    borderBottom: "1px solid var(--border-color, #e2e8f0)",
+    color: "var(--text-primary, #1e293b)"
   },
   discountBadge: {
     display: "inline-block",
@@ -773,17 +780,20 @@ const styles = {
     justifyContent: "space-between",
     padding: "12px 0 0",
     fontWeight: "bold",
-    fontSize: "18px"
+    fontSize: "18px",
+    color: "var(--text-primary, #1e293b)"
   },
   codePreview: {
     display: "flex",
     flexDirection: "column",
     gap: "8px",
     padding: "16px",
-    background: "#111827",
+    background: "var(--bg-card, #f8fafc)",
+    border: "1px solid var(--border-color, #e2e8f0)",
     borderRadius: "8px",
     marginBottom: "16px",
-    fontFamily: "monospace"
+    fontFamily: "monospace",
+    color: "var(--text-primary, #1e293b)"
   },
   submitButton: {
     display: "flex",
@@ -809,7 +819,8 @@ const styles = {
     gap: "12px",
     fontSize: "20px",
     fontWeight: "600",
-    marginBottom: "16px"
+    marginBottom: "16px",
+    color: "var(--text-primary, #1e293b)"
   },
   orgList: {
     display: "flex",
@@ -817,7 +828,8 @@ const styles = {
     gap: "12px"
   },
   orgCard: {
-    background: "#1f2937",
+    background: "var(--bg-card, #f8fafc)",
+    border: "1px solid var(--border-color, #e2e8f0)",
     borderRadius: "12px",
     padding: "16px"
   },
@@ -828,14 +840,15 @@ const styles = {
     marginBottom: "12px"
   },
   orgMain: {
-    flex: 1
+    flex: 1,
+    color: "var(--text-primary, #1e293b)"
   },
   orgMeta: {
     display: "flex",
     gap: "16px",
     marginTop: "8px",
     fontSize: "13px",
-    color: "#9ca3af"
+    color: "var(--text-muted, #64748b)"
   },
   orgStats: {
     display: "flex",
@@ -847,12 +860,13 @@ const styles = {
   orgStatValue: {
     display: "block",
     fontSize: "20px",
-    fontWeight: "bold"
+    fontWeight: "bold",
+    color: "var(--text-primary, #1e293b)"
   },
   orgStatLabel: {
     display: "block",
     fontSize: "11px",
-    color: "#6b7280"
+    color: "var(--text-muted, #64748b)"
   },
   quickButtons: {
     display: "flex",
@@ -860,16 +874,16 @@ const styles = {
   },
   quickBtn: {
     padding: "8px 16px",
-    background: "#374151",
+    background: "var(--bg-muted, #e2e8f0)",
     border: "none",
     borderRadius: "6px",
-    color: "#fff",
+    color: "var(--text-primary, #1e293b)",
     cursor: "pointer",
     fontSize: "14px",
     fontWeight: "600"
   },
   emptyText: {
-    color: "#6b7280",
+    color: "var(--text-muted, #64748b)",
     textAlign: "center",
     padding: "40px"
   },
@@ -885,7 +899,8 @@ const styles = {
     alignItems: "center",
     gap: "12px",
     padding: "14px 16px",
-    background: "#1f2937",
+    background: "var(--bg-card, #f8fafc)",
+    border: "1px solid var(--border-color, #e2e8f0)",
     borderRadius: "8px"
   },
   orderInfo: {
@@ -898,7 +913,7 @@ const styles = {
     alignItems: "center",
     gap: "12px",
     fontSize: "13px",
-    color: "#9ca3af"
+    color: "var(--text-muted, #64748b)"
   },
   statusBadge: {
     padding: "4px 10px",
@@ -910,7 +925,7 @@ const styles = {
     alignItems: "center",
     gap: "6px",
     fontSize: "12px",
-    color: "#6b7280",
+    color: "var(--text-muted, #64748b)",
     width: "100%"
   }
 };
