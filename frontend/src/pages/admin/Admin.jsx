@@ -14,7 +14,7 @@ import {
 // QR-Codes Tab als separate Komponente importieren
 import SuperAdminQROrders from "./SuperAdminQROrders";
 
-const API = import.meta.env.VITE_API_URL;
+const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 // Super-Admin E-Mails
 const SUPER_ADMINS = [
@@ -24,7 +24,13 @@ const SUPER_ADMINS = [
 ];
 
 export default function Admin() {
-  const token = localStorage.getItem("trapmap_token");
+  let token = null;
+  try {
+    token = localStorage.getItem("trapmap_token");
+  } catch (error) {
+    console.error("❌ localStorage nicht verfügbar:", error);
+  }
+  
   const headers = { Authorization: `Bearer ${token}` };
   const jsonHeaders = { ...headers, "Content-Type": "application/json" };
 
@@ -53,17 +59,29 @@ export default function Admin() {
 
   const loadHeaderStats = async () => {
     try {
+      console.log("📊 Loading header stats from:", `${API}/admin/stats`);
+      console.log("🔑 Auth token present:", !!token);
+      
       const res = await fetch(`${API}/admin/stats`, { headers });
+      
+      console.log("📊 Stats response status:", res.status);
+      
       if (res.ok) {
         const data = await res.json();
+        console.log("📊 Stats data received:", data);
         setHeaderStats({
           orgs: data.organisations || 0,
           users: data.users || 0,
           qr: data.boxes || 0
         });
+      } else {
+        const errorText = await res.text();
+        console.error("❌ Stats load failed:", res.status, errorText);
+        showMessage("error", `Fehler beim Laden der Statistiken: ${res.status}`);
       }
     } catch (err) {
-      console.error("Stats error:", err);
+      console.error("❌ Stats error:", err);
+      showMessage("error", `Netzwerkfehler beim Laden der Statistiken: ${err.message}`);
     }
   };
 
@@ -106,49 +124,114 @@ export default function Admin() {
   };
 
   const loadOrganisations = async () => {
-    const res = await fetch(`${API}/admin/organisations`, { headers });
-    if (res.ok) {
-      const data = await res.json();
-      setOrganisations(Array.isArray(data) ? data : []);
+    try {
+      console.log("🏢 Loading organisations from:", `${API}/admin/organisations`);
+      const res = await fetch(`${API}/admin/organisations`, { headers });
+      console.log("🏢 Organisations response status:", res.status);
+      
+      if (res.ok) {
+        const data = await res.json();
+        console.log("🏢 Organisations data received:", data.length, "items");
+        setOrganisations(Array.isArray(data) ? data : []);
+      } else {
+        const errorText = await res.text();
+        console.error("❌ Organisations load failed:", res.status, errorText);
+        showMessage("error", `Fehler beim Laden der Organisationen: ${res.status}`);
+        setOrganisations([]);
+      }
+    } catch (err) {
+      console.error("❌ Organisations error:", err);
+      showMessage("error", `Netzwerkfehler beim Laden der Organisationen: ${err.message}`);
+      setOrganisations([]);
     }
   };
 
   const loadAllUsers = async () => {
-    const res = await fetch(`${API}/admin/users`, { headers });
-    if (res.ok) {
-      const data = await res.json();
-      setUsers(Array.isArray(data) ? data : []);
+    try {
+      console.log("👥 Loading users from:", `${API}/admin/users`);
+      const res = await fetch(`${API}/admin/users`, { headers });
+      console.log("👥 Users response status:", res.status);
+      
+      if (res.ok) {
+        const data = await res.json();
+        console.log("👥 Users data received:", data.length, "items");
+        setUsers(Array.isArray(data) ? data : []);
+      } else {
+        const errorText = await res.text();
+        console.error("❌ Users load failed:", res.status, errorText);
+        showMessage("error", `Fehler beim Laden der Benutzer: ${res.status}`);
+        setUsers([]);
+      }
+    } catch (err) {
+      console.error("❌ Users error:", err);
+      showMessage("error", `Netzwerkfehler beim Laden der Benutzer: ${err.message}`);
+      setUsers([]);
     }
   };
 
   const loadAllPartners = async () => {
-    const res = await fetch(`${API}/admin/partners`, { headers });
-    if (res.ok) {
-      const data = await res.json();
-      setPartners(Array.isArray(data) ? data : []);
+    try {
+      console.log("🤝 Loading partners from:", `${API}/admin/partners`);
+      const res = await fetch(`${API}/admin/partners`, { headers });
+      console.log("🤝 Partners response status:", res.status);
+      
+      if (res.ok) {
+        const data = await res.json();
+        console.log("🤝 Partners data received:", data.length, "items");
+        setPartners(Array.isArray(data) ? data : []);
+      } else {
+        const errorText = await res.text();
+        console.error("❌ Partners load failed:", res.status, errorText);
+        showMessage("error", `Fehler beim Laden der Partner: ${res.status}`);
+        setPartners([]);
+      }
+    } catch (err) {
+      console.error("❌ Partners error:", err);
+      showMessage("error", `Netzwerkfehler beim Laden der Partner: ${err.message}`);
+      setPartners([]);
     }
   };
 
   const loadSystemStats = async () => {
-    const res = await fetch(`${API}/admin/stats`, { headers });
-    if (res.ok) {
-      const data = await res.json();
-      setStats(data);
+    try {
+      console.log("⚙️ Loading system stats from:", `${API}/admin/stats`);
+      const res = await fetch(`${API}/admin/stats`, { headers });
+      console.log("⚙️ System stats response status:", res.status);
+      
+      if (res.ok) {
+        const data = await res.json();
+        console.log("⚙️ System stats data received:", data);
+        setStats(data);
+      } else {
+        const errorText = await res.text();
+        console.error("❌ System stats load failed:", res.status, errorText);
+        showMessage("error", `Fehler beim Laden der Systemstatistiken: ${res.status}`);
+      }
+    } catch (err) {
+      console.error("❌ System stats error:", err);
+      showMessage("error", `Netzwerkfehler beim Laden der Systemstatistiken: ${err.message}`);
     }
   };
 
   const loadDemoRequests = async () => {
     try {
+      console.log("📝 Loading demo requests from:", `${API}/demo/requests`);
       const res = await fetch(`${API}/demo/requests`, { headers });
+      console.log("📝 Demo requests response status:", res.status);
+      
       if (res.ok) {
         const data = await res.json();
+        console.log("📝 Demo requests data received:", data.length, "items");
         setDemoRequests(data);
       } else {
-        console.error('Failed to load demo requests');
+        const errorText = await res.text();
+        console.error("❌ Demo requests load failed:", res.status, errorText);
+        showMessage("error", `Fehler beim Laden der Demo-Anfragen: ${res.status}`);
         setDemoRequests([]);
       }
     } catch (error) {
-      console.error('Error loading demo requests:', error);
+      console.error("❌ Demo requests error:", error);
+      showMessage("error", `Netzwerkfehler beim Laden der Demo-Anfragen: ${error.message}`);
       setDemoRequests([]);
     }
   };
@@ -274,6 +357,8 @@ export default function Admin() {
                   demoRequests={demoRequests}
                   onRefresh={loadDemoRequests}
                   showMessage={showMessage}
+                  headers={headers}
+                  jsonHeaders={jsonHeaders}
                 />
               )}
               {activeTab === "system" && (
@@ -772,8 +857,9 @@ function StatCard({ icon: Icon, label, value, color }) {
 // ============================================
 // DEMO REQUESTS TAB
 // ============================================
-function DemoRequestsTab({ demoRequests, onRefresh, showMessage }) {
+function DemoRequestsTab({ demoRequests, onRefresh, showMessage, headers, jsonHeaders }) {
   const [creatingAccount, setCreatingAccount] = useState(null);
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
   const handleCreateAccount = async (request) => {
     const password = prompt(`Demo-Account für ${request.name} erstellen.\n\nPasswort eingeben (oder leer lassen für automatisch generiertes):`) || 
@@ -784,15 +870,9 @@ function DemoRequestsTab({ demoRequests, onRefresh, showMessage }) {
     setCreatingAccount(request.id);
     
     try {
-      const API = import.meta.env.VITE_API_URL;
-      const token = localStorage.getItem("trapmap_token");
-      
-      const res = await fetch(`${API}/demo/create-account/${request.id}`, {
+      const res = await fetch(`${API_URL}/demo/create-account/${request.id}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: jsonHeaders,
         body: JSON.stringify({ password, trial_days: 90 })
       });
 
@@ -816,14 +896,9 @@ function DemoRequestsTab({ demoRequests, onRefresh, showMessage }) {
     if (!window.confirm(`Demo-Anfrage von ${request.name} löschen?`)) return;
     
     try {
-      const API = import.meta.env.VITE_API_URL;
-      const token = localStorage.getItem("trapmap_token");
-      
-      const res = await fetch(`${API}/demo/requests/${request.id}`, {
+      const res = await fetch(`${API_URL}/demo/requests/${request.id}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        headers
       });
 
       if (res.ok) {
