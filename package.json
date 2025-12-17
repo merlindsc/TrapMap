@@ -15,7 +15,9 @@
     "author": "TrapMap Team",
     "license": "MIT",
     "dependencies": {
+        "@capacitor/android": "^8.0.0",
         "@capacitor/core": "^8.0.0",
+        "@capacitor/ios": "^8.0.0",
         "@supabase/supabase-js": "^2.38.4",
         "bcryptjs": "^2.4.3",
         "cors": "^2.8.5",

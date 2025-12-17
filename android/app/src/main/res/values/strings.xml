@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TrapMap</string>
+    <string name="title_activity_main">TrapMap</string>
+    <string name="package_name">com.trapmap.app</string>
+    <string name="custom_url_scheme">com.trapmap.app</string>
+</resources>

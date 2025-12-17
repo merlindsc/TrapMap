@@ -137,7 +137,11 @@ app.use(cors({
     'http://localhost:5177',
     'https://trapmap-app.onrender.com',
     'https://trap-map.de',
-    'https://www.trap-map.de'
+    'https://www.trap-map.de',
+    // Capacitor App
+    'https://localhost',
+    'capacitor://localhost',
+    'http://localhost'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],

@@ -1,5 +1,8 @@
 {
   "appId": "com.trapmap.app",
   "appName": "TrapMap",
-  "webDir": "dist"
+  "webDir": "frontend/dist",
+  "server": {
+    "androidScheme": "https"
+  }
 }
