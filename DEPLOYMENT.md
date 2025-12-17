@@ -2,47 +2,54 @@
 
 ## Port Configuration
 
-The TrapMap backend server is configured to run on **port 5000** by default.
+The TrapMap backend server defaults to **port 5000** for local development. In production, it will use the PORT environment variable if provided by your hosting platform.
 
 ### Local Development
 
-For local development, create a `.env` file in the `backend/` directory:
+For local development, the server automatically uses port 5000. You can optionally specify it in a `.env` file:
 
 ```bash
-# backend/.env
+# backend/.env (optional for local development)
 PORT=5000
 NODE_ENV=development
 # ... other environment variables
 ```
 
-Or simply use the default - the server will automatically use port 5000 if PORT is not set.
+If you don't set PORT, the server will use 5000 by default.
 
 ### Production Deployment
 
-When deploying to production platforms (Render, Heroku, Vercel, etc.), ensure the `PORT` environment variable is set to **5000**:
+The server is designed to work with both fixed ports and dynamically assigned ports.
 
-#### Render.com
+#### Platforms with Dynamic Port Assignment (Heroku, Railway)
+
+**Do NOT set a PORT environment variable**. These platforms automatically assign a port and pass it via the PORT environment variable. The server will automatically use it.
+
+- Heroku: Leave PORT unset (uses `$PORT` automatically)
+- Railway: Leave PORT unset (uses `$PORT` automatically)
+
+#### Platforms with Fixed Ports (Render, Vercel, VPS, Docker)
+
+If you need to use a specific port (e.g., reverting from port 10000 to port 5000), set the PORT environment variable:
+
+##### Render.com
 1. Go to your service dashboard
 2. Navigate to "Environment" tab
-3. Add or update: `PORT=5000`
+3. Add or update: `PORT=5000` (or remove PORT to use the default)
 
-#### Heroku
-```bash
-heroku config:set PORT=5000 --app your-app-name
-```
-
-#### Vercel
+##### Vercel
 In your project settings, add environment variable:
 - Key: `PORT`
-- Value: `5000`
+- Value: `5000` (if needed)
 
-#### Docker
-Update your docker-compose.yml or Dockerfile to expose port 5000:
+##### VPS/Docker
+Update your configuration to use port 5000:
 ```yaml
+# docker-compose.yml
 ports:
   - "5000:5000"
 environment:
-  - PORT=5000
+  - PORT=5000  # Optional - will default to 5000 anyway
 ```
 
 ### Frontend Configuration
@@ -86,7 +93,7 @@ Expected response:
 }
 ```
 
-## Common Issues
+### Common Issues
 
 ### Port Already in Use
 
@@ -101,19 +108,32 @@ netstat -ano | findstr :5000
 taskkill /PID <PID> /F
 ```
 
-### Different Port in Production
+### Changing from Another Port (e.g., 10000 to 5000)
 
-If your deployment platform assigns a different port (e.g., 10000):
-1. Check your platform's environment variables
-2. Update or remove the PORT variable to use the default (5000)
-3. Or explicitly set `PORT=5000` in the platform settings
+If your deployment is currently using a different port and you want to use port 5000:
+
+1. **Check current PORT setting**: Look in your platform's environment variables
+2. **Update or remove PORT variable**:
+   - If on a platform with dynamic ports (Heroku): Remove the PORT variable
+   - If on a platform with fixed ports (Render, VPS): Set `PORT=5000`
+3. **Redeploy** your application
+4. **Update frontend**: Ensure `VITE_API_URL` points to the new port
+
+**Note**: The server defaults to port 5000, so removing the PORT environment variable will automatically use 5000.
 
 ### CORS Issues
 
 If the frontend cannot connect to the backend, verify:
-1. The backend PORT is correctly set to 5000
-2. The frontend VITE_API_URL points to the correct backend URL
+1. The backend PORT is correctly configured
+2. The frontend VITE_API_URL points to the correct backend URL and port
 3. CORS is properly configured in `backend/server.js`
+
+### Dynamic Port Assignment
+
+Some platforms require the app to listen on their assigned port:
+- **Never** hardcode the port in your application code
+- **Always** respect the PORT environment variable when provided
+- The current implementation correctly handles both scenarios
 
 ## Support
 
