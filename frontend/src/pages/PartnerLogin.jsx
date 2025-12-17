@@ -20,7 +20,12 @@ export default function PartnerLogin() {
   const [error, setError] = useState(null);
 
   // Prüfe ob ein Pending Scan existiert
-  const pendingScan = localStorage.getItem("trapmap_pending_scan");
+  let pendingScan = null;
+  try {
+    pendingScan = localStorage.getItem("trapmap_pending_scan");
+  } catch (e) {
+    console.warn("localStorage nicht verfügbar:", e);
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -41,9 +46,13 @@ export default function PartnerLogin() {
       }
 
       // Token speichern (mit Marker dass es ein Partner ist)
-      localStorage.setItem("trapmap_token", data.token);
-      localStorage.setItem("trapmap_user_type", "partner");
-      localStorage.setItem("trapmap_partner", JSON.stringify(data.partner));
+      try {
+        localStorage.setItem("trapmap_token", data.token);
+        localStorage.setItem("trapmap_user_type", "partner");
+        localStorage.setItem("trapmap_partner", JSON.stringify(data.partner));
+      } catch (e) {
+        console.warn("Konnte Session nicht in localStorage speichern:", e);
+      }
 
       // Redirect mit komplettem Reload (damit App.jsx den Partner-Check neu ausführt)
       if (pendingScan) {
