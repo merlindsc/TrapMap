@@ -191,11 +191,6 @@ exports.create = async (payload, orgId) => {
     if (boxData && !boxData.floor_plan_id && payload.latitude && payload.longitude && payload.update_gps === true) {
       boxUpdate.lat = parseFloat(payload.latitude);
       boxUpdate.lng = parseFloat(payload.longitude);
-      console.log(`📍 GPS-Update für Box ${payload.box_id}: ${payload.latitude}, ${payload.longitude} (explizit angefordert)`);
-    } else if (boxData && boxData.floor_plan_id) {
-      console.log(`🗺️ Box ${payload.box_id} ist auf Lageplan - GPS wird NICHT aktualisiert`);
-    } else if (payload.latitude && payload.longitude && payload.update_gps !== true) {
-      console.log(`📍 GPS vorhanden aber update_gps !== true - Position wird NICHT aktualisiert`);
     }
 
     const { error: boxError } = await supabase
