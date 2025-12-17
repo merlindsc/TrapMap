@@ -14,7 +14,7 @@ import {
 // QR-Codes Tab als separate Komponente importieren
 import SuperAdminQROrders from "./SuperAdminQROrders";
 
-const API = import.meta.env.VITE_API_URL;
+const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 // Super-Admin E-Mails
 const SUPER_ADMINS = [
@@ -867,10 +867,15 @@ function DemoRequestsTab({ demoRequests, onRefresh, showMessage }) {
     setCreatingAccount(request.id);
     
     try {
-      const API = import.meta.env.VITE_API_URL;
-      const token = localStorage.getItem("trapmap_token");
+      const API_ENDPOINT = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+      let token = null;
+      try {
+        token = localStorage.getItem("trapmap_token");
+      } catch (e) {
+        console.error("localStorage nicht verfügbar:", e);
+      }
       
-      const res = await fetch(`${API}/demo/create-account/${request.id}`, {
+      const res = await fetch(`${API_ENDPOINT}/demo/create-account/${request.id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -899,10 +904,15 @@ function DemoRequestsTab({ demoRequests, onRefresh, showMessage }) {
     if (!window.confirm(`Demo-Anfrage von ${request.name} löschen?`)) return;
     
     try {
-      const API = import.meta.env.VITE_API_URL;
-      const token = localStorage.getItem("trapmap_token");
+      const API_ENDPOINT = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+      let token = null;
+      try {
+        token = localStorage.getItem("trapmap_token");
+      } catch (e) {
+        console.error("localStorage nicht verfügbar:", e);
+      }
       
-      const res = await fetch(`${API}/demo/requests/${request.id}`, {
+      const res = await fetch(`${API_ENDPOINT}/demo/requests/${request.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`

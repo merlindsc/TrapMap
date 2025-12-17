@@ -19,7 +19,7 @@ import {
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import trapMapLogo from "../assets/trapmap-logo-200.png";
 
-const API = import.meta.env.VITE_API_URL;
+const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 export default function PartnerDashboard() {
   const navigate = useNavigate();

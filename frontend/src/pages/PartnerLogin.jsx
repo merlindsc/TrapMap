@@ -8,7 +8,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { QrCode, Mail, Lock, LogIn, Loader, AlertCircle, Building2 } from "lucide-react";
 import trapMapLogo from "../assets/trapmap-logo-200.png";
 
-const API = import.meta.env.VITE_API_URL;
+const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 export default function PartnerLogin() {
   const navigate = useNavigate();
