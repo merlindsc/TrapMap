@@ -115,6 +115,17 @@ exports.createDemoAccount = async (requestId, options = {}) => {
     throw new Error('Für diese Anfrage wurde bereits ein Account erstellt');
   }
 
+  // Check if user with this email already exists
+  const { data: existingUser } = await supabase
+    .from('users')
+    .select('id, email')
+    .eq('email', request.email)
+    .single();
+
+  if (existingUser) {
+    throw new Error(`Ein Benutzer mit der E-Mail-Adresse "${request.email}" existiert bereits. Bitte verwenden Sie eine andere E-Mail-Adresse oder loggen Sie sich mit Ihren bestehenden Daten ein.`);
+  }
+
   // Generate organization name from company or name
   const orgName = request.company || `${request.name} Demo`;
   
