@@ -47,8 +47,6 @@ export default function Login() {
     setLoading(true);
     setError("");
 
-    console.log("LOGIN ATTEMPT:", email);
-
     try {
       const res = await fetch(`${API}/auth/login`, {
         method: "POST",
@@ -56,9 +54,7 @@ export default function Login() {
         body: JSON.stringify({ email, password }),
       });
 
-      console.log("LOGIN RESPONSE STATUS:", res.status);
       const data = await res.json();
-      console.log("LOGIN DATA:", data);
 
       if (!res.ok) {
         setError(data.error || "Login fehlgeschlagen");
@@ -67,7 +63,6 @@ export default function Login() {
 
       // Prüfe ob Passwort geändert werden muss
       if (data.user.must_change_password) {
-        console.log("MUST CHANGE PASSWORD");
         setMustChangeUser(data.user);
         setTempToken(data.token);
         setView("changePassword");
@@ -75,7 +70,6 @@ export default function Login() {
       }
 
       // Normaler Login
-      console.log("SAVING TO LOCALSTORAGE...");
       localStorage.setItem("trapmap_token", data.token);
       localStorage.setItem("trapmap_refresh_token", data.refreshToken);
       localStorage.setItem("trapmap_user", JSON.stringify(data.user));

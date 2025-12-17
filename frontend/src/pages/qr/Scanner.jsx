@@ -132,7 +132,6 @@ export default function Scanner() {
         });
       }
       setBoxTypes(Array.isArray(res.data) ? res.data : res.data?.data || []);
-      console.log("✅ BoxTypes geladen:", res.data?.length);
     } catch (err) {
       console.error("Load box types error:", err);
     }
@@ -148,7 +147,6 @@ export default function Scanner() {
       codeReaderRef.current = new BrowserMultiFormatReader();
       
       const devices = await BrowserMultiFormatReader.listVideoInputDevices();
-      console.log("📷 Kameras gefunden:", devices.length, devices.map(d => d.label));
       
       if (!devices || devices.length === 0) {
         setError("Keine Kamera gefunden");
@@ -157,7 +155,6 @@ export default function Scanner() {
 
       // Kameras sortieren: Beste zuerst
       const sortedCameras = sortCamerasByQuality(devices);
-      console.log("📷 Sortiert:", sortedCameras.map(d => d.label));
       
       setCameras(sortedCameras);
       setCurrentCameraIndex(0);
@@ -229,7 +226,6 @@ export default function Scanner() {
         
         // Maximal 3 Versuche
         if (nextTry < cams.length && nextTry < 3) {
-          console.log(`📷 Auto-Switch: Kamera ${nextTry + 1}/${cams.length}`);
           cameraTriesRef.current = nextTry;
           switchToCamera(nextTry);
         }
@@ -268,7 +264,6 @@ export default function Scanner() {
     if (!codeReaderRef.current || !videoRef.current) return;
     
     try {
-      console.log("🎥 Starte Scanner...");
       isPausedRef.current = false;
       processingRef.current = false;
       
@@ -279,7 +274,6 @@ export default function Scanner() {
           if (isPausedRef.current) return;
           if (processingRef.current) return;
           if (result) {
-            console.log("📸 QR erkannt:", result.getText());
             handleScan(result.getText());
           }
         }
@@ -293,7 +287,6 @@ export default function Scanner() {
       
       setIsScanning(true);
       setError("");
-      console.log("✅ Scanner läuft");
       
     } catch (err) {
       console.error("Start error:", err);
@@ -361,8 +354,6 @@ export default function Scanner() {
       return;
     }
     
-    console.log("📱 Scan:", code);
-    
     // Auto-Switch Timer stoppen (erfolgreicher Scan!)
     if (autoSwitchTimerRef.current) {
       clearTimeout(autoSwitchTimerRef.current);
@@ -387,8 +378,6 @@ export default function Scanner() {
       const res = await axios.get(`${API}/qr/check/${code}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-
-      console.log("📦 Response:", res.data);
 
       // Code nicht in DB
       if (!res.data || !res.data.box_id) {
@@ -472,7 +461,7 @@ export default function Scanner() {
           }
           return;
         } catch (err) {
-          console.log("GPS Error:", err.message);
+          // GPS error - continue without GPS
         }
       }
 
@@ -509,8 +498,6 @@ export default function Scanner() {
   // RESET - Scanner fortsetzen
   // ============================================
   const resetScanner = () => {
-    console.log("🔄 Reset");
-    
     setCurrentBox(null);
     setShowScanDialog(false);
     setShowGPSWarning(false);
@@ -535,7 +522,6 @@ export default function Scanner() {
       // Auto-Switch Timer neu starten
       startAutoSwitchTimer();
       
-      console.log("✅ Scanner bereit");
     }, 800);
   };
 

@@ -49,7 +49,6 @@ export default function SuperAdminQROrders() {
       const statsRes = await fetch(`${API}/qr-orders/stats`, { headers });
       if (statsRes.ok) {
         const data = await statsRes.json();
-        console.log("📊 Loaded organisations:", data);
         setOrganisations(data);
       }
 

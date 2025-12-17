@@ -63,8 +63,6 @@ export default function QRRedirect() {
       // Box ist auf Lageplan wenn floor_plan_id existiert UND pos_x/pos_y gesetzt sind
       const hasFloorplan = floorPlanId && (res.data.pos_x !== null && res.data.pos_x !== undefined);
 
-      console.log("🔍 QR Routing:", { boxId, objectId, positionType, floorPlanId, hasGPS, hasFloorplan, pos_x: res.data.pos_x });
-
       // ============================================
       // ROUTING LOGIK
       // ============================================

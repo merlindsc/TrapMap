@@ -51,7 +51,6 @@ export default function ObjectCreate() {
       }
 
       const created = await res.json();
-      console.log("Created object:", created);
 
       if (created?.id) {
         navigate(`/objects/${created.id}`);

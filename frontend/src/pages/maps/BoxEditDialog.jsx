@@ -99,7 +99,6 @@ export default function BoxEditDialog({
       if (res.ok) {
         const data = await res.json();
         setBoxTypes(Array.isArray(data) ? data : data?.data || []);
-        console.log("✅ BoxTypes geladen:", data.length || data?.data?.length);
       }
     } catch (err) {
       console.error("BoxTypes laden fehlgeschlagen:", err);
@@ -228,7 +227,6 @@ export default function BoxEditDialog({
     
     // Prüfen ob Box bereits GPS hat
     if (box?.lat && box?.lng) {
-      console.log("📍 Box hat bereits GPS:", box.lat, box.lng);
       setGpsPosition({ lat: box.lat, lng: box.lng });
       setGpsSaved(true);
     }
@@ -245,14 +243,12 @@ export default function BoxEditDialog({
     
     // Wenn Box schon GPS hat, nicht nochmal anfordern
     if (box?.lat && box?.lng) {
-      console.log("📍 Box hat schon GPS, überspringe Anforderung");
       return;
     }
     
     // Nur einmal anfordern
     if (gpsRequested || gpsLoading) return;
     
-    console.log("📍 Ersteinrichtung: Fordere GPS an...");
     setGpsRequested(true);
     requestGPSPosition();
   }, [box?.id, isFirstSetup, isMobile, box?.lat, box?.lng, gpsRequested, gpsLoading]);
@@ -266,7 +262,6 @@ export default function BoxEditDialog({
 
     setGpsLoading(true);
     setGpsError(null);
-    console.log("📍 GPS wird angefordert...");
 
     try {
       const position = await new Promise((resolve, reject) => {
@@ -277,7 +272,6 @@ export default function BoxEditDialog({
         );
       });
 
-      console.log("📍 GPS Position erhalten:", position);
       setGpsPosition(position);
 
       // Sofort in DB speichern
@@ -297,7 +291,6 @@ export default function BoxEditDialog({
           });
 
           if (response.ok) {
-            console.log("✅ GPS Position gespeichert");
             setGpsSaved(true);
           } else {
             console.error("GPS save error:", await response.text());

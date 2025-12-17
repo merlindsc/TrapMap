@@ -120,7 +120,6 @@ const verify = (token) => {
   try {
     // Prüfe ob Token auf Blacklist
     if (tokenBlacklist.has(token)) {
-      console.log('🚫 Token is blacklisted');
       return null;
     }
     
@@ -128,9 +127,9 @@ const verify = (token) => {
     return decoded;
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
-      console.log('⏰ Token expired');
+      // Token expired
     } else if (error.name === 'JsonWebTokenError') {
-      console.log('❌ Invalid token:', error.message);
+      // Invalid token
     } else {
       console.error('JWT verification failed:', error.message);
     }
@@ -162,7 +161,6 @@ const verifyRefresh = (token) => {
 const invalidateToken = (token) => {
   if (token) {
     tokenBlacklist.add(token);
-    console.log('🚫 Token invalidated');
   }
 };
 
@@ -171,7 +169,6 @@ const invalidateToken = (token) => {
  * Simplified version: just logs the action
  */
 const invalidateAllUserTokens = (userId) => {
-  console.log(`🚫 All tokens invalidated for user: ${userId}`);
   // In Production: Alle Tokens des Users in Redis invalidieren
 };
 

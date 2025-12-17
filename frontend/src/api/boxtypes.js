@@ -86,8 +86,6 @@ export const createBox = async ({
       control_interval_days,
     };
 
-    console.log("📤 createBox payload:", payload);
-
     const response = await axios.post(`${API_URL}/boxes`, payload, {
       headers: {
         "Content-Type": "application/json",

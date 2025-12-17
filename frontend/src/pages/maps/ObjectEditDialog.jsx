@@ -114,7 +114,6 @@ export default function ObjectEditDialog({ object, onClose, onSave, onDelete, bo
         }
 
         const boxData = await boxRes.json();
-        console.log(`✅ ${boxData.count} Boxen zurück ins Lager`);
       }
 
       // 2. Objekt deaktivieren/löschen

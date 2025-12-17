@@ -14,13 +14,11 @@ export const OfflineProvider = ({ children }) => {
   // -----------------------------
   useEffect(() => {
     const handleOnline = () => {
-      console.log('✅ Back online');
       setIsOnline(true);
       syncOfflineData();
     };
 
     const handleOffline = () => {
-      console.log('📵 Offline mode');
       setIsOnline(false);
     };
 
@@ -75,12 +73,9 @@ export const OfflineProvider = ({ children }) => {
       const unsynced = await getUnsyncedScans();
 
       if (!Array.isArray(unsynced) || unsynced.length === 0) {
-        console.log('✅ No offline scans to sync.');
         setIsSyncing(false);
         return;
       }
-
-      console.log(`🔄 Syncing ${unsynced.length} offline scans...`);
 
       let successCount = 0;
 
@@ -109,7 +104,6 @@ export const OfflineProvider = ({ children }) => {
         }
       }
 
-      console.log(`✅ Successfully synced ${successCount}/${unsynced.length} scans`);
       await loadSyncQueue();
 
     } catch (error) {

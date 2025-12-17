@@ -160,7 +160,6 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
       }
 
       const newObject = await res.json();
-      console.log("✅ Objekt erstellt:", newObject.id);
 
       // 2. Boxen zuweisen (falls ausgewählt)
       if (selectedBoxIds.size > 0) {
@@ -178,7 +177,6 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
 
         if (boxRes.ok) {
           const boxData = await boxRes.json();
-          console.log(`✅ ${boxData.count} Boxen zugewiesen`);
         } else {
           console.error("⚠️ Boxen konnten nicht zugewiesen werden");
         }

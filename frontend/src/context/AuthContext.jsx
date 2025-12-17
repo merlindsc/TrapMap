@@ -16,7 +16,6 @@ export const AuthProvider = ({ children }) => {
       try {
         setToken(savedToken);
         setUser(JSON.parse(savedUser));
-        console.log("Session restored");
       } catch (error) {
         console.error("Failed to restore session:", error);
         localStorage.removeItem('trapmap_token');
@@ -29,11 +28,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      console.log("LOGIN ATTEMPT:", email);
-      
       const response = await apiLogin(email, password);
-
-      console.log("LOGIN RESPONSE:", response);
 
       if (response.error) {
         console.error("Login failed:", response.message);
@@ -41,16 +36,12 @@ export const AuthProvider = ({ children }) => {
       }
 
       if (response && response.token && response.user) {
-        console.log("Login successful! Saving session");
-        
         setToken(response.token);
         setUser(response.user);
 
         localStorage.setItem('trapmap_token', response.token);
         localStorage.setItem('trapmap_user', JSON.stringify(response.user));
 
-        console.log("Session saved");
-        
         return true;
       }
 
@@ -64,8 +55,6 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    console.log("Logging out");
-    
     setUser(null);
     setToken(null);
 

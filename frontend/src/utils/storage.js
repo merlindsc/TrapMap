@@ -22,7 +22,6 @@ export const initDB = () => {
 
     request.onsuccess = () => {
       db = request.result;
-      console.log('✅ IndexedDB initialized');
       resolve(db);
     };
 
@@ -72,7 +71,6 @@ export const initDB = () => {
         labelsStore.createIndex('layout_id', 'layout_id', { unique: false });
       }
 
-      console.log('✅ IndexedDB stores created');
     };
   });
 };

@@ -57,10 +57,6 @@ export default function Dashboard() {
         })
       ]);
 
-      console.log("Dashboard response:", dashRes.data);
-      console.log("Boxes response:", boxesRes.data);
-      console.log("Objects response:", objectsRes.data);
-
       setStats(dashRes.data.stats || {});
       setRecentScans(dashRes.data.recentScans || []);
       setAllBoxes(Array.isArray(boxesRes.data) ? boxesRes.data : []);
