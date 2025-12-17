@@ -461,7 +461,8 @@ export default function Scanner() {
           }
           return;
         } catch (err) {
-          // GPS error - continue without GPS
+          // GPS acquisition failed - scan will proceed without GPS coordinates
+          // Box position will remain unset or unchanged
         }
       }
 
