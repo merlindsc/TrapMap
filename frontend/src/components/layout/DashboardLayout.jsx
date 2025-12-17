@@ -175,7 +175,7 @@ export default function DashboardLayout({ children }) {
               <button 
                 className="mobile-logout-btn"
                 onClick={handleLogoutClick}
-                aria-label="Logout"
+                aria-label="Abmelden"
               >
                 <LogOut className="logout-icon" />
               </button>

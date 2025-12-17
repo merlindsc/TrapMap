@@ -198,7 +198,7 @@ body.sidebar-open {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 10px;
-  color: #ef4444;
+  color: var(--status-red);
   cursor: pointer;
   transition: all 0.2s ease;
   -webkit-tap-highlight-color: transparent;
@@ -208,7 +208,7 @@ body.sidebar-open {
 .mobile-logout-btn:hover,
 .mobile-logout-btn:active {
   background: rgba(239, 68, 68, 0.2);
-  border-color: #ef4444;
+  border-color: var(--status-red);
 }
 
 .mobile-logout-btn .logout-icon {
@@ -345,7 +345,7 @@ body.sidebar-open {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
   border-radius: 10px;
-  color: #ef4444;
+  color: var(--status-red);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -354,7 +354,7 @@ body.sidebar-open {
 
 .logout-btn:hover {
   background: rgba(239, 68, 68, 0.2);
-  border-color: #ef4444;
+  border-color: var(--status-red);
 }
 
 /* ============================================================
@@ -587,12 +587,12 @@ html, body, .page-content {
   transition: all 0.2s ease;
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #ef4444;
+  color: var(--status-red);
 }
 
 .btn-confirm-logout:hover {
   background: rgba(239, 68, 68, 0.2);
-  border-color: #ef4444;
+  border-color: var(--status-red);
 }
 
 /* Mobile-specific modal buttons */
