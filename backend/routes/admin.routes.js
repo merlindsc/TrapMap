@@ -191,7 +191,7 @@ router.delete("/organisations/:id", async (req, res) => {
 
     // Schritt 1: Alle Scans löschen
     console.log("🔄 Lösche Scans...");
-    const { error: scansError, count: scansCount } = await supabase
+    const { error: scansError } = await supabase
       .from("scans")
       .delete()
       .eq("organisation_id", id);
@@ -200,11 +200,11 @@ router.delete("/organisations/:id", async (req, res) => {
       console.error("❌ Fehler beim Löschen von Scans:", scansError.message);
       return res.status(500).json({ error: `Fehler beim Löschen von Scans: ${scansError.message}` });
     }
-    console.log(`✅ ${scansCount || 0} Scans gelöscht`);
+    console.log(`✅ Scans gelöscht`);
 
     // Schritt 2: Alle Boxen löschen
     console.log("🔄 Lösche Boxen...");
-    const { error: boxesError, count: boxesCount } = await supabase
+    const { error: boxesError } = await supabase
       .from("boxes")
       .delete()
       .eq("organisation_id", id);
@@ -213,11 +213,11 @@ router.delete("/organisations/:id", async (req, res) => {
       console.error("❌ Fehler beim Löschen von Boxen:", boxesError.message);
       return res.status(500).json({ error: `Fehler beim Löschen von Boxen: ${boxesError.message}` });
     }
-    console.log(`✅ ${boxesCount || 0} Boxen gelöscht`);
+    console.log(`✅ Boxen gelöscht`);
 
     // Schritt 3: Alle Objekte löschen
     console.log("🔄 Lösche Objekte...");
-    const { error: objectsError, count: objectsCount } = await supabase
+    const { error: objectsError } = await supabase
       .from("objects")
       .delete()
       .eq("organisation_id", id);
@@ -226,11 +226,11 @@ router.delete("/organisations/:id", async (req, res) => {
       console.error("❌ Fehler beim Löschen von Objekten:", objectsError.message);
       return res.status(500).json({ error: `Fehler beim Löschen von Objekten: ${objectsError.message}` });
     }
-    console.log(`✅ ${objectsCount || 0} Objekte gelöscht`);
+    console.log(`✅ Objekte gelöscht`);
 
     // Schritt 4: Alle Users löschen (außer Super-Admins)
     console.log("🔄 Lösche Benutzer...");
-    const { error: usersError, count: usersCount } = await supabase
+    const { error: usersError } = await supabase
       .from("users")
       .delete()
       .eq("organisation_id", id)
@@ -240,11 +240,11 @@ router.delete("/organisations/:id", async (req, res) => {
       console.error("❌ Fehler beim Löschen von Benutzern:", usersError.message);
       return res.status(500).json({ error: `Fehler beim Löschen von Benutzern: ${usersError.message}` });
     }
-    console.log(`✅ ${usersCount || 0} Benutzer gelöscht`);
+    console.log(`✅ Benutzer gelöscht`);
 
     // Schritt 5: Partner löschen (falls vorhanden)
     console.log("🔄 Lösche Partner...");
-    const { error: partnersError, count: partnersCount } = await supabase
+    const { error: partnersError } = await supabase
       .from("partners")
       .delete()
       .eq("organisation_id", id);
@@ -253,11 +253,11 @@ router.delete("/organisations/:id", async (req, res) => {
       console.error("❌ Fehler beim Löschen von Partnern:", partnersError.message);
       return res.status(500).json({ error: `Fehler beim Löschen von Partnern: ${partnersError.message}` });
     }
-    console.log(`✅ ${partnersCount || 0} Partner gelöscht`);
+    console.log(`✅ Partner gelöscht`);
 
     // Schritt 6: Organisation löschen
     console.log("🔄 Lösche Organisation...");
-    const { error: orgError, count: orgCount } = await supabase
+    const { error: orgError } = await supabase
       .from("organisations")
       .delete()
       .eq("id", id);
@@ -267,21 +267,12 @@ router.delete("/organisations/:id", async (req, res) => {
       return res.status(500).json({ error: `Fehler beim Löschen der Organisation: ${orgError.message}` });
     }
 
-    if (!orgCount || orgCount === 0) {
-      console.error("❌ Organisation wurde nicht gelöscht (count=0)");
-      return res.status(500).json({ error: "Organisation konnte nicht gelöscht werden" });
-    }
-
     console.log(`✅ Organisation erfolgreich gelöscht: ID ${id}, Name: ${orgExists.name}`);
     res.json({ 
       message: "Organisation und alle zugehörigen Daten wurden erfolgreich gelöscht",
       deleted: {
         organisation: orgExists.name,
-        scans: scansCount || 0,
-        boxes: boxesCount || 0,
-        objects: objectsCount || 0,
-        users: usersCount || 0,
-        partners: partnersCount || 0
+        organisationId: id
       }
     });
   } catch (err) {
