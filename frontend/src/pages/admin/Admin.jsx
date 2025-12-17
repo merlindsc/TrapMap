@@ -54,6 +54,13 @@ export default function Admin() {
   // UI States
   const [message, setMessage] = useState(null);
 
+  // Debug log on mount
+  useEffect(() => {
+    console.log("🔧 Super Admin Dashboard initialized");
+    console.log("📡 API URL:", API);
+    console.log("🔑 Token present:", !!token);
+  }, []);
+
   // ============================================
   // HEADER STATS
   // ============================================
