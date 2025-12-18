@@ -312,6 +312,9 @@ export default function Maps() {
   const user = userStr ? JSON.parse(userStr) : null;
   const canEdit = user?.role === "admin" || user?.role === "supervisor" || user?.role === "editor";
   const navigate = useNavigate();
+  
+  // 🆕 Offline-Context nutzen
+  const { isOffline } = useOffline();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const urlObjectId = searchParams.get("object_id");
@@ -1142,6 +1145,14 @@ export default function Maps() {
         </div>
 
         <div className="header-right">
+          {/* 🆕 Offline-Indikator */}
+          {isOffline && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/20 border border-yellow-500/30 rounded-lg text-yellow-400 text-sm">
+              <WifiOff size={14} />
+              <span>Offline</span>
+            </div>
+          )}
+          
           {canEdit && (
             <button
               className={`header-btn ${objectPlacingMode ? 'active' : ''}`}
