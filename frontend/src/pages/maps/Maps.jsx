@@ -1064,10 +1064,7 @@ export default function Maps() {
           ============================================================ */}
       <header className="maps-header-modern">
         <div className="header-left">
-          <div className="header-logo">
-            {logoImg && <img src={logoImg} alt="TrapMap" onError={(e) => { e.target.style.display = 'none'; }} />}
-            <span className="logo-text">TrapMap</span>
-          </div>
+          {/* Logo entfernt - nur im DashboardLayout Header */}
         </div>
 
         <div className="header-center">

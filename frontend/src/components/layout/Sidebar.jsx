@@ -139,13 +139,9 @@ export default function Sidebar({ isMobile, onClose }) {
 
   return (
     <div className="sidebar">
-      {/* Header mit Logo */}
+      {/* Header */}
       <div className="sidebar-header">
         <div className="sidebar-header-row">
-          <Link to="/dashboard" className="sidebar-brand">
-            <img src={trapMapLogo} alt="TrapMap" className="sidebar-logo-img" />
-          </Link>
-
           {isMobile && (
             <button className="sidebar-close-btn" onClick={onClose}>
               <XMarkIcon style={{ width: 24, height: 24 }} />
