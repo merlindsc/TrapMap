@@ -1291,8 +1291,8 @@ export default function Maps() {
               attribution='&copy; Mapbox'
               tileSize={512}            // 🚀 512px für 4x weniger Requests
               zoomOffset={-1}           // 🚀 Erforderlich für 512px Tiles
-              maxNativeZoom={18}        // 🚀 Gute Balance: Qualität vs. Requests
-              maxZoom={20}              // 🚀 Höhere max Zoom möglich
+              maxNativeZoom={20}        // 🔍 Erhöht für näheres Zoomen
+              maxZoom={24}              // 🔍 Sehr nahe Ansicht möglich
               keepBuffer={4}            // 🆕 Mehr Tiles im RAM behalten (Standard: 2)
               updateWhenZooming={false} // 🆕 Nicht während Zoom nachladen
               updateWhenIdle={true}     // 🆕 Nur nachladen wenn Karte still steht
@@ -1304,8 +1304,8 @@ export default function Maps() {
                 tileSize={512}            // 🚀 512px für Konsistenz
                 zoomOffset={-1}           // 🚀 Erforderlich für 512px
                 opacity={0.6} 
-                maxNativeZoom={18}        // 🚀 Konsistent mit Base Layer
-                maxZoom={20}              // 🚀 Höhere max Zoom
+                maxNativeZoom={20}        // 🔍 Konsistent mit Base Layer
+                maxZoom={24}              // 🔍 Sehr nahe Ansicht
                 keepBuffer={4}            // 🆕 Mehr Tiles im RAM behalten
                 updateWhenZooming={false} // 🆕 Nicht während Zoom nachladen
                 updateWhenIdle={true}     // 🆕 Nur nachladen wenn Karte still steht
