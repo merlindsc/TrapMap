@@ -1246,9 +1246,12 @@ export default function Maps() {
           <MapContainer
             center={[51.1657, 10.4515]}
             zoom={6}
-            maxZoom={22}
+            maxZoom={18}              // 🆕 Reduziert von 22 auf 18 - spart Tiles
             zoomControl={false}
             scrollWheelZoom={true}
+            preferCanvas={true}       // 🆕 Schnelleres Rendering
+            wheelDebounceTime={100}   // 🆕 Zoom-Scroll verzögern
+            wheelPxPerZoomLevel={120} // 🆕 Langsameres Zoomen = weniger Tile-Loads
             style={{ width: "100%", height: "100%" }}
           >
             <TileLayer
@@ -1257,11 +1260,25 @@ export default function Maps() {
               attribution='&copy; Mapbox'
               tileSize={512}
               zoomOffset={-1}
-              maxNativeZoom={20}
-              maxZoom={22}
+              maxNativeZoom={18}        // 🆕 Reduziert von 20 auf 18
+              maxZoom={18}              // 🆕 Reduziert von 22 auf 18
+              keepBuffer={4}            // 🆕 Mehr Tiles im RAM behalten (Standard: 2)
+              updateWhenZooming={false} // 🆕 Nicht während Zoom nachladen
+              updateWhenIdle={true}     // 🆕 Nur nachladen wenn Karte still steht
             />
             {mapStyle === "hybrid" && (
-              <TileLayer key="hybrid-labels" url={MAPBOX_STREETS} tileSize={512} zoomOffset={-1} opacity={0.6} maxNativeZoom={20} maxZoom={22} />
+              <TileLayer 
+                key="hybrid-labels" 
+                url={MAPBOX_STREETS} 
+                tileSize={512} 
+                zoomOffset={-1} 
+                opacity={0.6} 
+                maxNativeZoom={18}        // 🆕 Reduziert von 20 auf 18
+                maxZoom={18}              // 🆕 Reduziert von 22 auf 18
+                keepBuffer={4}            // 🆕 Mehr Tiles im RAM behalten
+                updateWhenZooming={false} // 🆕 Nicht während Zoom nachladen
+                updateWhenIdle={true}     // 🆕 Nur nachladen wenn Karte still steht
+              />
             )}
 
             <MapReadyHandler />
