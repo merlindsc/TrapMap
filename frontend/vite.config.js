@@ -99,6 +99,19 @@ export default defineConfig({
                 maxAgeSeconds: 30 * 24 * 60 * 60
               }
             }
+          },
+          
+          // 🆕 Mapbox Tiles (Streets, Satellite, Hybrid)
+          {
+            urlPattern: /^https:\/\/api\.mapbox\.com\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'mapbox-tiles',
+              expiration: {
+                maxEntries: 2000, // Mehr wegen Streets + Satellite
+                maxAgeSeconds: 30 * 24 * 60 * 60 // 30 Tage
+              }
+            }
           }
         ],
         
