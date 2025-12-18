@@ -579,16 +579,54 @@ export default function ObjectSidebar({
 
             <div className="history-list-v6">
               {history.map((scan) => (
-                <div key={scan.id} className="history-item-v6">
-                  <span className={`box-status-v6 ${getStatusColor(scan.status)}`} />
-                  <span className="history-date-v6">
-                    {(scan.scanned_at || scan.created_at) 
-                      ? new Date(scan.scanned_at || scan.created_at).toLocaleDateString("de-DE") 
-                      : "-"}
-                  </span>
-                  <span className="history-user-v6">
-                    {scan.users?.first_name || scan.users?.email || "Unbekannt"}
-                  </span>
+                <div key={scan.id} className="history-item-v6" style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "10px",
+                  padding: "10px",
+                  borderBottom: "1px solid #30363d"
+                }}>
+                  <span className={`box-status-v6 ${getStatusColor(scan.status)}`} style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    marginTop: "4px",
+                    flexShrink: 0
+                  }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ 
+                      color: "#e6edf3", 
+                      fontSize: "13px", 
+                      fontWeight: 600,
+                      marginBottom: "4px"
+                    }}>
+                      {scan.boxes?.number ? `Box ${scan.boxes.number}` : 'Box'} {scan.boxes?.qr_code || ''}
+                    </div>
+                    <div style={{ 
+                      color: "#8b949e", 
+                      fontSize: "11px",
+                      marginBottom: scan.notes ? "4px" : "0"
+                    }}>
+                      {(scan.scanned_at || scan.created_at) 
+                        ? new Date(scan.scanned_at || scan.created_at).toLocaleString("de-DE", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit"
+                          })
+                        : "-"}
+                    </div>
+                    {scan.notes && (
+                      <div style={{ 
+                        color: "#c9d1d9", 
+                        fontSize: "12px",
+                        fontStyle: "italic"
+                      }}>
+                        {scan.notes}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

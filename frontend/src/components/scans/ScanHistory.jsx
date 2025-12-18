@@ -83,6 +83,13 @@ export default function ScanHistory({ boxId }) {
             )}
           </div>
 
+          {/* BOX NAME & QR CODE */}
+          {scan.boxes && (
+            <div className="mb-2 text-sm text-gray-300 font-medium">
+              BOX {scan.boxes.number || scan.boxes.id} {scan.boxes.qr_code || ''}
+            </div>
+          )}
+
           {scan.notes && <p className="text-sm text-gray-300 mb-3">{scan.notes}</p>}
 
           <div className="flex items-center gap-4 text-xs text-gray-400">

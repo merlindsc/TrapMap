@@ -334,7 +334,8 @@ export default function Scanner() {
           setTimeout(() => resetForNextScan(), 3000);
           return;
         } else {
-          navigate(`/qr/assign-code?code=${code}`);
+          // Direkt zur Objekt-Zuweisung (Box wird dort erstellt)
+          navigate(`/qr/assign-object?code=${code}&newBox=true`);
           return;
         }
       }

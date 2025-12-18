@@ -506,12 +506,14 @@ function ScansList({ scans, objects }) {
           <div className="scan-number">{index + 1}</div>
           <div className={`scan-status-dot status-${scan.status || 'gray'}`} />
           <div className="scan-info">
-            <div className="scan-box-name">{scan.box_name || 'Box'}</div>
+            <div className="scan-box-name">
+              {scan.box_name || 'Box'} {scan.box_qr_code ? scan.box_qr_code : ''}
+            </div>
             <div className="scan-object">{scan.object_name || getObjectName(scan.object_id)}</div>
             <div className="scan-message">{scan.message || `Status: ${scan.status}`}</div>
           </div>
           <div className="scan-meta">
-            <div className="scan-time">{timeAgo(scan.created_at)}</div>
+            <div className="scan-time">{formatDate(scan.created_at)}</div>
             <div className="scan-tech">{scan.technician_name || 'Unbekannt'}</div>
           </div>
         </div>
@@ -571,7 +573,9 @@ function RecentScansSection({ scans, objects, onViewAll }) {
                   <div className="scan-left">
                     <div className={`scan-dot status-${scan.status || 'gray'}`} />
                     <div className="scan-info">
-                      <div className="scan-box">{scan.box_name || 'Box'}</div>
+                      <div className="scan-box">
+                        {scan.box_name || 'Box'} {scan.box_qr_code ? scan.box_qr_code : ''}
+                      </div>
                       <div className="scan-message">{scan.message || `Status: ${scan.status}`}</div>
                     </div>
                   </div>

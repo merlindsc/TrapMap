@@ -1,5 +1,5 @@
 /* ============================================================
-   TRAPMAP - BOX SCAN DIALOG V5 (OFFLINE-FÄHIG)
+   TRAPMAP - BOX SCAN DIALOG V6 (OFFLINE-FÄHIG)
    Kontrolle + Verlauf + Mini-Karte + Box-Name/Nummer Anzeige
    + Bestätigungsdialog für "Zurück ins Lager"
    + VOLLSTÄNDIGE OFFLINE-UNTERSTÜTZUNG
@@ -12,9 +12,10 @@
    - 🆕 Offline-Speicherung von Kontrollen
    - 🆕 Offline-History aus Cache
    - 🆕 Visueller Offline-Indikator
+   - 🔧 V6: submitLock verhindert 3x Speichern
    ============================================================ */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X, Save, Camera, Clock, CheckCircle, AlertCircle, Edit3, MapPin, Navigation, Maximize2, Hash, Archive, AlertTriangle, WifiOff, Cloud } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
@@ -350,6 +351,9 @@ export default function BoxScanDialog({
   const { isOnline: contextIsOnline, pendingCount, updatePendingCount } = useOffline();
   const currentlyOffline = !isOnline();
   
+  // 🔧 V6 FIX: Submit-Lock verhindert mehrfaches Speichern
+  const submitLockRef = useRef(false);
+  
   const [tab, setTab] = useState("scan");
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
@@ -465,9 +469,24 @@ export default function BoxScanDialog({
     }
   };
 
-  // 🆕 Submit - OFFLINE-FÄHIG
+  // 🔧 V6 FIX: Submit mit Lock - VERHINDERT 3X SPEICHERN
   const submit = async () => {
+    // 🔧 Sofort prüfen und sperren
+    if (submitLockRef.current) {
+      console.log("⚠️ Submit bereits aktiv (Lock), ignoriere");
+      return;
+    }
+    if (loading) {
+      console.log("⚠️ Submit bereits aktiv (Loading), ignoriere");
+      return;
+    }
+    
+    // Lock setzen BEVOR alles andere
+    submitLockRef.current = true;
     setLoading(true);
+    
+    console.log("💾 Starte Speichern...");
+    
     try {
       const scanData = {
         box_id: box.id,
@@ -489,6 +508,8 @@ export default function BoxScanDialog({
       const result = await createScanOffline(scanData, photo);
 
       if (result.success) {
+        console.log("✅ Erfolgreich gespeichert:", result.online ? "online" : "offline");
+        
         // Toast anzeigen
         if (result.online) {
           setToast({ type: "success", msg: "Kontrolle gespeichert!" });
@@ -501,6 +522,7 @@ export default function BoxScanDialog({
           updatePendingCount();
         }
         
+        // 🔧 NUR EINMAL callback aufrufen
         setTimeout(() => { 
           if (onScanCreated) {
             onScanCreated();
@@ -512,7 +534,10 @@ export default function BoxScanDialog({
         throw new Error(result.message || "Fehler beim Speichern");
       }
     } catch (e) {
+      console.error("❌ Speichern fehlgeschlagen:", e);
       setToast({ type: "error", msg: e.message });
+      // Bei Fehler: Lock wieder freigeben damit User erneut versuchen kann
+      submitLockRef.current = false;
       setLoading(false);
     }
   };
@@ -1127,7 +1152,7 @@ export default function BoxScanDialog({
           {/* Footer */}
           {tab === "scan" && (
             <div style={{ padding: "12px 14px", background: "#161b22", borderTop: "1px solid #21262d" }}>
-              <button onClick={submit} disabled={loading} style={{
+              <button onClick={submit} disabled={loading || submitLockRef.current} style={{
                 width: "100%", padding: "11px", borderRadius: 6, border: "none",
                 background: loading ? "#21262d" : "#238636", color: "#fff",
                 fontSize: 13, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer",
