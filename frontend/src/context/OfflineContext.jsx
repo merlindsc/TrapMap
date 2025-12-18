@@ -1,34 +1,116 @@
-import React, { createContext, useState, useEffect } from 'react';
-import { getUnsyncedScans, markScanAsSynced } from '../utils/storage';
-import { createScan } from '../api/scans';
+/* ============================================================
+   TRAPMAP — OFFLINE CONTEXT
+   Globaler State für Offline-Funktionalität
+   Mit IndexedDB und automatischer Synchronisation
+   ============================================================ */
+
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { initDB, getOfflineStats, getUnsyncedScans, getUnsyncedBoxes } from '../utils/offlineDB';
+import { startAutoSync, addSyncListener, syncAll } from '../utils/syncService';
+import { refreshAllCaches } from '../utils/offlineAPI';
 
 export const OfflineContext = createContext();
 
 export const OfflineProvider = ({ children }) => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [syncQueue, setSyncQueue] = useState([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [pendingScans, setPendingScans] = useState(0);
+  const [pendingBoxes, setPendingBoxes] = useState(0);
+  const [lastSyncResult, setLastSyncResult] = useState(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [syncQueue, setSyncQueue] = useState([]);
 
-  // -----------------------------
-  //  Online / Offline Monitoring
-  // -----------------------------
+  // Pending Count aktualisieren
+  const updatePendingCount = useCallback(async () => {
+    try {
+      const stats = await getOfflineStats();
+      setPendingScans(stats.pendingScans);
+      setPendingBoxes(stats.pendingBoxes);
+      
+      // Für Rückwärtskompatibilität: syncQueue aktualisieren
+      const scans = await getUnsyncedScans();
+      const boxes = await getUnsyncedBoxes();
+      setSyncQueue([...scans, ...boxes]);
+    } catch (error) {
+      console.error('Fehler beim Laden der Offline-Stats:', error);
+    }
+  }, []);
+
+  // Initialisierung
+  useEffect(() => {
+    const init = async () => {
+      try {
+        // IndexedDB initialisieren
+        await initDB();
+        console.log('✅ Offline-System initialisiert');
+        
+        // Auto-Sync starten (alle 30 Sekunden)
+        const stopAutoSync = startAutoSync(30000);
+
+        // Sync-Listener hinzufügen
+        const removeSyncListener = addSyncListener((event) => {
+          switch (event.type) {
+            case 'start':
+              setIsSyncing(true);
+              break;
+            case 'complete':
+              setIsSyncing(false);
+              setLastSyncResult(event.results);
+              updatePendingCount();
+              break;
+            case 'error':
+              setIsSyncing(false);
+              break;
+            case 'offline':
+              setIsOnline(false);
+              break;
+            case 'scan_synced':
+            case 'box_synced':
+              updatePendingCount();
+              break;
+          }
+        });
+
+        // Initial pending count laden
+        await updatePendingCount();
+        
+        // Cache aktualisieren wenn online
+        if (navigator.onLine) {
+          refreshAllCaches().catch(console.error);
+        }
+
+        setIsInitialized(true);
+
+        return () => {
+          stopAutoSync();
+          removeSyncListener();
+        };
+      } catch (error) {
+        console.error('❌ Offline-System Initialisierungsfehler:', error);
+        setIsInitialized(true); // Trotzdem als initialisiert markieren
+      }
+    };
+
+    init();
+  }, [updatePendingCount]);
+
+  // Online/Offline Event Listener
   useEffect(() => {
     const handleOnline = () => {
-      console.log('✅ Back online');
       setIsOnline(true);
-      syncOfflineData();
+      console.log('🌐 Online - Starte Sync...');
+      // Bei Wiederverbindung: Sync und Cache aktualisieren
+      syncAll().catch(console.error);
+      refreshAllCaches().catch(console.error);
     };
 
     const handleOffline = () => {
-      console.log('📵 Offline mode');
       setIsOnline(false);
+      console.log('📴 Offline-Modus aktiv');
     };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
-    // Load queue when app starts
-    loadSyncQueue();
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -36,98 +118,48 @@ export const OfflineProvider = ({ children }) => {
     };
   }, []);
 
-  // -----------------------------
-  //  Load existing offline queue
-  // -----------------------------
-  const loadSyncQueue = async () => {
-    try {
-      const unsynced = await getUnsyncedScans();
-
-      if (!Array.isArray(unsynced)) {
-        console.warn("⚠️ Offline DB returned non-array. Setting empty queue.");
-        setSyncQueue([]);
-        return;
-      }
-
-      setSyncQueue(unsynced);
-    } catch (error) {
-      // Important fix: IndexedDB is not initialized yet
-      if (String(error).includes("Database not initialized")) {
-        console.warn("ℹ️ IndexedDB not ready yet. This is normal on first load.");
-        setSyncQueue([]); // Prevent crash
-        return;
-      }
-
-      console.error('❌ Failed to load sync queue:', error);
-      setSyncQueue([]);
+  // Manueller Sync (Rückwärtskompatibilität: syncOfflineData)
+  const syncOfflineData = useCallback(async () => {
+    if (!isOnline) {
+      console.log('📴 Offline - Sync nicht möglich');
+      return { success: false, message: 'Keine Internetverbindung' };
     }
-  };
 
-  // -----------------------------
-  //  Sync offline scans → backend
-  // -----------------------------
-  const syncOfflineData = async () => {
-    if (isSyncing || !isOnline) return;
+    if (isSyncing) {
+      console.log('⏳ Sync bereits aktiv');
+      return { success: false, message: 'Sync bereits aktiv' };
+    }
 
     setIsSyncing(true);
-
     try {
-      const unsynced = await getUnsyncedScans();
-
-      if (!Array.isArray(unsynced) || unsynced.length === 0) {
-        console.log('✅ No offline scans to sync.');
-        setIsSyncing(false);
-        return;
-      }
-
-      console.log(`🔄 Syncing ${unsynced.length} offline scans...`);
-
-      let successCount = 0;
-
-      for (const scan of unsynced) {
-        try {
-          if (!scan.box_id || !scan.status) {
-            console.warn(`⚠️ Invalid offline scan skipped (id ${scan.temp_id})`);
-            await markScanAsSynced(scan.temp_id);
-            continue;
-          }
-
-          await createScan({
-            box_id: scan.box_id,
-            status: scan.status,
-            symbol: scan.symbol || null,
-            notes: scan.notes || '',
-            photo_url: scan.photo_url || null,
-            scanned_at: scan.created_at
-          });
-
-          await markScanAsSynced(scan.temp_id);
-          successCount++;
-
-        } catch (error) {
-          console.error(`❌ Failed to sync scan ${scan.temp_id}:`, error);
-        }
-      }
-
-      console.log(`✅ Successfully synced ${successCount}/${unsynced.length} scans`);
-      await loadSyncQueue();
-
+      const results = await syncAll();
+      await updatePendingCount();
+      setLastSyncResult(results);
+      return { success: true, results };
     } catch (error) {
-      console.error('❌ Sync error:', error);
+      console.error('❌ Sync-Fehler:', error);
+      return { success: false, error: error.message };
     } finally {
       setIsSyncing(false);
     }
-  };
+  }, [isOnline, isSyncing, updatePendingCount]);
 
-  // -----------------------------
-  //  Exposed context values
-  // -----------------------------
+  // Context-Werte (mit Rückwärtskompatibilität)
   const value = {
+    // Neue API
     isOnline,
-    syncQueue,
-    queueLength: syncQueue.length,
     isSyncing,
-    syncOfflineData
+    pendingScans,
+    pendingBoxes,
+    pendingCount: pendingScans + pendingBoxes,
+    lastSyncResult,
+    isInitialized,
+    syncOfflineData,
+    updatePendingCount,
+    
+    // Rückwärtskompatibilität
+    syncQueue,
+    queueLength: pendingScans + pendingBoxes
   };
 
   return (
@@ -135,4 +167,13 @@ export const OfflineProvider = ({ children }) => {
       {children}
     </OfflineContext.Provider>
   );
+};
+
+// Custom Hook
+export const useOffline = () => {
+  const context = useContext(OfflineContext);
+  if (!context) {
+    throw new Error('useOffline must be used within an OfflineProvider');
+  }
+  return context;
 };

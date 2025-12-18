@@ -4,22 +4,30 @@
    - GPS-Integration für Maps
    - FloorPlan-Unterstützung (ohne GPS)
    - Echtzeit-Position vom Handy
+   - OFFLINE-FÄHIG: Speichert lokal wenn keine Verbindung
    ============================================================ */
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useContext } from "react";
 import { BrowserQRCodeReader } from "@zxing/browser";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   X, Save, MapPin, Package, Calendar, FileText, Camera, QrCode,
   CheckCircle, Navigation, Crosshair, Map, Layers, RefreshCw,
-  AlertCircle, Wifi, WifiOff
+  AlertCircle, Wifi, WifiOff, Cloud
 } from "lucide-react";
+import { createBoxOffline, createScanOffline, findBoxByQR } from "../../utils/offlineAPI";
+import { OfflineContext } from "../../context/OfflineContext";
+import { getCachedObjects } from "../../utils/offlineDB";
 
 const API = import.meta.env.VITE_API_URL;
 
 export default function ScanFlowV2() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  
+  // Offline Context
+  const offlineContext = useContext(OfflineContext);
+  const isOnline = offlineContext?.isOnline ?? navigator.onLine;
   
   // Context: Woher kommt der Scan?
   const context = searchParams.get("context") || "maps"; // maps | floorplan
@@ -48,6 +56,7 @@ export default function ScanFlowV2() {
   // Flow State
   const [mode, setMode] = useState("scanning"); // scanning | setup | control | success
   const [boxData, setBoxData] = useState(null);
+  const [isOfflineResult, setIsOfflineResult] = useState(false);
 
   // GPS State (nur für Maps-Context)
   const [gpsPosition, setGpsPosition] = useState(null);
@@ -225,7 +234,7 @@ export default function ScanFlowV2() {
   };
 
   // ============================================
-  // SCAN HANDLING
+  // SCAN HANDLING (OFFLINE-FÄHIG)
   // ============================================
   const handleScan = async (code) => {
     if (!code || scannedCode === code) return;
@@ -238,66 +247,87 @@ export default function ScanFlowV2() {
     setScannedCode(code);
     stopScanner();
     setScanning(false);
+    setIsOfflineResult(false);
 
     try {
-      const res = await fetch(`${API}/qr/check/${code}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // Offline-fähige QR-Code Suche verwenden
+      const result = await findBoxByQR(code);
 
-      const data = await res.json();
-
-      if (data.assigned && data.box_id) {
-        // Code ist zugewiesen → Box laden und Kontrolle öffnen
-        const boxRes = await fetch(`${API}/boxes/${data.box_id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-
-        if (boxRes.ok) {
-          const box = await boxRes.json();
-          setBoxData(box);
-          setMode("control");
+      if (result.success && result.data) {
+        // Box gefunden (online oder aus Cache)
+        setBoxData(result.data);
+        setIsOfflineResult(result.offline || result.cached);
+        
+        if (result.pending) {
+          // Box wurde offline erstellt - zeige Hinweis
+          setError("Diese Box wurde offline erstellt und wartet auf Synchronisation.");
+          setMode("success");
         } else {
-          setError("Box konnte nicht geladen werden");
-          resetScanner();
+          setMode("control");
         }
-      } else {
+      } else if (result.notFound) {
         // Code nicht zugewiesen → Setup
         setMode("setup");
-        loadSetupData();
+        await loadSetupData();
+      } else {
+        setError(result.message || "Fehler beim Laden der Box");
+        resetScanner();
       }
     } catch (err) {
       console.error("QR check error:", err);
+      // Bei Fehler: Setup-Modus versuchen
       setMode("setup");
-      loadSetupData();
+      await loadSetupData();
     }
   };
 
   // ============================================
-  // SETUP DATA
+  // SETUP DATA (OFFLINE-FÄHIG)
   // ============================================
   const loadSetupData = async () => {
     try {
-      const [objRes, typeRes] = await Promise.all([
-        fetch(`${API}/objects`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API}/boxtypes`, { headers: { Authorization: `Bearer ${token}` } })
-      ]);
+      // Wenn online: Von Server laden
+      if (isOnline) {
+        const [objRes, typeRes] = await Promise.all([
+          fetch(`${API}/objects`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${API}/boxtypes`, { headers: { Authorization: `Bearer ${token}` } })
+        ]);
 
-      if (objRes.ok) {
-        const objData = await objRes.json();
-        setObjects(Array.isArray(objData) ? objData : objData.data || []);
-      }
+        if (objRes.ok) {
+          const objData = await objRes.json();
+          setObjects(Array.isArray(objData) ? objData : objData.data || []);
+        }
 
-      if (typeRes.ok) {
-        const typeData = await typeRes.json();
-        setBoxTypes(Array.isArray(typeData) ? typeData : typeData.data || []);
+        if (typeRes.ok) {
+          const typeData = await typeRes.json();
+          setBoxTypes(Array.isArray(typeData) ? typeData : typeData.data || []);
+        }
+      } else {
+        // Offline: Aus Cache laden
+        console.log('📴 Offline: Lade Setup-Daten aus Cache');
+        const cachedObjs = await getCachedObjects();
+        if (cachedObjs && cachedObjs.length > 0) {
+          setObjects(cachedObjs);
+        } else {
+          setError("Keine Offline-Daten verfügbar. Bitte gehen Sie online um Daten zu synchronisieren.");
+        }
       }
     } catch (err) {
       console.error("Setup data error:", err);
+      // Fallback: Aus Cache laden
+      try {
+        const cachedObjs = await getCachedObjects();
+        if (cachedObjs && cachedObjs.length > 0) {
+          setObjects(cachedObjs);
+        }
+      } catch (cacheErr) {
+        console.error("Cache error:", cacheErr);
+      }
     }
   };
 
   // ============================================
-  // CREATE BOX
+  // CREATE BOX (OFFLINE-FÄHIG)
   // ============================================
   const handleCreateBox = async () => {
     if (!selectedObject || !boxTypeId) {
@@ -318,8 +348,9 @@ export default function ScanFlowV2() {
       : Math.floor((intervalRangeStart + intervalRangeEnd) / 2);
 
     try {
-      // Box erstellen
+      // Box-Daten vorbereiten
       const boxPayload = {
+        qr_code: scannedCode,
         object_id: selectedObject,
         box_type_id: parseInt(boxTypeId),
         notes,
@@ -332,45 +363,45 @@ export default function ScanFlowV2() {
         boxPayload.lng = gpsPosition.lng;
       }
 
-      const boxRes = await fetch(`${API}/boxes`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(boxPayload)
-      });
+      // Offline-fähige Box-Erstellung verwenden
+      const result = await createBoxOffline(boxPayload);
 
-      if (!boxRes.ok) {
-        const err = await boxRes.json();
-        alert("Fehler: " + (err.error || "Box konnte nicht erstellt werden"));
-        setSaving(false);
-        return;
+      if (result.success) {
+        if (result.online) {
+          // Online erstellt - QR-Code verknüpfen
+          await fetch(`${API}/qr/assign`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              qr_code: scannedCode,
+              box_id: result.data.id
+            })
+          });
+
+          setBoxData(result.data);
+          setIsOfflineResult(false);
+        } else {
+          // Offline erstellt
+          setBoxData({
+            ...boxPayload,
+            id: result.tempId,
+            box_name: `Box ${scannedCode.substring(0, 8)}`,
+            offline: true
+          });
+          setIsOfflineResult(true);
+          
+          // Pending Count aktualisieren
+          if (offlineContext?.updatePendingCount) {
+            offlineContext.updatePendingCount();
+          }
+        }
+        setMode("success");
+      } else {
+        alert("Fehler: " + (result.message || "Box konnte nicht erstellt werden"));
       }
-
-      const newBox = await boxRes.json();
-
-      // QR-Code mit Box verknüpfen
-      await fetch(`${API}/qr/assign`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          qr_code: scannedCode,
-          box_id: newBox.id
-        })
-      });
-
-      // Falls FloorPlan-Context: Box auf Plan platzieren
-      if (context === "floorplan" && floorplanId) {
-        // Position wird vom FloorPlanEditor gesetzt
-        // Hier nur zurück navigieren
-      }
-
-      setBoxData(newBox);
-      setMode("success");
 
     } catch (e) {
       console.error("Create box error:", e);
@@ -381,7 +412,7 @@ export default function ScanFlowV2() {
   };
 
   // ============================================
-  // SAVE CONTROL
+  // SAVE CONTROL (OFFLINE-FÄHIG)
   // ============================================
   const getBoxType = () => {
     const rawName = (boxData?.box_type_name || boxData?.type_name || "") + "";
@@ -440,37 +471,26 @@ export default function ScanFlowV2() {
         scanData.scan_lng = gpsPosition.lng;
       }
 
-      if (photo) {
-        const formData = new FormData();
-        Object.entries(scanData).forEach(([key, value]) => {
-          if (value !== null) formData.append(key, value);
-        });
-        formData.append("photo", photo);
+      // Offline-fähige Scan-Erstellung verwenden
+      const result = await createScanOffline(scanData, photo);
 
-        const res = await fetch(`${API}/scans`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData
-        });
-
-        if (!res.ok) throw new Error("Scan konnte nicht gespeichert werden");
+      if (result.success) {
+        if (result.online) {
+          setIsOfflineResult(false);
+        } else {
+          setIsOfflineResult(true);
+          // Pending Count aktualisieren
+          if (offlineContext?.updatePendingCount) {
+            offlineContext.updatePendingCount();
+          }
+        }
+        setMode("success");
       } else {
-        const res = await fetch(`${API}/scans`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify(scanData)
-        });
-
-        if (!res.ok) throw new Error("Scan konnte nicht gespeichert werden");
+        throw new Error(result.message || "Scan konnte nicht gespeichert werden");
       }
-
-      setMode("success");
     } catch (e) {
       console.error("Save control error:", e);
-      alert("Fehler beim Speichern");
+      alert("Fehler beim Speichern: " + e.message);
     } finally {
       setSaving(false);
     }

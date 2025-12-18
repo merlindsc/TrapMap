@@ -1,9 +1,13 @@
 /* ============================================================
    TRAPMAP — SCAN DIALOG (ERSATZ)
    mit automatischer Statuslogik + BoxTyp-Feldern
+   OFFLINE-FÄHIG: Speichert lokal wenn keine Verbindung
    ============================================================ */
 
 import React, { useState, useEffect } from "react";
+import { createScanOffline } from "../../utils/offlineAPI";
+import { useOffline } from "../../context/OfflineContext";
+import { WifiOff, Check, AlertCircle } from "lucide-react";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -41,6 +45,7 @@ function autoStatus(boxType, consumption, quantity, trapState) {
 export default function ScanDialog({ isOpen, onClose, box, reload }) {
   if (!isOpen) return null;
 
+  const { isOnline, updatePendingCount } = useOffline();
   const token = localStorage.getItem("trapmap_token");
 
   // Felder
@@ -50,6 +55,8 @@ export default function ScanDialog({ isOpen, onClose, box, reload }) {
   const [trapState, setTrapState] = useState(0);
   const [quantity, setQuantity] = useState("none");
   const [photo, setPhoto] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitResult, setSubmitResult] = useState(null);
 
   // Box-Typ bestimmen
   const typeName = (box?.box_type_name || "").toLowerCase();
@@ -72,34 +79,72 @@ export default function ScanDialog({ isOpen, onClose, box, reload }) {
 
   async function submitScan(e) {
     e.preventDefault();
+    setIsSubmitting(true);
+    setSubmitResult(null);
 
-    const formData = new FormData();
-    formData.append("box_id", box.id);
-    formData.append("status", status);
-    formData.append("notes", notes);
+    try {
+      // Scan-Daten vorbereiten
+      const scanData = {
+        box_id: box.id,
+        status,
+        notes,
+        trap_state: boxType === "schlagfalle" ? trapState : undefined,
+        consumption: (boxType === "monitoring_rodent" || boxType === "giftbox") ? consumption : undefined,
+        quantity: boxType === "monitoring_insect" ? quantity : undefined
+      };
 
-    if (photo) formData.append("photo", photo);
+      // Offline-fähige API verwenden
+      const result = await createScanOffline(scanData, photo);
 
-    if (boxType === "schlagfalle") formData.append("trap_state", trapState);
-    if (boxType === "monitoring_rodent" || boxType === "giftbox")
-      formData.append("consumption", consumption);
-    if (boxType === "monitoring_insect")
-      formData.append("quantity", quantity);
+      if (result.success) {
+        if (result.online) {
+          setSubmitResult({ type: 'success', message: 'Kontrolle gespeichert!' });
+        } else {
+          setSubmitResult({ 
+            type: 'offline', 
+            message: 'Kontrolle offline gespeichert. Wird bei Verbindung synchronisiert.' 
+          });
+          updatePendingCount();
+        }
 
-    await fetch(`${API}/scans`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: formData,
-    });
-
-    reload();
-    onClose();
+        // Nach kurzer Verzögerung schließen
+        setTimeout(() => {
+          reload();
+          onClose();
+        }, 1500);
+      } else {
+        setSubmitResult({ type: 'error', message: result.message || 'Fehler beim Speichern' });
+      }
+    } catch (error) {
+      console.error('Scan-Fehler:', error);
+      setSubmitResult({ type: 'error', message: 'Fehler beim Speichern der Kontrolle' });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
     <div className="scan-dialog-overlay" onClick={onClose}>
       <div className="scan-dialog" onClick={(e) => e.stopPropagation()}>
         <h2>✓ Kontrolle: {box.box_name}</h2>
+
+        {/* Offline-Hinweis */}
+        {!isOnline && (
+          <div className="offline-notice">
+            <WifiOff size={16} />
+            <span>Offline-Modus: Kontrolle wird lokal gespeichert</span>
+          </div>
+        )}
+
+        {/* Ergebnis-Anzeige */}
+        {submitResult && (
+          <div className={`submit-result ${submitResult.type}`}>
+            {submitResult.type === 'success' && <Check size={16} />}
+            {submitResult.type === 'offline' && <WifiOff size={16} />}
+            {submitResult.type === 'error' && <AlertCircle size={16} />}
+            <span>{submitResult.message}</span>
+          </div>
+        )}
 
         <form onSubmit={submitScan}>
           {/* SCHLAGFALLE */}
@@ -157,24 +202,74 @@ export default function ScanDialog({ isOpen, onClose, box, reload }) {
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
+            disabled={isSubmitting}
           />
 
           <label>Foto (optional)</label>
           <input
             type="file"
             accept="image/*"
+            capture="environment"
             onChange={(e) => setPhoto(e.target.files[0])}
+            disabled={isSubmitting}
           />
 
-          <button type="submit" className="btn-primary">
-            Speichern
+          <button 
+            type="submit" 
+            className="btn-primary"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Speichern...' : 'Speichern'}
           </button>
         </form>
 
-        <button className="btn-secondary" onClick={onClose}>
+        <button className="btn-secondary" onClick={onClose} disabled={isSubmitting}>
           Abbrechen
         </button>
       </div>
+
+      <style>{`
+        .offline-notice {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 14px;
+          background: rgba(239, 68, 68, 0.1);
+          border: 1px solid rgba(239, 68, 68, 0.3);
+          border-radius: 8px;
+          color: #ef4444;
+          font-size: 13px;
+          margin-bottom: 16px;
+        }
+
+        .submit-result {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 12px 14px;
+          border-radius: 8px;
+          font-size: 14px;
+          margin-bottom: 16px;
+        }
+
+        .submit-result.success {
+          background: rgba(34, 197, 94, 0.1);
+          border: 1px solid rgba(34, 197, 94, 0.3);
+          color: #22c55e;
+        }
+
+        .submit-result.offline {
+          background: rgba(59, 130, 246, 0.1);
+          border: 1px solid rgba(59, 130, 246, 0.3);
+          color: #3b82f6;
+        }
+
+        .submit-result.error {
+          background: rgba(239, 68, 68, 0.1);
+          border: 1px solid rgba(239, 68, 68, 0.3);
+          color: #ef4444;
+        }
+      `}</style>
     </div>
   );
 }
