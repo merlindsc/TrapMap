@@ -1289,7 +1289,7 @@ export default function Maps() {
               tileSize={512}
               zoomOffset={-1}
               maxNativeZoom={20}
-              maxZoom={20}
+              maxZoom={22}
             />
             {mapStyle === "hybrid" && (
               <TileLayer 
@@ -1299,7 +1299,7 @@ export default function Maps() {
                 zoomOffset={-1}
                 opacity={0.6} 
                 maxNativeZoom={20}
-                maxZoom={20}
+                maxZoom={22}
               />
             )}
 
