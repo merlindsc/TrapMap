@@ -1,15 +1,19 @@
 /* ============================================================
-   TRAPMAP - QR SCANNER V13
+   TRAPMAP - QR SCANNER V14
    
-   REPARIERT: Korrekter QR-Flow basierend auf V10
+   KORREKTER QR-FLOW:
+   1. Code nicht in DB → /qr/assign-code (neuen Code zuweisen)
+   2. Box im Pool (kein Objekt) → /qr/assign-object (Objekt zuweisen)
+   3. Box mit Objekt aber NICHT platziert → Platzierungsauswahl (GPS oder Karte)
+   4. Box platziert aber KEINE ERSTEINRICHTUNG → Ersteinrichtungsdialog
+   5. GPS-Box + Mobile + Ersteinrichtung fertig → Distanzprüfung → Kontrollformular
+   6. Lageplan-Box + Ersteinrichtung fertig → Kontrollformular
+   
+   ERSTEINRICHTUNG ERKENNUNG:
+   - Kein box_type_id = braucht Setup
+   - Kein last_scan = noch nie gescannt = braucht Setup
+   
    + OFFLINE SUPPORT: Scannt auch ohne Internet aus Cache
-   
-   FLOW:
-   1. Code nicht in DB → /qr/assign-code
-   2. Box im Pool (kein Objekt) → /qr/assign-object
-   3. Box zugewiesen aber NICHT platziert → Platzierungsauswahl
-   4. GPS-Box platziert → Distanzprüfung → Kontrollformular
-   5. Lageplan-Box platziert → Kontrollformular
    ============================================================ */
 
 import React, { useEffect, useRef, useState } from "react";
@@ -453,6 +457,11 @@ export default function Scanner() {
             name: res.data.name,
             box_type_id: res.data.box_type_id,
             box_type_name: res.data.box_type_name,
+            box_type_category: res.data.box_type_category,
+            last_scan: res.data.last_scan,
+            needs_setup: res.data.needs_setup,
+            bait: res.data.bait,
+            notes: res.data.notes,
           };
 
           // In Cache speichern für Offline
@@ -486,8 +495,13 @@ export default function Scanner() {
       const isPlaced = hasGPS || hasFloorplan;
       const isGPSBox = (boxData.position_type === 'gps' || boxData.position_type === 'map') || 
                        (hasGPS && !hasFloorplan);
+      
+      // WICHTIG: Ersteinrichtung nötig wenn:
+      // - kein box_type_id ODER
+      // - kein last_scan (noch nie gescannt)
+      const needsSetup = !boxData.box_type_id || !boxData.last_scan || boxData.needs_setup;
 
-      console.log("📍 Box Status:", { hasGPS, hasFloorplan, isPlaced, isGPSBox, offline });
+      console.log("📍 Box Status:", { hasGPS, hasFloorplan, isPlaced, isGPSBox, needsSetup, offline });
 
       // ============================================
       // FALL 3: NICHT PLATZIERT → Platzierungsauswahl
@@ -522,7 +536,17 @@ export default function Scanner() {
       }
 
       // ============================================
-      // FALL 4: GPS-Box auf Mobile → Distanz prüfen
+      // FALL 4: Platziert aber ERSTEINRICHTUNG nötig
+      // ============================================
+      if (needsSetup) {
+        console.log("📝 Box braucht Ersteinrichtung");
+        setBoxLoading(false);
+        setShowFirstSetup(true);
+        return;
+      }
+
+      // ============================================
+      // FALL 5: GPS-Box auf Mobile → Distanz prüfen
       // ============================================
       if (isGPSBox && hasGPS && isMobile) {
         try {
@@ -551,7 +575,7 @@ export default function Scanner() {
       }
 
       // ============================================
-      // FALL 5: Direkt zum Kontrollformular
+      // FALL 6: Direkt zum Kontrollformular
       // ============================================
       setBoxLoading(false);
       setShowScanDialog(true);

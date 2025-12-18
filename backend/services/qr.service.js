@@ -104,9 +104,12 @@ exports.checkCode = async (code) => {
     .select(`
       id, organisation_id, box_id, assigned,
       boxes:box_id (
-        id, number, status, position_type, object_id, box_type_id, current_status,
-        objects:object_id (id, name),
-        box_types:box_type_id (id, name)
+        id, number, display_number, qr_code, status, position_type, 
+        object_id, box_type_id, current_status,
+        lat, lng, floor_plan_id, pos_x, pos_y, grid_position,
+        last_scan, control_interval_days, notes, bait,
+        objects:object_id (id, name, address),
+        box_types:box_type_id (id, name, category)
       )
     `)
     .eq("id", code.toUpperCase())

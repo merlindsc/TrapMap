@@ -96,6 +96,7 @@ exports.check = async (req, res) => {
       // Box Type flach
       box_type_id: box.box_type_id || null,
       box_type_name: box.box_types?.name || null,
+      box_type_category: box.box_types?.category || null,
       
       // GPS Position
       lat: box.lat || null,
@@ -107,12 +108,19 @@ exports.check = async (req, res) => {
       pos_y: box.pos_y || null,
       grid_position: box.grid_position || null,
       
+      // WICHTIG für Ersteinrichtungserkennung
+      last_scan: box.last_scan || null,
+      bait: box.bait || null,
+      
       // Sonstiges
       notes: box.notes || null,
-      control_interval_days: box.control_interval_days || 30
+      control_interval_days: box.control_interval_days || 30,
+      
+      // Helper für Frontend: Braucht Ersteinrichtung?
+      needs_setup: !box.box_type_id || !box.last_scan
     };
 
-    console.log(`✅ Code gefunden: box_id=${response.box_id}, object_id=${response.object_id}, object_name=${response.object_name}`);
+    console.log(`✅ Code gefunden: box_id=${response.box_id}, object_id=${response.object_id}, needs_setup=${response.needs_setup}`);
     
     res.json(response);
   } catch (err) {
