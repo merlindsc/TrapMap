@@ -222,12 +222,8 @@ export const createScanOffline = async (scanData, photo = null) => {
   // Offline speichern
   const localId = await addPendingScan(offlineScan);
   
-  // Auch zur lokalen History hinzufügen
-  await addOfflineScanToHistory(scanData.box_id, {
-    ...offlineScan,
-    scanned_at: offlineScan.offline_created_at,
-    users: await getCachedUser().then(u => u?.user || { email: 'Offline' })
-  });
+  // 🆕 KEINE separate History mehr - wird dynamisch aus pending_scans geladen
+  // await addOfflineScanToHistory(...) → ENTFERNT
   
   // Lokalen Box-Status aktualisieren
   await updateCachedBox(scanData.box_id, { 
@@ -272,10 +268,10 @@ export const getBoxHistory = async (boxId, limit = 20) => {
   // Fallback auf Cache
   const cachedHistory = await getCachedHistoryForBox(boxId);
   
-  // Auch pending offline scans hinzufügen
+  // 🆕 Nur wirklich ungesyncte Scans hinzufügen (synced !== true)
   const pendingScans = await getUnsyncedScans();
   const boxPendingScans = pendingScans
-    .filter(s => s.box_id === boxId)
+    .filter(s => s.box_id === boxId && !s.synced) // 🆕 Bereits gesyncte ausschließen
     .map(s => ({
       ...s,
       id: `pending_${s.localId}`,

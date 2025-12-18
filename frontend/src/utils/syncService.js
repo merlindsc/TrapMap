@@ -135,7 +135,8 @@ const syncScans = async () => {
     
     try {
       const serverResult = await syncSingleScan(scan);
-      await markScanAsSynced(scan.localId, serverResult?.id);
+      // 🆕 Nach erfolgreichem Sync: Scan LÖSCHEN statt nur markieren
+      await deletePendingScan(scan.localId);
       results.success++;
       
       emitSyncEvent('scan_synced', { 
@@ -144,7 +145,7 @@ const syncScans = async () => {
         boxId: scan.box_id 
       });
       
-      console.log(`✅ Scan ${scan.localId} synchronisiert`);
+      console.log(`✅ Scan ${scan.localId} synchronisiert & gelöscht`);
     } catch (error) {
       results.failed++;
       await incrementScanAttempts(scan.localId);
