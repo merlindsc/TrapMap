@@ -62,53 +62,27 @@ export default defineConfig({
             }
           },
           
-          // Map Tiles - Cache First (sehr wichtig für Offline-Karten!)
-          {
-            urlPattern: /^https:\/\/.*tile.*\.png$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'map-tiles',
-              expiration: {
-                maxEntries: 500,
-                maxAgeSeconds: 30 * 24 * 60 * 60 // 30 Tage
-              }
-            }
-          },
-          
-          // OpenStreetMap Tiles
-          {
-            urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\//,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'osm-tiles',
-              expiration: {
-                maxEntries: 1000,
-                maxAgeSeconds: 30 * 24 * 60 * 60
-              }
-            }
-          },
-          
-          // MapTiler Tiles
-          {
-            urlPattern: /^https:\/\/api\.maptiler\.com\//,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'maptiler-tiles',
-              expiration: {
-                maxEntries: 1000,
-                maxAgeSeconds: 30 * 24 * 60 * 60
-              }
-            }
-          },
-          
-          // 🆕 Mapbox Tiles (Streets, Satellite, Hybrid)
+          // 🗺️ Mapbox Tiles (Hauptkarten: Streets, Satellite, Hybrid)
           {
             urlPattern: /^https:\/\/api\.mapbox\.com\//,
             handler: 'CacheFirst',
             options: {
               cacheName: 'mapbox-tiles',
               expiration: {
-                maxEntries: 2000, // Mehr wegen Streets + Satellite
+                maxEntries: 3000, // Großzügig für Streets + Satellite
+                maxAgeSeconds: 30 * 24 * 60 * 60 // 30 Tage
+              }
+            }
+          },
+          
+          // 🌍 OSM Tiles (nur für Mini-Karten in Dialogen)
+          {
+            urlPattern: /^https:\/\/[abc]\.tile\.openstreetmap\.org\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'osm-tiles',
+              expiration: {
+                maxEntries: 500, // Weniger, da nur Mini-Karten
                 maxAgeSeconds: 30 * 24 * 60 * 60 // 30 Tage
               }
             }
