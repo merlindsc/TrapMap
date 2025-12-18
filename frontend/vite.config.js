@@ -40,12 +40,19 @@ export default defineConfig({
               cacheName: 'api-cache',
               expiration: {
                 maxEntries: 200,
-                maxAgeSeconds: 24 * 60 * 60 // 24 Stunden
+                maxAgeSeconds: 6 * 60 * 60 // 6 Stunden (kürzer für frischere Daten)
               },
-              networkTimeoutSeconds: 10,
+              networkTimeoutSeconds: 15,
               cacheableResponse: {
-                statuses: [0, 200]
-              }
+                statuses: [0, 200, 201, 204]
+              },
+              plugins: [{
+                cacheKeyWillBeUsed: async ({request}) => {
+                  // Remove auth headers from cache key
+                  const url = new URL(request.url);
+                  return url.href;
+                }
+              }]
             }
           },
           
@@ -64,14 +71,38 @@ export default defineConfig({
           
           // 🗺️ Mapbox Tiles (Hauptkarten: Streets, Satellite, Hybrid)
           {
-            urlPattern: /^https:\/\/api\.mapbox\.com\//,
+            urlPattern: /^https:\/\/api\.mapbox\.com\/styles\/v1\/mapbox\/.+\/tiles\/512\//,
             handler: 'CacheFirst',
             options: {
               cacheName: 'mapbox-tiles',
               expiration: {
-                maxEntries: 3000, // Großzügig für Streets + Satellite
+                maxEntries: 2000, // Weniger Tiles da 512px = 4x effizienter
                 maxAgeSeconds: 30 * 24 * 60 * 60 // 30 Tage
-              }
+              },
+              cacheableResponse: {
+                statuses: [200]
+              },
+              // 📴 Offline-Fallback: Leere Response wenn offline
+              plugins: [{
+                cacheKeyWillBeUsed: async ({request}) => request.url,
+                requestWillFetch: async ({request}) => {
+                  if (!navigator.onLine) {
+                    // Offline: Versuche aus Cache zu laden
+                    const cache = await caches.open('mapbox-tiles');
+                    const cachedResponse = await cache.match(request);
+                    if (!cachedResponse) {
+                      // Kein Cache: Transparentes 1x1 Pixel PNG zurückgeben
+                      const transparentPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+                      return new Response(await (await fetch(transparentPng)).blob(), {
+                        status: 200,
+                        statusText: 'OK',
+                        headers: {'Content-Type': 'image/png'}
+                      });
+                    }
+                  }
+                  return fetch(request);
+                }
+              }]
             }
           },
           

@@ -11,11 +11,13 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   MapContainer,
-  TileLayer,
   Marker,
   useMap,
   useMapEvents,
 } from "react-leaflet";
+
+// 📴 Offline-freundlicher Tile Layer
+import OfflineFriendlyTileLayer from "../../components/OfflineFriendlyTileLayer";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { getBoxShortLabel, getBoxLabel } from "../../utils/boxUtils";
@@ -68,6 +70,7 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
    MAPBOX TILE URLS
    ============================================================ */
 // 🆕 512px Tiles für 4x weniger Requests!
+// 512px Tiles für 4x weniger Requests (offline-freundlich)
 const MAPBOX_STREETS = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
 const MAPBOX_SAT = `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/512/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
 
@@ -518,9 +521,19 @@ export default function Maps() {
       const result = await getPoolBoxes();
       
       if (result.success) {
+        // Lokale extractNumber Funktion für Pool-Boxen
+        const getSequenceNumber = (box) => {
+          if (box.sequence_number != null) return box.sequence_number;
+          
+          const idStr = box.id ? String(box.id) : '';
+          const match = idStr.match(/(\d+)$/);
+          if (match) return parseInt(match[1], 10);
+          return 999999;
+        };
+        
         const pool = (result.data || []).sort((a, b) => {
-          const numA = a.sequence_number ?? extractNumber(a);
-          const numB = b.sequence_number ?? extractNumber(b);
+          const numA = getSequenceNumber(a);
+          const numB = getSequenceNumber(b);
           return numA - numB;
         });
         
@@ -540,7 +553,10 @@ export default function Maps() {
 
   const extractNumber = (qr) => {
     if (qr.sequence_number != null) return qr.sequence_number;
-    const match = qr.id?.match(/(\d+)$/);
+    
+    // Sicherstellen dass id ein String ist
+    const idStr = qr.id ? String(qr.id) : '';
+    const match = idStr.match(/(\d+)$/);
     if (match) return parseInt(match[1], 10);
     return 999999;
   };
@@ -1232,6 +1248,14 @@ export default function Maps() {
         </div>
       )}
 
+      {/* 📴 Offline Karten-Hinweis */}
+      {isOffline && (
+        <div className="offline-map-notice">
+          <WifiOff size={16} />
+          <span>Offline-Modus: Nur gecachte Kartenbereiche verfügbar</span>
+        </div>
+      )}
+
       {/* ============================================================
           MAIN CONTENT: Map + Sidebar/Sheet
           ============================================================ */}
@@ -1261,27 +1285,27 @@ export default function Maps() {
             wheelPxPerZoomLevel={120} // 🆕 Langsameres Zoomen = weniger Tile-Loads
             style={{ width: "100%", height: "100%" }}
           >
-            <TileLayer
+            <OfflineFriendlyTileLayer
               key={`base-${mapStyle}`}
               url={getTileUrl()}
               attribution='&copy; Mapbox'
-              tileSize={512}
-              zoomOffset={-1}
-              maxNativeZoom={18}        // 🆕 Reduziert von 20 auf 18
-              maxZoom={18}              // 🆕 Reduziert von 22 auf 18
+              tileSize={512}            // 🚀 512px für 4x weniger Requests
+              zoomOffset={-1}           // 🚀 Erforderlich für 512px Tiles
+              maxNativeZoom={18}        // 🚀 Gute Balance: Qualität vs. Requests
+              maxZoom={20}              // 🚀 Höhere max Zoom möglich
               keepBuffer={4}            // 🆕 Mehr Tiles im RAM behalten (Standard: 2)
               updateWhenZooming={false} // 🆕 Nicht während Zoom nachladen
               updateWhenIdle={true}     // 🆕 Nur nachladen wenn Karte still steht
             />
             {mapStyle === "hybrid" && (
-              <TileLayer 
+              <OfflineFriendlyTileLayer 
                 key="hybrid-labels" 
                 url={MAPBOX_STREETS} 
-                tileSize={512} 
-                zoomOffset={-1} 
+                tileSize={512}            // 🚀 512px für Konsistenz
+                zoomOffset={-1}           // 🚀 Erforderlich für 512px
                 opacity={0.6} 
-                maxNativeZoom={18}        // 🆕 Reduziert von 20 auf 18
-                maxZoom={18}              // 🆕 Reduziert von 22 auf 18
+                maxNativeZoom={18}        // 🚀 Konsistent mit Base Layer
+                maxZoom={20}              // 🚀 Höhere max Zoom
                 keepBuffer={4}            // 🆕 Mehr Tiles im RAM behalten
                 updateWhenZooming={false} // 🆕 Nicht während Zoom nachladen
                 updateWhenIdle={true}     // 🆕 Nur nachladen wenn Karte still steht

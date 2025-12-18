@@ -128,25 +128,38 @@ app.use(helmet({
 }));
 
 // CORS Configuration
-app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'http://localhost:5174',
-    'http://localhost:5175',
-    'http://localhost:5176',
-    'http://localhost:5177',
-    'https://trapmap-app.onrender.com',
-    'https://trap-map.de',
-    'https://www.trap-map.de',
-    // Capacitor App
-    'https://localhost',
-    'capacitor://localhost',
-    'http://localhost'
-  ],
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Für Development: Alle localhost-Origins erlauben
+    if (!origin || origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return callback(null, true);
+    }
+    
+    // Für Production: Spezifische Origins
+    const allowedOrigins = [
+      'https://trapmap-app.onrender.com',
+      'https://trapmap.onrender.com',
+      'https://trap-map.de',
+      'https://www.trap-map.de',
+      'https://localhost',
+      'capacitor://localhost'
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log(`❌ CORS blocked for origin: ${origin}`);
+      callback(null, false);
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  optionsSuccessStatus: 200,
+  preflightContinue: false
+};
+
+app.use(cors(corsOptions));
 
 // Body Parsers
 app.use(express.json({ limit: '10mb' }));

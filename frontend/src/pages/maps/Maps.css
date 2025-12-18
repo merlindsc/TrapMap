@@ -1492,3 +1492,37 @@
   background: transparent !important;
   border: none !important;
 }
+
+/* ============================================================
+   OFFLINE FEATURES
+   ============================================================ */
+
+/* 📴 Offline Map Notice */
+.offline-map-notice {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  background: rgba(251, 191, 36, 0.95);
+  color: #92400e;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #fbbf24;
+  box-shadow: 0 4px 16px rgba(251, 191, 36, 0.3);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 1000;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .offline-map-notice {
+    bottom: 100px; /* Über der mobilen Navigation */
+    right: 10px;
+    left: 10px;
+    font-size: 11px;
+    padding: 6px 10px;
+  }
+}

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cache leeren - TrapMap</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h2>🧹 Cache leeren</h2>
+    <button onclick="clearCache()">Service Worker Cache leeren</button>
+    <div id="output"></div>
+    
+    <script>
+    async function clearCache() {
+        const output = document.getElementById('output');
+        output.innerHTML = '<p>Lösche Cache...</p>';
+        
+        try {
+            // Service Worker Cache löschen
+            if ('serviceWorker' in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                for (let registration of registrations) {
+                    await registration.unregister();
+                    output.innerHTML += '<p>✅ Service Worker deregistriert</p>';
+                }
+            }
+            
+            // Alle Caches löschen
+            const cacheNames = await caches.keys();
+            for (const cacheName of cacheNames) {
+                await caches.delete(cacheName);
+                output.innerHTML += `<p>✅ Cache gelöscht: ${cacheName}</p>`;
+            }
+            
+            // Browser-Storage löschen
+            if ('indexedDB' in window) {
+                indexedDB.deleteDatabase('trapmap-offline-db');
+                output.innerHTML += '<p>✅ IndexedDB gelöscht</p>';
+            }
+            
+            localStorage.clear();
+            sessionStorage.clear();
+            output.innerHTML += '<p>✅ Local/Session Storage gelöscht</p>';
+            
+            output.innerHTML += '<p><strong>🎉 Alle Caches gelöscht! Bitte Seite neu laden.</strong></p>';
+            
+        } catch (error) {
+            output.innerHTML += `<p>❌ Fehler: ${error}</p>`;
+        }
+    }
+    </script>
+</body>
+</html>
