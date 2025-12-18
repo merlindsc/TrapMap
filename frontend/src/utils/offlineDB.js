@@ -726,6 +726,9 @@ export const getOfflineStats = async () => {
   const cachedObjects = await getCachedObjects();
   const cachedBoxTypes = await getCachedBoxTypes();
   const cachedLayouts = await getCachedLayouts();
+  
+  // 🆕 Pool-Boxen separat zählen
+  const poolBoxes = cachedBoxes.filter(b => b.status === 'pool' || b._isPoolBox);
 
   return {
     pending: {
@@ -737,10 +740,16 @@ export const getOfflineStats = async () => {
     },
     cached: {
       boxes: cachedBoxes.length,
+      poolBoxes: poolBoxes.length, // 🆕 Pool-Boxen
       objects: cachedObjects.length,
       boxTypes: cachedBoxTypes.length,
       layouts: cachedLayouts.length
-    }
+    },
+    // Kompatibilität für alte Verwendung
+    cachedBoxes: cachedBoxes.length,
+    cachedObjects: cachedObjects.length,
+    cachedBoxTypes: cachedBoxTypes.length,
+    cachedLayouts: cachedLayouts.length
   };
 };
 

@@ -709,6 +709,7 @@ export const getBoxesByObject = async (objectId) => {
 
 /**
  * Lädt Pool-Boxen (QR-Codes ohne Objekt-Zuweisung) - Online oder aus Cache
+ * 🆕 Pool-Boxen werden jetzt auch gecached für Offline-Scans!
  */
 export const getPoolBoxes = async () => {
   if (isOnline()) {
@@ -721,6 +722,31 @@ export const getPoolBoxes = async () => {
         
         // Pool = Boxen ohne object_id
         const pool = allCodes.filter(qr => !qr.boxes?.object_id);
+        
+        // 🆕 Pool-Boxen in Cache speichern (als boxes mit status='pool')
+        if (pool.length > 0) {
+          const poolBoxes = pool.map(qr => ({
+            id: qr.boxes?.id || qr.box_id,
+            qr_code: qr.id,
+            number: qr.boxes?.number,
+            display_number: qr.boxes?.display_number,
+            status: 'pool',
+            object_id: null,
+            box_type_id: qr.boxes?.box_type_id,
+            box_type_name: qr.boxes?.box_types?.name,
+            short_code: qr.boxes?.box_types?.short_code,
+            current_status: qr.boxes?.current_status || 'green',
+            ...qr.boxes
+          })).filter(b => b.id); // Nur Boxen mit gültiger ID
+          
+          // Vorhandene gecachte Boxen holen (nicht-Pool)
+          const existingCached = await getCachedBoxes();
+          const nonPoolBoxes = existingCached.filter(b => b.status !== 'pool' && b.object_id);
+          
+          // Zusammenführen und cachen
+          await cacheBoxes([...nonPoolBoxes, ...poolBoxes]);
+          console.log('✅ Pool-Boxen gecached:', poolBoxes.length);
+        }
         
         return { success: true, online: true, data: pool };
       }
@@ -818,6 +844,7 @@ export const getLayouts = async (objectId = null) => {
 
 /**
  * Vollständiger Cache-Refresh aller Stammdaten
+ * 🆕 Inkl. Pool-Boxen für Offline-Scans
  */
 export const refreshAllCaches = async () => {
   if (!isOnline()) {
@@ -831,11 +858,15 @@ export const refreshAllCaches = async () => {
     getBoxTypes(),
     getObjects(),
     getBoxes(),
+    getPoolBoxes(), // 🆕 Pool-Boxen für Offline-Scans!
     getLayouts()
   ]);
   
   const success = results.every(r => r.status === 'fulfilled' && r.value?.success);
   
+  // Statistiken loggen
+  const stats = await getOfflineStats();
+  console.log(`📦 Cache: ${stats.cachedBoxes} Boxen, ${stats.cachedObjects} Objekte, ${stats.cachedBoxTypes} Typen`);
   console.log(success ? '✅ Cache-Refresh abgeschlossen' : '⚠️ Cache-Refresh teilweise fehlgeschlagen');
   
   return success;
