@@ -26,8 +26,8 @@ import {
   getBoxHistory, 
   returnBoxToPool,
   isOnline 
-} from "../utils/offlineAPI";
-import { useOffline } from "../context/OfflineContext";
+} from "../../utils/offlineAPI";
+import { useOffline } from "../../context/OfflineContext";
 
 const STATUS = {
   green: { label: "OK", color: "#238636" },

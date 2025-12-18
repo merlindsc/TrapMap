@@ -25,8 +25,8 @@ import {
   createSetupScan,
   updateBoxPosition,
   isOnline 
-} from "../utils/offlineAPI";
-import { useOffline } from "../context/OfflineContext";
+} from "  ../../utils/offlineAPI";
+import { useOffline } from "../../context/OfflineContext";
 
 // Mini-Karte Icon
 const gpsMarkerIcon = L.divIcon({
