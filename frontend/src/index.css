@@ -255,3 +255,50 @@ body,
 .animate-slide-up {
   animation: slide-up 0.5s ease-out forwards;
 }
+
+/* ============================================================
+   MOBILE RESPONSIVE OPTIMIERUNGEN
+   ============================================================ */
+
+/* Portrait Mobile - Buttons verstecken/optimieren */
+@media (max-width: 768px) and (orientation: portrait) {
+  /* Button-Texte generell verkürzen auf Mobile Portrait */
+  .btn-text-mobile-hide {
+    display: none !important;
+  }
+  
+  /* Responsive Buttons kompakter machen */
+  .mobile-responsive-btn {
+    padding: 8px 12px !important;
+    font-size: 14px !important;
+    min-width: 44px; /* Touch-Target Mindestgröße */
+  }
+  
+  /* Icon-only Buttons für Mobile */
+  .mobile-icon-only span {
+    display: none !important;
+  }
+  
+  /* Spezielle Button-Container auf Mobile anpassen */
+  .button-container-mobile {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  
+  /* Überlauf-Buttons in Dropdown verstecken */
+  .mobile-overflow-hidden {
+    display: none;
+  }
+}
+
+/* Landscape Mobile/Tablet - Buttons wieder zeigen */
+@media (max-width: 1024px) and (orientation: landscape) {
+  .btn-text-mobile-hide {
+    display: inline;
+  }
+  
+  .mobile-icon-only span {
+    display: inline;
+  }
+}

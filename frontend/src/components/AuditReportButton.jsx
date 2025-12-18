@@ -31,6 +31,9 @@ const AuditReportButton = ({
     lg: variant === 'icon' ? "p-3" : "px-6 py-3 text-lg"
   };
 
+  // 📱 Mobile-responsive Klasse hinzufügen
+  const mobileClass = "mobile-responsive-btn";
+
   const iconSizes = {
     sm: "w-4 h-4",
     md: "w-5 h-5",
@@ -41,11 +44,11 @@ const AuditReportButton = ({
     <>
       <button
         onClick={() => setShowGenerator(true)}
-        className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+        className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${mobileClass} ${className}`}
         title="Audit-Report erstellen"
       >
         <FileText className={iconSizes[size]} />
-        {variant !== 'icon' && <span>Audit-Report</span>}
+        {variant !== 'icon' && <span className="btn-text-mobile-hide">Audit-Report</span>}
       </button>
 
       {showGenerator && (

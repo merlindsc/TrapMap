@@ -389,9 +389,20 @@ export default function GefahrenanalyseDialog({ isOpen, onClose }) {
           <button
             onClick={handleGenerate}
             disabled={generating}
-            className="flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg disabled:opacity-50"
+            className="flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg disabled:opacity-50 mobile-responsive-btn"
+            title="PDF-Report erstellen"
           >
-            {generating ? <><Loader size={18} className="animate-spin" /> Erstellen...</> : <><Download size={18} /> PDF erstellen</>}
+            {generating ? (
+              <>
+                <Loader size={18} className="animate-spin" /> 
+                <span className="btn-text-mobile-hide">Erstellen...</span>
+              </>
+            ) : (
+              <>
+                <Download size={18} /> 
+                <span className="btn-text-mobile-hide">PDF erstellen</span>
+              </>
+            )}
           </button>
         </div>
       </div>
