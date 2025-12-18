@@ -8,15 +8,22 @@
    ============================================================ */
 
 import React, { useEffect, useState, useMemo } from "react";
-import axios from "axios";
 import { 
   Package, BarChart3, AlertTriangle, Radio, 
   TrendingUp, CheckCircle, XCircle, Clock,
   ChevronDown, X, ArrowLeft, Calendar,
-  Building2, Filter, ExternalLink
+  Building2, Filter, ExternalLink, WifiOff
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import "./Dashboard.css";
+
+// 🆕 Offline API statt axios
+import { 
+  getObjects, 
+  getBoxes, 
+  isOnline 
+} from "../../utils/offlineAPI";
+import { useOffline } from "../../context/OfflineContext";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -28,6 +35,9 @@ export default function Dashboard() {
   const [objects, setObjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // 🆕 Offline-Status
+  const { isOffline } = useOffline();
 
   // UI States
   const [activeView, setActiveView] = useState("overview"); // overview, warnings, status, scans
@@ -41,46 +51,105 @@ export default function Dashboard() {
 
   async function loadDashboard() {
     try {
-      let token = null;
-      try {
-        token = localStorage.getItem("trapmap_token");
-      } catch (error) {
-        console.error("localStorage nicht verfügbar:", error);
-        setError("Keine Authentifizierung verfügbar. Bitte neu anmelden.");
-        setLoading(false);
-        return;
-      }
-      
-      const headers = { Authorization: `Bearer ${token}` };
-
-      // Parallel laden
-      const [dashRes, boxesRes, objectsRes] = await Promise.all([
-        axios.get(`${API}/dashboard/all`, { headers }),
-        axios.get(`${API}/boxes`, { headers }).catch(err => {
+      // 🆕 Offline-fähiges Laden
+      const [boxesResult, objectsResult] = await Promise.all([
+        getBoxes().catch(err => {
           console.error("Boxes load error:", err);
-          return { data: [] };
+          return { success: false, data: [] };
         }),
-        axios.get(`${API}/objects`, { headers }).catch(err => {
+        getObjects().catch(err => {
           console.error("Objects load error:", err);
-          return { data: [] };
+          return { success: false, data: [] };
         })
       ]);
 
-      console.log("Dashboard response:", dashRes.data);
-      console.log("Boxes response:", boxesRes.data);
-      console.log("Objects response:", objectsRes.data);
+      const boxes = boxesResult.success ? boxesResult.data : [];
+      const objects = objectsResult.success ? objectsResult.data : [];
 
-      setStats(dashRes.data.stats || {});
-      setRecentScans(dashRes.data.recentScans || []);
-      setAllBoxes(Array.isArray(boxesRes.data) ? boxesRes.data : []);
-      setObjects(Array.isArray(objectsRes.data) ? objectsRes.data : []);
+      // Dashboard-Stats aus geladenen Daten berechnen
+      const stats = calculateStats(boxes);
+      const recentScans = extractRecentScans(boxes);
+
+      console.log("📊 Dashboard geladen:", { 
+        boxes: boxes.length, 
+        objects: objects.length,
+        offline: boxesResult.offline || objectsResult.offline 
+      });
+
+      setStats(stats);
+      setRecentScans(recentScans);
+      setAllBoxes(boxes);
+      setObjects(objects);
     } catch (err) {
       console.error("Dashboard load error:", err);
       setError(err.message);
       setStats({ boxes: 0, scansToday: 0, warnings: 0, green: 0, yellow: 0, orange: 0, red: 0 });
+      setRecentScans([]);
+      setAllBoxes([]);
+      setObjects([]);
     } finally {
       setLoading(false);
     }
+  }
+
+  // 🆕 Dashboard-Statistiken aus Boxen berechnen
+  function calculateStats(boxes) {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    let green = 0, yellow = 0, orange = 0, red = 0;
+    let scansToday = 0;
+    let warnings = 0;
+
+    boxes.forEach(box => {
+      // Status-Farben zählen
+      switch (box.current_status) {
+        case 'green': green++; break;
+        case 'yellow': yellow++; break;
+        case 'orange': orange++; break;
+        case 'red': red++; break;
+      }
+
+      // Scans heute zählen
+      if (box.last_scan_at) {
+        const scanDate = new Date(box.last_scan_at);
+        if (scanDate >= todayStart) scansToday++;
+      }
+
+      // Warnungen (überfällige Boxen)
+      if (box.last_scan_at && box.status !== 'archived') {
+        const lastScan = new Date(box.last_scan_at);
+        const daysSince = Math.floor((now - lastScan) / (1000 * 60 * 60 * 24));
+        if (daysSince > 30) warnings++; // Über 30 Tage = Warnung
+      }
+    });
+
+    return {
+      boxes: boxes.length,
+      scansToday,
+      warnings,
+      green,
+      yellow,
+      orange,
+      red
+    };
+  }
+
+  // 🆕 Letzte Scans aus Boxen extrahieren
+  function extractRecentScans(boxes) {
+    return boxes
+      .filter(box => box.last_scan_at)
+      .sort((a, b) => new Date(b.last_scan_at) - new Date(a.last_scan_at))
+      .slice(0, 10)
+      .map(box => ({
+        id: `box-${box.id}`,
+        box_id: box.id,
+        scanned_at: box.last_scan_at,
+        status: box.current_status,
+        qr_code: box.qr_code,
+        notes: box.notes || '',
+        user: { email: 'System' } // Fallback da wir keinen User haben
+      }));
   }
 
   // ============================================================
@@ -185,10 +254,19 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Objekt-Filter */}
-        <div className="object-filter">
-          <button 
-            className="object-filter-btn"
+        <div className="header-right-section">
+          {/* 🆕 Offline-Indikator */}
+          {isOffline && (
+            <div className="offline-indicator">
+              <WifiOff size={16} />
+              <span>Offline</span>
+            </div>
+          )}
+
+          {/* Objekt-Filter */}
+          <div className="object-filter">
+            <button 
+              className="object-filter-btn"
             onClick={() => setObjectDropdownOpen(!objectDropdownOpen)}
           >
             <Building2 size={18} />
@@ -217,6 +295,7 @@ export default function Dashboard() {
               ))}
             </div>
           )}
+          </div>
         </div>
       </div>
 
