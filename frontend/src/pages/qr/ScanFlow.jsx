@@ -384,11 +384,19 @@ export default function ScanFlowV2() {
           setBoxData(result.data);
           setIsOfflineResult(false);
         } else {
-          // Offline erstellt
+          // Offline erstellt - Box-Nummer aus QR-Code extrahieren
+          const extractQrNumber = (qrCode) => {
+            if (!qrCode) return null;
+            const match = qrCode.match(/(\d+)/);
+            return match ? parseInt(match[1], 10) : null;
+          };
+          const boxNumber = extractQrNumber(scannedCode);
+          
           setBoxData({
             ...boxPayload,
             id: result.tempId,
-            box_name: `Box ${scannedCode.substring(0, 8)}`,
+            number: boxNumber,
+            display_number: boxNumber,
             offline: true
           });
           setIsOfflineResult(true);
@@ -783,6 +791,18 @@ export default function ScanFlowV2() {
   // ============================================
   if (mode === "control" && boxData) {
     const boxType = getBoxType();
+    
+    // Box-Nummer aus QR-Code oder direkt
+    const getDisplayNumber = () => {
+      if (boxData.number) return boxData.number;
+      if (boxData.display_number) return boxData.display_number;
+      if (boxData.qr_code) {
+        const match = boxData.qr_code.match(/(\d+)/);
+        return match ? parseInt(match[1], 10) : boxData.id;
+      }
+      return boxData.id;
+    };
+    const displayNumber = getDisplayNumber();
 
     return (
       <div className="scan-flow-container">
@@ -792,13 +812,13 @@ export default function ScanFlowV2() {
           <button onClick={resetScanner} className="scan-back-btn">
             <X size={24} />
           </button>
-          <h1>📋 Box {boxData.number} kontrollieren</h1>
+          <h1>📋 Box {displayNumber} kontrollieren</h1>
         </div>
 
         <div className="scan-form">
           {/* Box Info */}
           <div className="box-info-card">
-            <div className="box-number">Box {boxData.number}</div>
+            <div className="box-number">Box {displayNumber} {boxData.qr_code || ''}</div>
             <div className="box-details">
               <span>{boxData.object_name}</span>
               <span>{boxData.box_type_name || boxData.type_name}</span>

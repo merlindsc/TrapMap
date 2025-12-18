@@ -49,12 +49,22 @@ exports.generateCodes = async (organisation_id, count) => {
 
     if (qrError) continue;
 
-    // 2. Box im Pool erstellen
+    // Box-Nummer aus QR-Code extrahieren (ohne führende Nullen)
+    const extractBoxNumber = (qrCode) => {
+      const match = qrCode.match(/(\d+)/);
+      return match ? parseInt(match[1], 10) : null;
+    };
+    
+    const boxNumber = extractBoxNumber(code);
+
+    // 2. Box im Pool erstellen (mit automatischer Nummer aus QR-Code)
     const { data: box, error: boxError } = await supabase
       .from("boxes")
       .insert({
         organisation_id: parseInt(organisation_id),
         qr_code: code,
+        number: boxNumber, // Automatisch aus QR-Code
+        display_number: boxNumber ? boxNumber.toString() : null,
         status: "pool",
         position_type: "none",
         current_status: "green",
@@ -158,10 +168,22 @@ exports.assignCode = async (code, box_id) => {
 
   if (error) throw new Error(error.message);
 
-  // Box aktualisieren
+  // Box-Nummer aus QR-Code extrahieren (ohne führende Nullen)
+  const extractBoxNumber = (qrCode) => {
+    const match = qrCode.match(/(\d+)/);
+    return match ? parseInt(match[1], 10) : null;
+  };
+  
+  const boxNumber = extractBoxNumber(code);
+
+  // Box aktualisieren mit QR-Code und automatischer Nummer
   await supabase
     .from("boxes")
-    .update({ qr_code: code })
+    .update({ 
+      qr_code: code,
+      number: boxNumber,
+      display_number: boxNumber ? boxNumber.toString() : null
+    })
     .eq("id", box_id);
 
   return true;

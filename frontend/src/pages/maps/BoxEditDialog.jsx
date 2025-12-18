@@ -363,9 +363,9 @@ export default function BoxEditDialog({
         control_interval_days: finalInterval
       };
       
-      // Box-Name und Nummer speichern
+      // Box-Name speichern (optional)
       if (boxName.trim()) updateData.name = boxName.trim();
-      if (displayNumber) updateData.number = displayNumber.toString();
+      // Box-Nummer wird NICHT mehr gespeichert - kommt automatisch vom QR-Code
       if (isRodentStation && finalBait) updateData.bait = finalBait;
 
       // 🆕 Offline-fähigen Update-Call
@@ -667,35 +667,22 @@ export default function BoxEditDialog({
             <p className="text-xs text-gray-600 mt-1">Eigener Name zur leichteren Identifikation</p>
           </div>
 
-          {/* DISPLAY-NUMMER */}
+          {/* BOX-NUMMER (automatisch aus QR-Code) */}
           <div>
             <label className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2">
               <Hash size={12} />
               Box-Nummer
             </label>
             <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={displayNumber}
-                onChange={(e) => setDisplayNumber(e.target.value)}
-                placeholder={qrNumber || "Auto"}
-                className="flex-1 px-3 py-2.5 bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg text-white dark:text-gray-100 text-sm focus:border-indigo-500 focus:outline-none transition-colors"
-              />
-              {qrNumber && displayNumber !== qrNumber && (
-                <button
-                  onClick={() => setDisplayNumber(qrNumber)}
-                  className="px-3 py-2.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg text-xs text-gray-700 dark:text-gray-300"
-                  title="Auf QR-Nummer zurücksetzen"
-                >
-                  = QR {qrNumber}
-                </button>
-              )}
+              <div className="flex-1 px-3 py-2.5 bg-gray-900 border border-white/10 rounded-lg text-white text-sm font-mono flex items-center gap-2">
+                <span className="text-lg font-bold">{qrNumber || displayNumber || '-'}</span>
+                {box?.qr_code && (
+                  <span className="text-gray-500 text-xs">({box.qr_code})</span>
+                )}
+              </div>
             </div>
             <p className="text-xs text-gray-600 mt-1">
-              QR-Code: {qrNumber || "nicht verfügbar"}
-              {displayNumber && displayNumber !== qrNumber && (
-                <span className="text-yellow-500 ml-2">→ Eigene Nummer: {displayNumber}</span>
-              )}
+              Die Box-Nummer wird automatisch aus dem QR-Code abgeleitet und kann nicht geändert werden.
             </p>
           </div>
 

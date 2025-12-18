@@ -389,9 +389,24 @@ export const deletePendingScan = (localId) => deleteFromStore(STORES.PENDING_SCA
 // PENDING BOXES (Offline-Box-Änderungen)
 // ============================================
 
+// Helper: Box-Nummer aus QR-Code extrahieren (ohne führende Nullen)
+const extractBoxNumberFromQR = (qrCode) => {
+  if (!qrCode) return null;
+  const match = qrCode.match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : null;
+};
+
 export const addPendingBoxUpdate = async (boxData, operation = 'update') => {
+  // Bei neuen Boxen: Nummer automatisch aus QR-Code ableiten
+  let boxNumber = boxData.number;
+  if (!boxNumber && boxData.qr_code) {
+    boxNumber = extractBoxNumberFromQR(boxData.qr_code);
+  }
+  
   const data = {
     ...boxData,
+    number: boxNumber,
+    display_number: boxNumber,
     operation, // 'create', 'update', 'setup'
     created_at: new Date().toISOString(),
     synced: false,
@@ -399,7 +414,7 @@ export const addPendingBoxUpdate = async (boxData, operation = 'update') => {
     tempId: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   };
   const localId = await addToStore(STORES.PENDING_BOXES, data);
-  console.log('📦 Offline-Box-Update gespeichert:', localId, operation);
+  console.log('📦 Offline-Box-Update gespeichert:', localId, operation, 'Nummer:', boxNumber);
   return { localId, tempId: data.tempId };
 };
 

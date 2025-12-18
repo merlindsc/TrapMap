@@ -827,8 +827,8 @@ export default function Scanner() {
                   <Package size={24} className="text-indigo-400" />
                 </div>
                 <div>
-                  <p className="font-semibold">Box #{currentBox.display_number || currentBox.number || currentBox.id}</p>
-                  <p className="text-sm text-gray-400">{currentBox.qr_code}</p>
+                  <p className="font-semibold">Box {currentBox.display_number || currentBox.number || currentBox.id} {currentBox.qr_code || ''}</p>
+                  <p className="text-sm text-gray-400">{currentBox.object_name || 'Kein Objekt'}</p>
                 </div>
               </div>
             </div>
