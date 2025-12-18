@@ -674,29 +674,75 @@ export const getBoxes = async () => {
 
 /**
  * Lädt alle Layouts - Online oder aus Cache
+ * HINWEIS: Backend hat nur /floorplans/object/:id - 
+ * daher laden wir für alle bekannten Objekte
  */
-export const getLayouts = async () => {
-  if (isOnline()) {
+export const getLayouts = async (objectId = null) => {
+  // Wenn spezifisches Objekt angefragt
+  if (objectId && isOnline()) {
     try {
-      const response = await authFetch(`${API}/layouts`);
+      const response = await authFetch(`${API}/floorplans/object/${objectId}`);
 
       if (response.ok) {
         const data = await response.json();
         const layouts = Array.isArray(data) ? data : data?.data || [];
         
-        await cacheLayouts(layouts);
+        // Zum Cache hinzufügen (nicht ersetzen)
+        if (layouts.length > 0) {
+          await cacheLayouts(layouts);
+        }
         
         return { success: true, online: true, data: layouts };
       }
     } catch (error) {
-      console.warn('⚠️ Layouts-Laden fehlgeschlagen, verwende Cache');
+      console.warn('⚠️ Layouts für Objekt laden fehlgeschlagen:', objectId);
     }
   }
-
+  
+  // Versuche alle Layouts aus Cache zu laden
   const cached = await getCachedLayouts();
+  
+  // Wenn spezifisches Objekt angefragt, filtere
+  if (objectId) {
+    const filtered = cached.filter(l => l.object_id === parseInt(objectId) || l.object_id === objectId);
+    return { success: true, offline: true, cached: true, data: filtered };
+  }
   
   if (cached.length > 0) {
     return { success: true, offline: true, cached: true, data: cached };
+  }
+  
+  // Wenn online und kein Cache, versuche für alle Objekte zu laden
+  if (isOnline()) {
+    try {
+      const objectsResult = await getObjects();
+      if (objectsResult.success && objectsResult.data?.length > 0) {
+        const allLayouts = [];
+        
+        // Lade Layouts für jedes Objekt (max 10 um nicht zu viele Requests zu machen)
+        const objectsToLoad = objectsResult.data.slice(0, 10);
+        
+        for (const obj of objectsToLoad) {
+          try {
+            const response = await authFetch(`${API}/floorplans/object/${obj.id}`);
+            if (response.ok) {
+              const data = await response.json();
+              const layouts = Array.isArray(data) ? data : data?.data || [];
+              allLayouts.push(...layouts);
+            }
+          } catch (e) {
+            // Einzelne Fehler ignorieren
+          }
+        }
+        
+        if (allLayouts.length > 0) {
+          await cacheLayouts(allLayouts);
+          return { success: true, online: true, data: allLayouts };
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Layouts-Laden fehlgeschlagen');
+    }
   }
   
   return { success: false, data: [] };
