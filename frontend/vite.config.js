@@ -82,26 +82,9 @@ export default defineConfig({
               cacheableResponse: {
                 statuses: [200]
               },
-              // 📴 Offline-Fallback: Leere Response wenn offline
+              // 📴 Bessere Offline-Behandlung (Service Worker übernimmt das)
               plugins: [{
-                cacheKeyWillBeUsed: async ({request}) => request.url,
-                requestWillFetch: async ({request}) => {
-                  if (!navigator.onLine) {
-                    // Offline: Versuche aus Cache zu laden
-                    const cache = await caches.open('mapbox-tiles');
-                    const cachedResponse = await cache.match(request);
-                    if (!cachedResponse) {
-                      // Kein Cache: Transparentes 1x1 Pixel PNG zurückgeben
-                      const transparentPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
-                      return new Response(await (await fetch(transparentPng)).blob(), {
-                        status: 200,
-                        statusText: 'OK',
-                        headers: {'Content-Type': 'image/png'}
-                      });
-                    }
-                  }
-                  return fetch(request);
-                }
+                cacheKeyWillBeUsed: async ({request}) => request.url
               }]
             }
           },
