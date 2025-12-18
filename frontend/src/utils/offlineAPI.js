@@ -673,6 +673,70 @@ export const getBoxes = async () => {
 };
 
 /**
+ * Lädt Boxen für ein bestimmtes Objekt - Online oder aus Cache
+ */
+export const getBoxesByObject = async (objectId) => {
+  if (isOnline()) {
+    try {
+      const response = await authFetch(`${API}/boxes?object_id=${objectId}`);
+
+      if (response.ok) {
+        const data = await response.json();
+        const boxes = Array.isArray(data) ? data : data?.data || [];
+        
+        // Cache alle Boxen (inkl. der neuen)
+        const allCached = await getCachedBoxes();
+        const otherBoxes = allCached.filter(b => b.object_id !== parseInt(objectId) && b.object_id !== objectId);
+        await cacheBoxes([...otherBoxes, ...boxes]);
+        
+        return { success: true, online: true, data: boxes };
+      }
+    } catch (error) {
+      console.warn('⚠️ Boxes für Objekt laden fehlgeschlagen, verwende Cache:', objectId);
+    }
+  }
+
+  // Fallback auf Cache - filtern nach object_id
+  const cached = await getCachedBoxes();
+  const filtered = cached.filter(b => b.object_id === parseInt(objectId) || b.object_id === objectId);
+  
+  if (filtered.length > 0) {
+    return { success: true, offline: true, cached: true, data: filtered };
+  }
+  
+  return { success: false, data: [] };
+};
+
+/**
+ * Lädt Pool-Boxen (QR-Codes ohne Objekt-Zuweisung) - Online oder aus Cache
+ */
+export const getPoolBoxes = async () => {
+  if (isOnline()) {
+    try {
+      const response = await authFetch(`${API}/qr/codes`);
+
+      if (response.ok) {
+        const data = await response.json();
+        const allCodes = Array.isArray(data) ? data : [];
+        
+        // Pool = Boxen ohne object_id
+        const pool = allCodes.filter(qr => !qr.boxes?.object_id);
+        
+        return { success: true, online: true, data: pool };
+      }
+    } catch (error) {
+      console.warn('⚠️ Pool-Boxen laden fehlgeschlagen');
+    }
+  }
+
+  // Fallback auf Cache - Pool-Boxen = status 'pool' oder keine object_id
+  const cached = await getCachedBoxes();
+  const pool = cached.filter(b => b.status === 'pool' || !b.object_id);
+  
+  return { success: true, offline: true, cached: true, data: pool };
+};
+
+/**
  * Lädt alle Layouts - Online oder aus Cache
  * HINWEIS: Backend hat nur /floorplans/object/:id - 
  * daher laden wir für alle bekannten Objekte

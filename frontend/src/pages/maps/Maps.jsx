@@ -1,9 +1,10 @@
 /* ============================================================
-   TRAPMAP - MAPS V12 - MIT DISPLAY_NUMBER & FLYTO
+   TRAPMAP - MAPS V13 - MIT OFFLINE-SUPPORT
    - Bottom Sheet für Mobile (Slide-Up Panel)
    - Dynamische display_number pro Objekt (1, 2, 3...)
    - FlyTo Button für GPS-Boxen
    - QR-Nummer als Badge
+   - OFFLINE-FÄHIG: Daten aus IndexedDB Cache
    ============================================================ */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
@@ -19,10 +20,20 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { getBoxShortLabel, getBoxLabel } from "../../utils/boxUtils";
 
+// 🆕 Offline API Imports
+import { 
+  getObjects, 
+  getBoxesByObject, 
+  getBoxTypes, 
+  getPoolBoxes,
+  isOnline 
+} from "../../utils/offlineAPI";
+import { useOffline } from "../../context/OfflineContext";
+
 import { 
   Plus, Layers3, X, Search, MapPin, Building2, 
   ChevronLeft, ChevronRight, Map, LayoutGrid, Navigation,
-  ChevronDown, Clock, User, Package, ArrowRight, List, Archive
+  ChevronDown, Clock, User, Package, ArrowRight, List, Archive, WifiOff
 } from "lucide-react";
 import "./Maps.css";
 
@@ -437,74 +448,91 @@ export default function Maps() {
   }, [isMobile, sheetState]);
 
   /* ============================================================
-     LOAD DATA
+     LOAD DATA - 🆕 MIT OFFLINE-SUPPORT
      ============================================================ */
   const loadObjects = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/objects`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await res.json();
-      const arr = Array.isArray(json) ? json : [];
-      arr.sort((a, b) => (a.name || "").localeCompare(b.name || "", "de"));
-      setObjects(arr);
+      const result = await getObjects();
+      
+      if (result.success) {
+        const arr = result.data || [];
+        arr.sort((a, b) => (a.name || "").localeCompare(b.name || "", "de"));
+        setObjects(arr);
+        
+        if (result.offline) {
+          console.log("📴 Objekte aus Cache geladen:", arr.length);
+        }
+      } else {
+        console.error("❌ Fehler beim Laden der Objekte");
+      }
     } catch (e) {
       console.error("❌ Fehler beim Laden der Objekte:", e);
     }
-  }, [token]);
+  }, []);
 
   const loadBoxes = useCallback(async (objectId) => {
     try {
-      const res = await fetch(`${API}/boxes?object_id=${objectId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await res.json();
-      let boxesData = Array.isArray(json) ? json : json.data || [];
+      const result = await getBoxesByObject(objectId);
       
-      // display_number berechnen
-      const boxesWithNumbers = calculateDisplayNumbers(boxesData);
-      setBoxes(boxesWithNumbers);
+      if (result.success) {
+        let boxesData = result.data || [];
+        
+        // display_number berechnen
+        const boxesWithNumbers = calculateDisplayNumbers(boxesData);
+        setBoxes(boxesWithNumbers);
+        
+        if (result.offline) {
+          console.log("📴 Boxen aus Cache geladen:", boxesData.length);
+        }
+      } else {
+        setBoxes([]);
+      }
     } catch (e) {
       console.error("❌ Fehler beim Laden der Boxen:", e);
       setBoxes([]);
     }
-  }, [token]);
+  }, []);
 
   const loadBoxTypes = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/boxtypes`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await res.json();
-      let types = Array.isArray(json) ? json : json.data || json.boxtypes || [];
-      setBoxTypes(types);
+      const result = await getBoxTypes();
+      
+      if (result.success) {
+        setBoxTypes(result.data || []);
+        
+        if (result.offline) {
+          console.log("📴 BoxTypes aus Cache geladen");
+        }
+      }
     } catch (e) {
       console.error("❌ Fehler beim Laden der Boxtypen:", e);
     }
-  }, [token]);
+  }, []);
 
   const loadPoolBoxes = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/qr/codes`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await res.json();
-      const allCodes = Array.isArray(json) ? json : [];
+      const result = await getPoolBoxes();
       
-      const pool = allCodes
-        .filter(qr => !qr.boxes?.object_id)
-        .sort((a, b) => {
+      if (result.success) {
+        const pool = (result.data || []).sort((a, b) => {
           const numA = a.sequence_number ?? extractNumber(a);
           const numB = b.sequence_number ?? extractNumber(b);
           return numA - numB;
         });
-      
-      setPoolBoxes(pool);
+        
+        setPoolBoxes(pool);
+        
+        if (result.offline) {
+          console.log("📴 Pool-Boxen aus Cache geladen:", pool.length);
+        }
+      } else {
+        setPoolBoxes([]);
+      }
     } catch (e) {
       console.error("❌ Fehler beim Laden der Pool-Boxen:", e);
       setPoolBoxes([]);
     }
-  }, [token]);
+  }, []);
 
   const extractNumber = (qr) => {
     if (qr.sequence_number != null) return qr.sequence_number;
@@ -535,11 +563,9 @@ export default function Maps() {
         
         const loadAndOpenBox = async () => {
           try {
-            const res = await fetch(`${API}/boxes?object_id=${targetObject.id}`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            const json = await res.json();
-            let boxesData = Array.isArray(json) ? json : json.data || [];
+            // 🆕 Offline-fähig
+            const result = await getBoxesByObject(targetObject.id);
+            let boxesData = result.success ? (result.data || []) : [];
             
             // display_number berechnen
             boxesData = calculateDisplayNumbers(boxesData);
