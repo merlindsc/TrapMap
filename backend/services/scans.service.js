@@ -21,6 +21,11 @@ exports.getHistoryForBox = async (boxId, orgId) => {
           first_name,
           last_name,
           email
+        ),
+        boxes:box_id (
+          id,
+          number,
+          qr_code
         )
       `)
       .eq("organisation_id", orgId)
@@ -77,6 +82,7 @@ exports.getHistoryForObject = async (objectId, orgId) => {
         boxes:box_id (
           id,
           number,
+          qr_code,
           notes
         )
       `)
@@ -243,6 +249,7 @@ exports.getRecent = async (orgId, limit = 10) => {
         boxes:box_id (
           id,
           number,
+          qr_code,
           object_id,
           objects:object_id (
             id,
