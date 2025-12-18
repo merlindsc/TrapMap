@@ -144,9 +144,9 @@ export default defineConfig({
         ]
       },
       
-      // Dev Options
+      // Dev Options - SERVICE WORKER DEAKTIVIERT FÜR DEBUGGING
       devOptions: {
-        enabled: true, // PWA auch im Dev-Mode testen
+        enabled: false, // PWA im Dev-Mode deaktiviert
         type: 'module'
       }
     })

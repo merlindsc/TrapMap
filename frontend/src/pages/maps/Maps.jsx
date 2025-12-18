@@ -70,9 +70,16 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
    MAPBOX TILE URLS
    ============================================================ */
 // 🆕 512px Tiles für 4x weniger Requests!
-// 512px Tiles für 4x weniger Requests (offline-freundlich)
-const MAPBOX_STREETS = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
-const MAPBOX_SAT = `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/512/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
+// TEMPORÄR: OSM Fallback für Debugging (wenn Mapbox Probleme macht)
+const OSM_FALLBACK = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+
+// 512px Tiles für 4x weniger Requests (offline-freundlich)  
+const MAPBOX_STREETS = MAPBOX_TOKEN ? 
+  `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}` : 
+  OSM_FALLBACK;
+const MAPBOX_SAT = MAPBOX_TOKEN ? 
+  `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/512/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}` : 
+  OSM_FALLBACK;
 
 /* ============================================================
    MOBILE DETECTION
@@ -1288,11 +1295,11 @@ export default function Maps() {
             <OfflineFriendlyTileLayer
               key={`base-${mapStyle}`}
               url={getTileUrl()}
-              attribution='&copy; Mapbox'
-              tileSize={512}            // 🚀 512px für 4x weniger Requests
-              zoomOffset={-1}           // 🚀 Erforderlich für 512px Tiles
-              maxNativeZoom={20}        // 🔍 Erhöht für näheres Zoomen
-              maxZoom={24}              // 🔍 Sehr nahe Ansicht möglich
+              attribution={MAPBOX_TOKEN ? '&copy; Mapbox' : '&copy; OpenStreetMap'}
+              tileSize={MAPBOX_TOKEN ? 512 : 256}    // OSM=256px, Mapbox=512px  
+              zoomOffset={MAPBOX_TOKEN ? -1 : 0}     // Nur für Mapbox 512px nötig
+              maxNativeZoom={19}        // 📐 Moderater Zoom ohne Performance-Probleme
+              maxZoom={19}              // 📐 Kein digitales Zoomen
               keepBuffer={4}            // 🆕 Mehr Tiles im RAM behalten (Standard: 2)
               updateWhenZooming={false} // 🆕 Nicht während Zoom nachladen
               updateWhenIdle={true}     // 🆕 Nur nachladen wenn Karte still steht
@@ -1304,8 +1311,8 @@ export default function Maps() {
                 tileSize={512}            // 🚀 512px für Konsistenz
                 zoomOffset={-1}           // 🚀 Erforderlich für 512px
                 opacity={0.6} 
-                maxNativeZoom={20}        // 🔍 Konsistent mit Base Layer
-                maxZoom={24}              // 🔍 Sehr nahe Ansicht
+                maxNativeZoom={19}        // 📐 Konsistent mit Base Layer
+                maxZoom={19}              // 📐 Kein digitales Zoomen
                 keepBuffer={4}            // 🆕 Mehr Tiles im RAM behalten
                 updateWhenZooming={false} // 🆕 Nicht während Zoom nachladen
                 updateWhenIdle={true}     // 🆕 Nur nachladen wenn Karte still steht
