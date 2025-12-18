@@ -1,22 +1,31 @@
 /* ============================================================
-   TRAPMAP - QR SCANNER V10
+   TRAPMAP - QR SCANNER V11 (OFFLINE-FÄHIG)
    
    Saubere Version mit @zxing/browser
+   + OFFLINE SUPPORT: Scannt auch ohne Internet aus Cache
    ============================================================ */
 
 import React, { useEffect, useRef, useState } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import axios from "axios";
 import { 
   Camera, X, RotateCcw, Flashlight, SwitchCamera,
   Package, Navigation, Layers, AlertTriangle,
-  MapPin, CheckCircle
+  MapPin, CheckCircle, WifiOff
 } from "lucide-react";
 
 import BoxScanDialog from "../../components/BoxScanDialog";
 import BoxEditDialog from "../maps/BoxEditDialog";
+
+// 🆕 Offline API Imports
+import { 
+  findBoxByQR, 
+  getBoxTypes,
+  getLayouts,
+  isOnline 
+} from "../../utils/offlineAPI";
+import { useOffline } from "../../context/OfflineContext";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -42,6 +51,10 @@ function formatDistance(meters) {
 export default function Scanner() {
   const navigate = useNavigate();
   const { token } = useAuth();
+  
+  // 🆕 Offline Context
+  const { isOnline: contextIsOnline, pendingCount } = useOffline();
+  const currentlyOffline = !isOnline();
   
   // Refs
   const videoRef = useRef(null);
@@ -69,6 +82,7 @@ export default function Scanner() {
   // Box State
   const [currentBox, setCurrentBox] = useState(null);
   const [boxLoading, setBoxLoading] = useState(false);
+  const [boxFromCache, setBoxFromCache] = useState(false); // 🆕
   
   // Dialog States
   const [showScanDialog, setShowScanDialog] = useState(false);
@@ -118,21 +132,14 @@ export default function Scanner() {
     };
   }, []);
 
+  // 🆕 BoxTypes laden - OFFLINE-FÄHIG
   const loadBoxTypes = async () => {
     try {
-      // Versuche beide Endpunkte
-      let res;
-      try {
-        res = await axios.get(`${API}/boxtypes`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-      } catch (e) {
-        res = await axios.get(`${API}/box-types`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+      const result = await getBoxTypes();
+      if (result.success) {
+        setBoxTypes(result.data || []);
+        console.log("✅ BoxTypes geladen:", result.data?.length, result.offline ? "(offline)" : "(online)");
       }
-      setBoxTypes(Array.isArray(res.data) ? res.data : res.data?.data || []);
-      console.log("✅ BoxTypes geladen:", res.data?.length);
     } catch (err) {
       console.error("Load box types error:", err);
     }
@@ -176,32 +183,21 @@ export default function Scanner() {
 
   // Kameras nach Qualität sortieren (beste für QR-Scanning zuerst)
   const sortCamerasByQuality = (devices) => {
-    // Scoring-System: höher = besser
     const getScore = (device) => {
       const label = device.label.toLowerCase();
       
-      // Frontkamera = -100 (nie verwenden)
       if (label.includes("front") || label.includes("user") || label.includes("selfie") || label.includes("facetime")) {
         return -100;
       }
       
       let score = 0;
       
-      // Hauptkamera / Wide = beste Wahl
       if (label.includes("wide") && !label.includes("ultra")) score += 50;
       if (label.includes("back camera") || label.includes("rear camera")) score += 40;
-      if (label.includes("0") && label.includes("back")) score += 30; // "Back Camera 0" ist oft die Hauptkamera
-      
-      // Ultra-Wide = schlecht für QR (zu viel Verzerrung)
+      if (label.includes("0") && label.includes("back")) score += 30;
       if (label.includes("ultra")) score -= 30;
-      
-      // Telephoto = schlecht für QR (zu nah)
       if (label.includes("tele") || label.includes("zoom")) score -= 20;
-      
-      // Macro = sehr schlecht
       if (label.includes("macro")) score -= 40;
-      
-      // Generische Rückkamera = okay
       if (label.includes("back") || label.includes("rear") || label.includes("environment")) score += 10;
       
       return score;
@@ -209,32 +205,29 @@ export default function Scanner() {
 
     return [...devices]
       .map(d => ({ device: d, score: getScore(d) }))
-      .filter(d => d.score > -100) // Frontkameras rausfiltern
-      .sort((a, b) => b.score - a.score) // Höchster Score zuerst
+      .filter(d => d.score > -100)
+      .sort((a, b) => b.score - a.score)
       .map(d => d.device);
   };
 
   // Auto-Switch: Wechselt Kamera wenn nach 6 Sekunden kein QR erkannt
   const startAutoSwitchTimer = () => {
-    // Alten Timer löschen
     if (autoSwitchTimerRef.current) {
       clearTimeout(autoSwitchTimerRef.current);
     }
     
     autoSwitchTimerRef.current = setTimeout(() => {
-      // Nur wechseln wenn noch am scannen und kein Dialog offen
       const cams = camerasRef.current;
       if (!dialogOpenRef.current && !processingRef.current && cams.length > 1) {
         const nextTry = cameraTriesRef.current + 1;
         
-        // Maximal 3 Versuche
         if (nextTry < cams.length && nextTry < 3) {
           console.log(`📷 Auto-Switch: Kamera ${nextTry + 1}/${cams.length}`);
           cameraTriesRef.current = nextTry;
           switchToCamera(nextTry);
         }
       }
-    }, 6000); // 6 Sekunden
+    }, 6000);
   };
 
   // Zu bestimmter Kamera wechseln
@@ -245,7 +238,6 @@ export default function Scanner() {
     setCurrentCameraIndex(index);
     setTorchOn(false);
     
-    // Aktuellen Stream stoppen
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
     }
@@ -254,11 +246,15 @@ export default function Scanner() {
       try { codeReaderRef.current.reset(); } catch (e) {}
     }
     
-    // Neuen Stream starten
     await startScanning(cams[index].deviceId);
-    
-    // Timer neu starten
     startAutoSwitchTimer();
+  };
+
+  // Manuell Kamera wechseln
+  const switchCamera = () => {
+    const nextIndex = (currentCameraIndex + 1) % cameras.length;
+    cameraTriesRef.current = nextIndex;
+    switchToCamera(nextIndex);
   };
 
   // ============================================
@@ -285,7 +281,6 @@ export default function Scanner() {
         }
       );
       
-      // Stream für Torch speichern
       if (videoRef.current.srcObject) {
         streamRef.current = videoRef.current.srcObject;
         checkTorchSupport();
@@ -302,7 +297,6 @@ export default function Scanner() {
   };
 
   const stopScanner = () => {
-    // Auto-Switch Timer stoppen
     if (autoSwitchTimerRef.current) {
       clearTimeout(autoSwitchTimerRef.current);
       autoSwitchTimerRef.current = null;
@@ -345,7 +339,7 @@ export default function Scanner() {
   };
 
   // ============================================
-  // SCAN HANDLER
+  // 🆕 SCAN HANDLER - OFFLINE-FÄHIG
   // ============================================
   const handleScan = async (decodedText) => {
     if (!decodedText) return;
@@ -361,9 +355,9 @@ export default function Scanner() {
       return;
     }
     
-    console.log("📱 Scan:", code);
+    console.log("📱 Scan:", code, currentlyOffline ? "(OFFLINE)" : "(online)");
     
-    // Auto-Switch Timer stoppen (erfolgreicher Scan!)
+    // Auto-Switch Timer stoppen
     if (autoSwitchTimerRef.current) {
       clearTimeout(autoSwitchTimerRef.current);
     }
@@ -382,67 +376,107 @@ export default function Scanner() {
     // Code prüfen
     setBoxLoading(true);
     setError("");
+    setBoxFromCache(false);
 
     try {
-      const res = await axios.get(`${API}/qr/check/${code}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // 🆕 OFFLINE-FÄHIGE BOX-SUCHE
+      const result = await findBoxByQR(code);
+      
+      console.log("📦 findBoxByQR Result:", result);
 
-      console.log("📦 Response:", res.data);
-
-      // Code nicht in DB
-      if (!res.data || !res.data.box_id) {
-        navigate(`/qr/assign-code?code=${code}`);
-        return;
+      // Code nicht gefunden
+      if (!result.success || result.notFound) {
+        if (currentlyOffline) {
+          // Offline und nicht im Cache → Fehler anzeigen
+          setBoxLoading(false);
+          setError("📴 Offline - Box nicht im Cache. Bitte online scannen.");
+          setTimeout(() => {
+            lastScannedCodeRef.current = null;
+            processingRef.current = false;
+            isPausedRef.current = false;
+            setError("");
+          }, 3000);
+          return;
+        } else {
+          // Online aber nicht gefunden → Zur Zuweisung
+          navigate(`/qr/assign-code?code=${code}`);
+          return;
+        }
       }
+
+      // Box gefunden (online oder aus Cache)
+      const boxData = result.data;
+      setBoxFromCache(result.offline || result.cached || false);
 
       // Box im Pool (kein Objekt)
-      if (!res.data.object_id) {
-        navigate(`/qr/assign-object?code=${code}&box_id=${res.data.box_id}`);
+      if (!boxData.object_id) {
+        if (currentlyOffline) {
+          setBoxLoading(false);
+          setError("📴 Offline - Box muss zuerst online zugewiesen werden.");
+          setTimeout(() => {
+            lastScannedCodeRef.current = null;
+            processingRef.current = false;
+            isPausedRef.current = false;
+            setError("");
+          }, 3000);
+          return;
+        }
+        navigate(`/qr/assign-object?code=${code}&box_id=${boxData.id}`);
         return;
       }
 
-      const boxData = {
-        id: res.data.box_id,
+      // Box-Daten normalisieren
+      const normalizedBox = {
+        id: boxData.id || boxData.box_id,
         qr_code: code,
         code: code,
-        object_id: res.data.object_id,
-        object_name: res.data.object_name,
-        position_type: res.data.position_type,
-        lat: res.data.lat,
-        lng: res.data.lng,
-        floor_plan_id: res.data.floor_plan_id,
-        pos_x: res.data.pos_x,
-        pos_y: res.data.pos_y,
-        grid_position: res.data.grid_position,
-        number: res.data.number,
-        display_number: res.data.display_number,
-        name: res.data.name,
-        box_type_id: res.data.box_type_id,
-        box_type_name: res.data.box_type_name,
+        object_id: boxData.object_id,
+        object_name: boxData.object_name || boxData.objects?.name,
+        position_type: boxData.position_type,
+        lat: boxData.lat,
+        lng: boxData.lng,
+        floor_plan_id: boxData.floor_plan_id,
+        pos_x: boxData.pos_x,
+        pos_y: boxData.pos_y,
+        grid_position: boxData.grid_position,
+        number: boxData.number || boxData.display_number,
+        display_number: boxData.display_number || boxData.number,
+        name: boxData.name || boxData.box_name,
+        box_type_id: boxData.box_type_id,
+        box_type_name: boxData.box_type_name || boxData.box_types?.name,
+        current_status: boxData.current_status,
+        // Für Offline-Scans wichtig
+        _fromCache: result.offline || result.cached
       };
 
-      setCurrentBox(boxData);
+      setCurrentBox(normalizedBox);
 
-      const hasGPS = boxData.lat && boxData.lng;
-      const hasFloorplan = boxData.floor_plan_id && (boxData.pos_x || boxData.grid_position);
+      const hasGPS = normalizedBox.lat && normalizedBox.lng;
+      const hasFloorplan = normalizedBox.floor_plan_id && (normalizedBox.pos_x !== null || normalizedBox.grid_position);
       const isPlaced = hasGPS || hasFloorplan;
-      const isGPSBox = (boxData.position_type === 'gps' || boxData.position_type === 'map') || 
+      const isGPSBox = (normalizedBox.position_type === 'gps' || normalizedBox.position_type === 'map') || 
                        (hasGPS && !hasFloorplan);
 
-      // NICHT PLATZIERT → Platzierungsauswahl
+      // NICHT PLATZIERT → Platzierungsauswahl (nur online möglich)
       if (!isPlaced) {
+        if (currentlyOffline) {
+          // Offline: Trotzdem Scan-Dialog zeigen für Ersteinrichtung
+          setBoxLoading(false);
+          setShowFirstSetup(true);
+          return;
+        }
+        
+        // Online: Lagepläne laden für Platzierungsauswahl
         try {
-          const fpRes = await axios.get(`${API}/floorplans/object/${boxData.object_id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          setObjectFloorplans(fpRes.data || []);
+          const layoutResult = await getLayouts();
+          const objectLayouts = (layoutResult.data || []).filter(l => l.object_id === normalizedBox.object_id);
+          setObjectFloorplans(objectLayouts);
         } catch (err) {}
         
         setPendingPlacement({
-          code: boxData.qr_code,
-          boxId: boxData.id,
-          objectId: boxData.object_id
+          code: normalizedBox.qr_code,
+          boxId: normalizedBox.id,
+          objectId: normalizedBox.object_id
         });
         setBoxLoading(false);
         setShowPlacementChoice(true);
@@ -461,7 +495,7 @@ export default function Scanner() {
           });
 
           setCurrentGPS(position);
-          const distance = calculateDistance(position.lat, position.lng, boxData.lat, boxData.lng);
+          const distance = calculateDistance(position.lat, position.lng, normalizedBox.lat, normalizedBox.lng);
           setGpsDistance(distance);
           setBoxLoading(false);
 
@@ -481,21 +515,17 @@ export default function Scanner() {
       setShowScanDialog(true);
 
     } catch (err) {
-      console.error("❌ API Error:", err.response?.status || err.message);
-      console.error("Response:", err.response?.data);
+      console.error("❌ Scan Error:", err);
       
       setBoxLoading(false);
       
-      // Bei 401 → Token ungültig
       if (err.response?.status === 401) {
         setError("Session abgelaufen - bitte neu einloggen");
         return;
       }
       
-      // Sonstiger Fehler → Anzeigen, NICHT zurücksetzen!
-      setError("Fehler: " + (err.response?.data?.message || err.message));
+      setError("Fehler: " + (err.message || "Unbekannter Fehler"));
       
-      // Scanner nach 3 Sekunden wieder freigeben
       setTimeout(() => {
         lastScannedCodeRef.current = null;
         processingRef.current = false;
@@ -522,19 +552,15 @@ export default function Scanner() {
     setError("");
     setBoxLoading(false);
     setScannedCode(null);
+    setBoxFromCache(false);
     
-    // Camera-Tries zurücksetzen
     cameraTriesRef.current = 0;
     
-    // Cooldown dann entsperren
     setTimeout(() => {
       lastScannedCodeRef.current = null;
       processingRef.current = false;
       isPausedRef.current = false;
-      
-      // Auto-Switch Timer neu starten
       startAutoSwitchTimer();
-      
       console.log("✅ Scanner bereit");
     }, 800);
   };
@@ -543,7 +569,14 @@ export default function Scanner() {
   // HANDLER: SCAN DIALOG
   // ============================================
   const handleScanCompleted = () => {
-    setSuccessMessage("Kontrolle gespeichert!");
+    setSuccessMessage(currentlyOffline ? "📴 Offline gespeichert!" : "Kontrolle gespeichert!");
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 2000);
+    resetScanner();
+  };
+
+  const handleFirstSetupCompleted = () => {
+    setSuccessMessage(currentlyOffline ? "📴 Offline eingerichtet!" : "Box eingerichtet!");
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 2000);
     resetScanner();
@@ -552,175 +585,138 @@ export default function Scanner() {
   // ============================================
   // HANDLER: GPS WARNING
   // ============================================
-  const handleIgnoreGPSWarning = () => {
-    setShowGPSWarning(false);
-    setShowScanDialog(true);
-  };
-
-  const handleUpdateGPSPosition = async () => {
-    if (!currentGPS || !currentBox) return;
+  const handleUpdateGPS = async () => {
+    if (!currentBox) return;
     
     setGpsLoading(true);
-    try {
-      await axios.put(`${API}/boxes/${currentBox.id}/position`, {
-        lat: currentGPS.lat,
-        lng: currentGPS.lng,
-        position_type: 'gps'
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      setCurrentBox(prev => ({ ...prev, lat: currentGPS.lat, lng: currentGPS.lng }));
-      setGpsLoading(false);
-      setShowGPSWarning(false);
-      setShowScanDialog(true);
-
-    } catch (err) {
-      console.error("GPS update error:", err);
-      setGpsLoading(false);
-      setShowGPSWarning(false);
-      setShowScanDialog(true);
-    }
-  };
-
-  // ============================================
-  // HANDLER: PLATZIERUNGSAUSWAHL
-  // ============================================
-  const handleChooseGPS = async () => {
-    if (!pendingPlacement) return;
     
-    if (!isMobile) {
-      navigate(`/maps?object_id=${pendingPlacement.objectId}&placeBox=${pendingPlacement.boxId}`);
-      return;
-    }
-
-    setGpsLoading(true);
     try {
       const position = await new Promise((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(
           (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
           reject,
-          { enableHighAccuracy: true, timeout: 10000 }
+          { enableHighAccuracy: true, timeout: 15000 }
         );
       });
+
+      // 🆕 Offline-fähiges Position-Update
+      const { updateBoxPosition } = await import("../../utils/offlineAPI");
+      await updateBoxPosition(currentBox.id, position.lat, position.lng, 'gps');
       
-      await axios.put(`${API}/boxes/${pendingPlacement.boxId}/position`, {
-        lat: position.lat,
-        lng: position.lng,
-        position_type: 'gps'
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      setCurrentBox(prev => ({ ...prev, lat: position.lat, lng: position.lng, position_type: 'gps' }));
-      setGpsLoading(false);
-      setShowPlacementChoice(false);
-      setShowFirstSetup(true);
-
+      setCurrentBox(prev => ({ ...prev, lat: position.lat, lng: position.lng }));
+      setShowGPSWarning(false);
+      setShowScanDialog(true);
+      
     } catch (err) {
-      console.error("GPS error:", err);
-      setGpsLoading(false);
-      setError("GPS nicht verfügbar");
+      console.error("GPS Update error:", err);
+      setError("GPS konnte nicht aktualisiert werden");
+    }
+    
+    setGpsLoading(false);
+  };
+
+  const handleIgnoreGPSWarning = () => {
+    setShowGPSWarning(false);
+    setShowScanDialog(true);
+  };
+
+  // ============================================
+  // HANDLER: PLATZIERUNG
+  // ============================================
+  const handleChooseGPS = async () => {
+    if (!pendingPlacement) return;
+
+    if (isMobile) {
+      setGpsLoading(true);
+      try {
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            reject,
+            { enableHighAccuracy: true, timeout: 15000 }
+          );
+        });
+
+        // 🆕 Offline-fähiges Position-Update
+        const { updateBoxPosition } = await import("../../utils/offlineAPI");
+        await updateBoxPosition(pendingPlacement.boxId, position.lat, position.lng, 'gps');
+
+        setGpsLoading(false);
+        setShowPlacementChoice(false);
+        setShowFirstSetup(true);
+        
+      } catch (err) {
+        console.error("GPS error:", err);
+        setGpsLoading(false);
+        navigate(`/maps?object_id=${pendingPlacement.objectId}&openBox=${pendingPlacement.boxId}&firstSetup=true`);
+      }
+    } else {
+      navigate(`/maps?object_id=${pendingPlacement.objectId}&openBox=${pendingPlacement.boxId}&firstSetup=true`);
     }
   };
 
   const handleChooseFloorplan = () => {
     if (!pendingPlacement) return;
-    
-    // GEÄNDERT: Direkt zum Lageplan-Editor navigieren
-    if (objectFloorplans.length === 1) {
-      navigate(`/layouts/${pendingPlacement.objectId}?fp=${objectFloorplans[0].id}&placeBox=${pendingPlacement.boxId}`);
-    } else {
-      navigate(`/layouts/${pendingPlacement.objectId}?placeBox=${pendingPlacement.boxId}`);
-    }
-  };
-
-  // ============================================
-  // HANDLER: ERSTEINRICHTUNG
-  // ============================================
-  const handleFirstSetupCompleted = () => {
-    setSuccessMessage("Box eingerichtet!");
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 2000);
-    resetScanner();
-  };
-
-  // ============================================
-  // KAMERA WECHSELN
-  // ============================================
-  // Manueller Kamera-Wechsel (Button)
-  const switchCamera = async () => {
-    const cams = camerasRef.current;
-    if (cams.length < 2) return;
-    
-    const nextIndex = (currentCameraIndex + 1) % cams.length;
-    
-    // Bei manuellem Wechsel: Tries zurücksetzen
-    cameraTriesRef.current = 0;
-    
-    await switchToCamera(nextIndex);
+    navigate(`/layouts/${pendingPlacement.objectId}?placeBox=${pendingPlacement.boxId}`);
   };
 
   // ============================================
   // RENDER
   // ============================================
   return (
-    <div className="min-h-screen bg-black dark:bg-gray-950 text-white">
-
+    <div className="fixed inset-0 bg-black text-white z-50 overflow-hidden">
       {/* Success Toast */}
       {showSuccess && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-green-600 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-green-500 text-white px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg">
           <CheckCircle size={20} />
-          <span className="font-medium">{successMessage}</span>
+          {successMessage}
         </div>
       )}
 
-      {/* ========== GPS WARNING ========== */}
-      {showGPSWarning && currentBox && (
-        <div className="fixed inset-0 z-[100] bg-black dark:bg-gray-950 overflow-auto">
-          <div className="flex items-center justify-between p-4 bg-[#111] border-b border-white/10">
-            <button onClick={resetScanner} className="p-2 text-gray-400 hover:text-white">
-              <X size={24} />
-            </button>
-            <h1 className="text-lg font-semibold flex items-center gap-2">
-              <AlertTriangle size={20} className="text-yellow-400" />
-              Position prüfen
-            </h1>
-            <div className="w-10" />
+      {/* 🆕 Offline Banner */}
+      {currentlyOffline && !hasActiveDialog && (
+        <div className="fixed top-16 left-4 right-4 z-[150] bg-yellow-500/20 border border-yellow-500/30 rounded-xl p-3 flex items-center gap-3">
+          <WifiOff size={20} className="text-yellow-400" />
+          <div className="flex-1">
+            <p className="text-yellow-400 font-medium text-sm">Offline-Modus</p>
+            <p className="text-yellow-400/60 text-xs">Scans werden lokal gespeichert</p>
           </div>
-          <div className="p-4 space-y-4">
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle size={24} className="text-yellow-400 flex-shrink-0" />
-                <div>
-                  <h3 className="font-semibold text-yellow-300">Position stimmt nicht überein</h3>
-                  <p className="text-yellow-200/80 text-sm mt-1">
-                    Du bist <strong>{formatDistance(gpsDistance)}</strong> von der gespeicherten Position entfernt.
-                  </p>
-                </div>
-              </div>
+          {pendingCount > 0 && (
+            <div className="px-2 py-1 bg-yellow-500/30 rounded text-yellow-400 text-xs">
+              {pendingCount} pending
             </div>
-            <div className="bg-[#111] border border-white/10 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center">
-                  <Package size={24} className="text-indigo-400" />
-                </div>
-                <div>
-                  <p className="font-semibold">Box #{currentBox.display_number || currentBox.number || currentBox.id}</p>
-                  <p className="text-sm text-gray-400">{currentBox.qr_code}</p>
-                </div>
+          )}
+        </div>
+      )}
+
+      {/* GPS WARNING DIALOG */}
+      {showGPSWarning && currentBox && (
+        <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center p-4">
+          <div className="bg-[#111] rounded-2xl max-w-sm w-full overflow-hidden border border-white/10">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle size={32} className="text-yellow-400" />
               </div>
+              <h2 className="text-xl font-bold mb-2">Entfernung: {formatDistance(gpsDistance)}</h2>
+              <p className="text-gray-400 text-sm mb-4">
+                Du bist {formatDistance(gpsDistance)} von der Box entfernt.
+              </p>
+              {currentGPS && (
+                <p className="text-xs text-gray-500 mb-4">
+                  Dein Standort: {currentGPS.lat.toFixed(5)}, {currentGPS.lng.toFixed(5)}
+                </p>
+              )}
             </div>
-            <div className="flex gap-3">
+            <div className="p-4 bg-black/50 flex gap-3">
               <button
-                onClick={handleUpdateGPSPosition}
+                onClick={handleUpdateGPS}
                 disabled={gpsLoading}
-                className="flex-1 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 rounded-xl font-semibold flex items-center justify-center gap-2"
+                className="flex-1 py-4 bg-green-600 hover:bg-green-700 rounded-xl font-semibold flex items-center justify-center gap-2"
               >
                 {gpsLoading ? (
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 ) : (
-                  <Navigation size={20} />
+                  <Navigation size={18} />
                 )}
                 Position aktualisieren
               </button>
@@ -735,7 +731,7 @@ export default function Scanner() {
         </div>
       )}
 
-      {/* ========== BOX SCAN DIALOG ========== */}
+      {/* BOX SCAN DIALOG */}
       {showScanDialog && currentBox && (
         <div className="fixed inset-0 z-[100] bg-black dark:bg-gray-950">
           <BoxScanDialog
@@ -744,10 +740,8 @@ export default function Scanner() {
             onSave={handleScanCompleted}
             onScanCreated={handleScanCompleted}
             onShowDetails={() => {
-              // GEÄNDERT: Bessere Lageplan-Erkennung
               const isFloorplan = currentBox.floor_plan_id && (currentBox.pos_x !== null && currentBox.pos_x !== undefined);
               if (isFloorplan) {
-                // GEÄNDERT: Direkt zum Lageplan-Editor
                 navigate(`/layouts/${currentBox.object_id}?fp=${currentBox.floor_plan_id}&openBox=${currentBox.id}`);
               } else {
                 navigate(`/maps?object_id=${currentBox.object_id}&openBox=${currentBox.id}&flyTo=true`);
@@ -757,7 +751,7 @@ export default function Scanner() {
         </div>
       )}
 
-      {/* ========== ERSTEINRICHTUNG ========== */}
+      {/* ERSTEINRICHTUNG */}
       {showFirstSetup && currentBox && (
         <div className="fixed inset-0 z-[100] bg-black dark:bg-gray-950">
           <BoxEditDialog
@@ -770,7 +764,7 @@ export default function Scanner() {
         </div>
       )}
 
-      {/* ========== PLATZIERUNGSAUSWAHL ========== */}
+      {/* PLATZIERUNGSAUSWAHL */}
       {showPlacementChoice && pendingPlacement && (
         <div className="fixed inset-0 z-[100] bg-black dark:bg-gray-950 overflow-auto">
           <div className="flex items-center justify-between p-4 bg-[#111] border-b border-white/10">
@@ -836,7 +830,7 @@ export default function Scanner() {
         </div>
       )}
 
-      {/* ========== SCANNER ========== */}
+      {/* SCANNER */}
       <div style={{ visibility: hasActiveDialog ? 'hidden' : 'visible' }}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 bg-[#111] border-b border-white/10">
@@ -846,9 +840,9 @@ export default function Scanner() {
           <h1 className="text-lg font-semibold flex items-center gap-2">
             <Camera size={20} />
             QR-Scanner
+            {currentlyOffline && <WifiOff size={14} className="text-yellow-400" />}
           </h1>
           <div className="flex gap-2">
-            {/* Kamera-Wechsel nur bei mehreren Rückkameras */}
             {cameras.length > 1 && (
               <button onClick={switchCamera} className="p-2 text-gray-400 hover:text-white">
                 <SwitchCamera size={20} />
@@ -886,6 +880,9 @@ export default function Scanner() {
             <p className="text-gray-400">Box wird geladen...</p>
             {scannedCode && (
               <p className="text-xs text-gray-500 mt-2 font-mono">Code: {scannedCode}</p>
+            )}
+            {currentlyOffline && (
+              <p className="text-xs text-yellow-400 mt-2">📴 Suche im Offline-Cache...</p>
             )}
           </div>
         )}
