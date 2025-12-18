@@ -25,7 +25,7 @@ import {
   createSetupScan,
   updateBoxPosition,
   isOnline 
-} from "  ../../utils/offlineAPI";
+} from "../../utils/offlineAPI";
 import { useOffline } from "../../context/OfflineContext";
 
 // Mini-Karte Icon
