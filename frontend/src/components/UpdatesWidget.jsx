@@ -12,6 +12,16 @@ import "./UpdatesWidget.css";
 
 const UPDATES = [
   {
+    id: "offline-functionality-2024-12-18",
+    type: "feature",
+    title: "📴 Vollständige Offline-Funktionalität",
+    description: "TrapMap funktioniert jetzt komplett offline! Boxen einrichten, Kontrollen durchführen und scannen - alles ohne Internetverbindung. Daten werden automatisch synchronisiert, sobald Sie wieder online sind.",
+    date: "2024-12-18",
+    version: "v4.0.0",
+    priority: "high",
+    read: false
+  },
+  {
     id: "demo-automation-2024-12-16",
     type: "feature",
     title: "🎉 Automatische Demo-Accounts",
