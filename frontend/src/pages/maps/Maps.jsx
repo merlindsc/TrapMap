@@ -17,6 +17,7 @@ import {
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import { getBoxShortLabel, getBoxLabel } from "../../utils/boxUtils";
 
 import { 
   Plus, Layers3, X, Search, MapPin, Building2, 
@@ -110,16 +111,18 @@ const getBoxIcon = (box) => {
   return "B";
 };
 
-// Marker mit QR-Label oben und display_number im Kreis
-const createBoxIcon = (displayNumber, shortQr, status = "green") => {
+// Marker mit short_code-number Label oben und Kürzel im Kreis
+const createBoxIcon = (box, status = "green") => {
   const color = getStatusHex(status);
+  const label = box?.short_code ? getBoxShortLabel(box) : (box?.display_number || '?');
+  const shortCode = box?.short_code || getBoxIcon(box);
 
   return L.divIcon({
     html: `
       <div class="box-marker-container">
-        <div class="box-qr-label">${shortQr}</div>
+        <div class="box-qr-label">${label}</div>
         <div class="box-circle" style="background-color: ${color}">
-          <span class="box-display-number">${displayNumber}</span>
+          <span class="box-display-number">${shortCode}</span>
         </div>
       </div>
     `,
@@ -131,7 +134,7 @@ const createBoxIcon = (displayNumber, shortQr, status = "green") => {
 };
 
 /* ============================================================
-   BOX MARKER - Mit display_number und shortQr
+   BOX MARKER - Mit short_code-number Label
    ============================================================ */
 function BoxMarker({ box, onClick }) {
   // Validierung der Koordinaten - prüft null/undefined aber erlaubt 0
@@ -139,9 +142,6 @@ function BoxMarker({ box, onClick }) {
     console.warn('Invalid coordinates for box:', box.id, box.lat, box.lng);
     return null;
   }
-
-  const displayNum = box.display_number || '?';
-  const shortQr = getShortQr(box);
   
   // Koordinaten als Zahlen konvertieren
   const lat = parseFloat(box.lat);
@@ -150,7 +150,7 @@ function BoxMarker({ box, onClick }) {
   return (
     <Marker
       position={[lat, lng]}
-      icon={createBoxIcon(displayNum, shortQr, box.current_status || box.status)}
+      icon={createBoxIcon(box, box.current_status || box.status)}
       eventHandlers={{ click: () => onClick(box) }}
     />
   );

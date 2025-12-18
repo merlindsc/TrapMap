@@ -26,7 +26,7 @@ exports.getAll = async (organisationId, objectId = null) => {
       .select(`
         *,
         objects ( id, name ),
-        box_types ( id, name, category ),
+        box_types ( id, name, category, short_code ),
         floor_plans ( id, name )
       `)
       .eq("organisation_id", organisationId)
@@ -47,6 +47,7 @@ exports.getAll = async (organisationId, objectId = null) => {
         object_name: box.objects?.name,
         box_type_name: box.box_types?.name,
         box_type_category: box.box_types?.category,
+        short_code: box.box_types?.short_code,
         floor_plan_name: box.floor_plans?.name,
         _sort_number: extractQrNumber(box.qr_code) || box.number || 999999
       }))
@@ -69,7 +70,7 @@ exports.getOne = async (boxId, organisationId) => {
       .select(`
         *,
         objects ( id, name, address, city ),
-        box_types ( id, name, category ),
+        box_types ( id, name, category, short_code ),
         floor_plans ( id, name )
       `)
       .eq("id", boxId)
@@ -85,7 +86,8 @@ exports.getOne = async (boxId, organisationId) => {
         ...data,
         object_name: data.objects?.name,
         box_type_name: data.box_types?.name,
-        box_type_category: data.box_types?.category
+        box_type_category: data.box_types?.category,
+        short_code: data.box_types?.short_code
       }
     };
   } catch (err) {
@@ -100,7 +102,7 @@ exports.getOne = async (boxId, organisationId) => {
 exports.update = async (boxId, organisationId, updateData) => {
   try {
     const allowedFields = [
-      "name", "number", "display_number", "notes", "bait",
+      "name", "number", "display_number", "notes", "bait", "box_name",
       "box_type_id", "control_interval_days", "control_interval_type",
       "control_interval_min", "control_interval_max"
     ];

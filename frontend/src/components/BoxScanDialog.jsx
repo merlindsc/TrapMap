@@ -20,6 +20,7 @@ import { X, Save, Camera, Clock, CheckCircle, AlertCircle, Edit3, MapPin, Naviga
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { getBoxLabel } from "../utils/boxUtils";
 
 // 🆕 Offline API Imports
 import { 
@@ -650,11 +651,11 @@ export default function BoxScanDialog({
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontWeight: 700, fontSize: 12, color: "#fff"
               }}>
-                {boxInfo.displayNumber}
+                {box?.short_code || "XX"}
               </div>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3", display: "flex", alignItems: "center", gap: 8 }}>
-                  {boxInfo.hasName ? boxInfo.boxName : `Box #${boxInfo.displayNumber}`}
+                  {box?.short_code ? getBoxLabel(box) : (boxInfo.hasName ? boxInfo.boxName : `Box #${boxInfo.displayNumber}`)}
                   
                   {/* 🆕 Offline-Badge im Header */}
                   {currentlyOffline && (
@@ -684,20 +685,14 @@ export default function BoxScanDialog({
                 <div style={{ fontSize: 11, color: "#8b949e", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                   <span>{typeName}</span>
                   
-                  {boxInfo.qrNumber && (
+                  {box?.qr_code && (
                     <span style={{ 
                       background: "#30363d", padding: "1px 6px", borderRadius: 4, 
                       fontSize: 10, fontFamily: "monospace",
                       display: "flex", alignItems: "center", gap: 3
                     }}>
                       <Hash size={9} />
-                      QR {boxInfo.qrNumber}
-                    </span>
-                  )}
-                  
-                  {boxInfo.hasCustomNumber && (
-                    <span style={{ color: "#f0b429", fontSize: 10 }}>
-                      (Nr. {boxInfo.displayNumber})
+                      {box.qr_code}
                     </span>
                   )}
                   

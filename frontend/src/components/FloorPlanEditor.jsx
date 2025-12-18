@@ -26,6 +26,7 @@ import BoxEditDialog from "../pages/maps/BoxEditDialog";
 
 // Helpers importieren
 import { calculateDisplayNumbers, getShortQr, isGpsBox } from "./boxes/BoxHelpers";
+import { getBoxShortLabel, getBoxLabel } from "../utils/boxUtils";
 
 // Maps CSS importieren für einheitliche Styles!
 import "../pages/maps/Maps.css";
@@ -131,6 +132,14 @@ function BoxListItem({ box, onClick, isFloorplan = false, isUnplaced = false, is
   const shortQr = getShortQr(box);
   const statusColor = getStatusColor(box.current_status || box.status);
   const isMobile = isMobileDevice();
+  
+  // Label mit short_code oder Fallback
+  const boxLabel = box.short_code ? getBoxShortLabel(box) : `#${displayNum}`;
+  const boxName = box.box_name || box.box_type_name || 'Kein Typ';
+  
+  // Label mit short_code oder Fallback
+  const boxLabel = box.short_code ? getBoxShortLabel(box) : `#${displayNum}`;
+  const boxName = box.box_name || box.box_type_name || 'Kein Typ';
 
   // Unplaced Style
   if (isUnplaced) {
@@ -146,10 +155,10 @@ function BoxListItem({ box, onClick, isFloorplan = false, isUnplaced = false, is
           borderColor: isSelected ? '#10b981' : undefined
         }}
       >
-        <span className={`box-icon ${statusColor}`}>{displayNum}</span>
+        <span className={`box-icon ${statusColor}`}>{box.short_code || displayNum}</span>
         <div className="box-info">
-          <h4>#{displayNum} <span className="qr-badge-small">{shortQr}</span></h4>
-          <p>{box.box_type_name || 'Kein Typ'}</p>
+          <h4>{boxLabel} {box.box_name && <span style={{color: '#9ca3af', fontSize: '11px'}}>({box.box_name})</span>}</h4>
+          <p style={{color: '#6b7280', fontSize: '10px', fontFamily: 'monospace'}}>{box.qr_code}</p>
         </div>
         <span className="drag-hint" style={{ color: isSelected ? '#10b981' : undefined }}>
           {isMobile 
@@ -166,16 +175,16 @@ function BoxListItem({ box, onClick, isFloorplan = false, isUnplaced = false, is
       <div className={`box-item-detailed gps group`} onClick={onClick}>
         <div className="box-item-main">
           <div className={`box-number-badge ${statusColor}`}>
-            {displayNum}
+            {box.short_code || displayNum}
           </div>
           <div className="box-item-info">
             <div className="box-item-name">
-              <span>Box #{displayNum}</span>
-              <span className="qr-badge">{shortQr}</span>
+              <span>{boxLabel}</span>
+              {box.box_name && <span style={{color: '#9ca3af', fontSize: '11px', marginLeft: '6px'}}>{box.box_name}</span>}
               <span className="location-badge">📍 Maps</span>
             </div>
             <div className="box-item-meta">
-              <span className="box-type">{box.box_type_name || 'Kein Typ'}</span>
+              <span style={{color: '#6b7280', fontSize: '10px', fontFamily: 'monospace', marginRight: '8px'}}>{box.qr_code}</span>
               <span className="last-scan">
                 <Clock size={11} />
                 {formatLastScan(box.last_scan)}
@@ -196,18 +205,18 @@ function BoxListItem({ box, onClick, isFloorplan = false, isUnplaced = false, is
     <div className={`box-item-detailed ${isFloorplan ? 'floorplan' : ''} group`} onClick={onClick}>
       <div className="box-item-main">
         <div className={`box-number-badge ${statusColor}`}>
-          {displayNum}
+          {box.short_code || displayNum}
         </div>
         <div className="box-item-info">
           <div className="box-item-name">
-            <span>Box #{displayNum}</span>
-            <span className="qr-badge">{shortQr}</span>
+            <span>{boxLabel}</span>
+            {box.box_name && <span style={{color: '#9ca3af', fontSize: '11px', marginLeft: '6px'}}>{box.box_name}</span>}
             {box.grid_position && (
               <span className="grid-badge">{box.grid_position}</span>
             )}
           </div>
           <div className="box-item-meta">
-            <span className="box-type">{box.box_type_name || 'Kein Typ'}</span>
+            <span style={{color: '#6b7280', fontSize: '10px', fontFamily: 'monospace', marginRight: '8px'}}>{box.qr_code}</span>
             <span className="last-scan">
               <Clock size={11} />
               {formatLastScan(box.last_scan)}

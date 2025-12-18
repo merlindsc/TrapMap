@@ -4,6 +4,7 @@
    ============================================================ */
 
 import { Clock, User, ChevronRight, LayoutGrid, Navigation2 } from "lucide-react";
+import { getBoxShortLabel } from "../../utils/boxUtils";
 
 // Helper: QR-Nummer extrahieren (ohne führende Null)
 export const getShortQr = (box) => {
@@ -68,6 +69,10 @@ export default function BoxListItem({
   const shortQr = getShortQr(box);
   const statusColor = getStatusColor(box.current_status || box.status);
   
+  // Label mit short_code oder Fallback
+  const boxLabel = box.short_code ? getBoxShortLabel(box) : `#${displayNum}`;
+  const boxName = box.box_name || box.box_type_name || 'Kein Typ';
+  
   // FlyTo nur anzeigen wenn:
   // 1. showFlyTo = true
   // 2. Box hat GPS-Koordinaten
@@ -88,25 +93,31 @@ export default function BoxListItem({
     >
       <div className="box-item-main">
         <div className={`box-number-badge ${statusColor}`}>
-          {displayNum}
+          {box.short_code || displayNum}
         </div>
         <div className="box-item-info">
           <div className="box-item-name">
-            {/* QR-Nummer anzeigen wenn vorhanden */}
-            {shortQr && (
+            {boxLabel}
+            {box.box_name && (
               <span style={{ 
                 color: '#9ca3af', 
-                fontSize: '11px', 
-                fontFamily: 'monospace',
-                marginRight: '6px'
+                fontSize: '11px',
+                marginLeft: '6px'
               }}>
-                #{shortQr}
+                {box.box_name}
               </span>
             )}
-            {box.box_type_name || 'Kein Typ'}
             {isFloorplan && <LayoutGrid size={12} className="floorplan-badge" style={{ marginLeft: '4px', color: '#8b5cf6' }} />}
           </div>
           <div className="box-item-meta">
+            <span style={{ 
+              color: '#6b7280', 
+              fontSize: '10px', 
+              fontFamily: 'monospace',
+              marginRight: '8px'
+            }}>
+              {box.qr_code}
+            </span>
             <span className="last-scan">
               <Clock size={11} />
               {formatLastScan(box.last_scan)}

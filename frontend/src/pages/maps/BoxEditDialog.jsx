@@ -17,6 +17,7 @@ import { X, Save, CheckCircle, MapPin, Navigation, Clock, Bug, Hash, Tag, Maximi
 import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { getBoxShortLabel } from "../../utils/boxUtils";
 
 // 🆕 Offline API Imports
 import { 
@@ -109,7 +110,7 @@ export default function BoxEditDialog({
   }, []);
 
   // Form State
-  const [boxName, setBoxName] = useState(box?.name || box?.box_name || "");
+  const [boxName, setBoxName] = useState(box?.box_name || "");
   const [displayNumber, setDisplayNumber] = useState(box?.display_number || box?.number || "");
   const [boxTypeId, setBoxTypeId] = useState(box?.box_type_id || "");
   const [bait, setBait] = useState(box?.bait || "");
@@ -207,7 +208,7 @@ export default function BoxEditDialog({
   // Initialisiere Box-Daten
   useEffect(() => {
     if (box?.box_type_id) setBoxTypeId(box.box_type_id);
-    if (box?.name || box?.box_name) setBoxName(box.name || box.box_name);
+    if (box?.box_name) setBoxName(box.box_name);
     if (box?.display_number || box?.number) setDisplayNumber(box.display_number || box.number);
     if (box?.notes) {
       const foundInsect = INSECT_TYPES.find(t => box.notes.includes(t));
@@ -364,7 +365,7 @@ export default function BoxEditDialog({
       };
       
       // Box-Name speichern (optional)
-      if (boxName.trim()) updateData.name = boxName.trim();
+      if (boxName.trim()) updateData.box_name = boxName.trim();
       // Box-Nummer wird NICHT mehr gespeichert - kommt automatisch vom QR-Code
       if (isRodentStation && finalBait) updateData.bait = finalBait;
 
@@ -403,6 +404,11 @@ export default function BoxEditDialog({
   };
 
   const getBoxHeaderNumber = () => {
+    // Verwende boxUtils Helper für konsistente Anzeige
+    if (box?.short_code) {
+      return getBoxShortLabel(box);
+    }
+    // Fallback wenn short_code fehlt
     if (displayNumber) return displayNumber;
     if (qrNumber) return qrNumber;
     return box?.id || "?";
@@ -426,6 +432,11 @@ export default function BoxEditDialog({
             <div>
               <h2 className="font-semibold text-white dark:text-gray-100 flex items-center gap-2">
                 {isFirstSetup ? "Ersteinrichtung" : "Box bearbeiten"}
+                {box?.box_name && (
+                  <span className="text-indigo-400 font-normal text-sm">
+                    {box.box_name}
+                  </span>
+                )}
                 {/* 🆕 Offline-Badge */}
                 {currentlyOffline && (
                   <span className="px-2 py-0.5 bg-yellow-500/20 rounded text-yellow-400 text-xs flex items-center gap-1">
@@ -434,15 +445,10 @@ export default function BoxEditDialog({
                 )}
               </h2>
               <div className="flex items-center gap-2 text-xs text-gray-500">
-                {qrNumber && (
+                {box?.qr_code && (
                   <span className="bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded flex items-center gap-1 font-mono text-gray-900 dark:text-gray-100">
                     <Hash size={10} />
-                    QR {qrNumber}
-                  </span>
-                )}
-                {hasCustomNumber && (
-                  <span className="text-yellow-400">
-                    (Nr. {displayNumber})
+                    {box.qr_code}
                   </span>
                 )}
               </div>
@@ -655,16 +661,16 @@ export default function BoxEditDialog({
           <div>
             <label className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2">
               <Tag size={12} />
-              Box-Name (optional)
+              Name (optional)
             </label>
             <input
               type="text"
               value={boxName}
               onChange={(e) => setBoxName(e.target.value)}
-              placeholder="z.B. Eingang Lager, Küche links..."
+              placeholder="z.B. Eingang Lager, Kühlraum Nord"
               className="w-full px-3 py-2.5 bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg text-white dark:text-gray-100 text-sm focus:border-indigo-500 focus:outline-none transition-colors"
             />
-            <p className="text-xs text-gray-600 mt-1">Eigener Name zur leichteren Identifikation</p>
+            <p className="text-xs text-gray-600 mt-1">Wird zusammen mit dem Kürzel angezeigt (z.B. RK-12 Eingang)</p>
           </div>
 
           {/* BOX-NUMMER (automatisch aus QR-Code) */}
