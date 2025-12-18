@@ -1,33 +1,30 @@
 /* ============================================================
-   TRAPMAP - QR SCANNER V12 (OFFLINE-FÄHIG, KEIN AUTO-SWITCH)
+   TRAPMAP - QR SCANNER V13
    
-   ÄNDERUNGEN V12:
-   - Auto-Switch komplett entfernt (nervte)
-   - Reset-Bug gefixt
-   - Bessere Offline-Behandlung
+   REPARIERT: Korrekter QR-Flow basierend auf V10
+   + OFFLINE SUPPORT: Scannt auch ohne Internet aus Cache
+   
+   FLOW:
+   1. Code nicht in DB → /qr/assign-code
+   2. Box im Pool (kein Objekt) → /qr/assign-object
+   3. Box zugewiesen aber NICHT platziert → Platzierungsauswahl
+   4. GPS-Box platziert → Distanzprüfung → Kontrollformular
+   5. Lageplan-Box platziert → Kontrollformular
    ============================================================ */
 
 import React, { useEffect, useRef, useState } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import axios from "axios";
 import { 
   Camera, X, RotateCcw, Flashlight, SwitchCamera,
   Package, Navigation, Layers, AlertTriangle,
-  CheckCircle, WifiOff
+  MapPin, CheckCircle, WifiOff
 } from "lucide-react";
 
 import BoxScanDialog from "../../components/BoxScanDialog";
 import BoxEditDialog from "../maps/BoxEditDialog";
-
-// Offline API Imports
-import { 
-  findBoxByQR, 
-  getBoxTypes,
-  getLayouts,
-  isOnline 
-} from "../../utils/offlineAPI";
-import { useOffline } from "../../context/OfflineContext";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -50,21 +47,26 @@ function formatDistance(meters) {
   return `${Math.round(meters)}m`;
 }
 
+// Offline Check Helper
+function isOnline() {
+  return navigator.onLine;
+}
+
 export default function Scanner() {
   const navigate = useNavigate();
   const { token } = useAuth();
-  
-  // Offline Context
-  const offlineCtx = useOffline();
-  const pendingCount = offlineCtx?.pendingCount || 0;
-  const currentlyOffline = !isOnline();
   
   // Refs
   const videoRef = useRef(null);
   const codeReaderRef = useRef(null);
   const streamRef = useRef(null);
   const lastScannedCodeRef = useRef(null);
-  const scanningActiveRef = useRef(false);
+  const isPausedRef = useRef(false);
+  const processingRef = useRef(false);
+  const autoSwitchTimerRef = useRef(null);
+  const cameraTriesRef = useRef(0);
+  const dialogOpenRef = useRef(false);
+  const camerasRef = useRef([]);
   
   // Scanner State
   const [isScanning, setIsScanning] = useState(false);
@@ -80,6 +82,7 @@ export default function Scanner() {
   // Box State
   const [currentBox, setCurrentBox] = useState(null);
   const [boxLoading, setBoxLoading] = useState(false);
+  const [boxFromCache, setBoxFromCache] = useState(false);
   
   // Dialog States
   const [showScanDialog, setShowScanDialog] = useState(false);
@@ -104,8 +107,35 @@ export default function Scanner() {
   // Mobile Detection
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
+  // Offline State
+  const [currentlyOffline, setCurrentlyOffline] = useState(!isOnline());
+
   // Helper
   const hasActiveDialog = showScanDialog || showGPSWarning || showPlacementChoice || showFirstSetup;
+  
+  // dialogOpenRef mit State synchronisieren
+  useEffect(() => {
+    dialogOpenRef.current = hasActiveDialog;
+  }, [hasActiveDialog]);
+
+  // camerasRef synchronisieren
+  useEffect(() => {
+    camerasRef.current = cameras;
+  }, [cameras]);
+
+  // Online/Offline Status überwachen
+  useEffect(() => {
+    const handleOnline = () => setCurrentlyOffline(false);
+    const handleOffline = () => setCurrentlyOffline(true);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // ============================================
   // INIT
@@ -119,12 +149,31 @@ export default function Scanner() {
     };
   }, []);
 
+  // BoxTypes laden - mit Offline-Fallback
   const loadBoxTypes = async () => {
     try {
-      const result = await getBoxTypes();
-      if (result.success) {
-        setBoxTypes(result.data || []);
-        console.log("✅ BoxTypes geladen:", result.data?.length);
+      // Zuerst aus Cache versuchen
+      const cached = localStorage.getItem('trapmap_boxtypes');
+      if (cached) {
+        setBoxTypes(JSON.parse(cached));
+      }
+
+      // Wenn online, vom Server laden
+      if (isOnline()) {
+        let res;
+        try {
+          res = await axios.get(`${API}/boxtypes`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        } catch (e) {
+          res = await axios.get(`${API}/box-types`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        }
+        const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
+        setBoxTypes(data);
+        localStorage.setItem('trapmap_boxtypes', JSON.stringify(data));
+        console.log("✅ BoxTypes geladen:", data.length);
       }
     } catch (err) {
       console.error("Load box types error:", err);
@@ -141,17 +190,20 @@ export default function Scanner() {
       codeReaderRef.current = new BrowserMultiFormatReader();
       
       const devices = await BrowserMultiFormatReader.listVideoInputDevices();
-      console.log("📷 Kameras gefunden:", devices.length);
+      console.log("📷 Kameras gefunden:", devices.length, devices.map(d => d.label));
       
       if (!devices || devices.length === 0) {
         setError("Keine Kamera gefunden");
         return;
       }
 
-      // Kameras sortieren: Rückkamera bevorzugen
+      // Kameras sortieren: Beste zuerst
       const sortedCameras = sortCamerasByQuality(devices);
+      console.log("📷 Sortiert:", sortedCameras.map(d => d.label));
+      
       setCameras(sortedCameras);
       setCurrentCameraIndex(0);
+      cameraTriesRef.current = 0;
       
       await startScanning(sortedCameras[0].deviceId);
       
@@ -161,22 +213,24 @@ export default function Scanner() {
     }
   };
 
-  // Kameras sortieren (Rückkamera zuerst, Frontkamera raus)
+  // Kameras nach Qualität sortieren (beste für QR-Scanning zuerst)
   const sortCamerasByQuality = (devices) => {
     const getScore = (device) => {
       const label = device.label.toLowerCase();
       
-      // Frontkamera ausschließen
       if (label.includes("front") || label.includes("user") || label.includes("selfie") || label.includes("facetime")) {
         return -100;
       }
       
       let score = 0;
-      if (label.includes("back") || label.includes("rear") || label.includes("environment")) score += 20;
-      if (label.includes("wide") && !label.includes("ultra")) score += 10;
-      if (label.includes("ultra")) score -= 10;
-      if (label.includes("tele") || label.includes("zoom")) score -= 5;
-      if (label.includes("macro")) score -= 15;
+      
+      if (label.includes("wide") && !label.includes("ultra")) score += 50;
+      if (label.includes("back camera") || label.includes("rear camera")) score += 40;
+      if (label.includes("0") && label.includes("back")) score += 30;
+      if (label.includes("ultra")) score -= 30;
+      if (label.includes("tele") || label.includes("zoom")) score -= 20;
+      if (label.includes("macro")) score -= 40;
+      if (label.includes("back") || label.includes("rear") || label.includes("environment")) score += 10;
       
       return score;
     };
@@ -188,49 +242,51 @@ export default function Scanner() {
       .map(d => d.device);
   };
 
-  // Manuell Kamera wechseln
-  const switchCamera = async () => {
-    if (cameras.length <= 1) return;
+  // Zu bestimmter Kamera wechseln
+  const switchToCamera = async (index) => {
+    const cams = camerasRef.current;
+    if (index >= cams.length) return;
     
-    const nextIndex = (currentCameraIndex + 1) % cameras.length;
-    setCurrentCameraIndex(nextIndex);
+    setCurrentCameraIndex(index);
     setTorchOn(false);
     
-    // Aktuellen Stream stoppen
-    stopCurrentStream();
-    
-    // Neuen Stream starten
-    await startScanning(cameras[nextIndex].deviceId);
-  };
-
-  const stopCurrentStream = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
     }
+    
     if (codeReaderRef.current) {
       try { codeReaderRef.current.reset(); } catch (e) {}
     }
+    
+    await startScanning(cams[index].deviceId);
+  };
+
+  // Manuell Kamera wechseln
+  const switchCamera = () => {
+    const nextIndex = (currentCameraIndex + 1) % cameras.length;
+    cameraTriesRef.current = nextIndex;
+    switchToCamera(nextIndex);
   };
 
   // ============================================
-  // SCANNING
+  // SCANNING STARTEN
   // ============================================
   const startScanning = async (deviceId) => {
     if (!codeReaderRef.current || !videoRef.current) return;
     
     try {
       console.log("🎥 Starte Scanner...");
-      scanningActiveRef.current = true;
+      isPausedRef.current = false;
+      processingRef.current = false;
       
       await codeReaderRef.current.decodeFromVideoDevice(
         deviceId,
         videoRef.current,
         (result, error) => {
-          // Nur verarbeiten wenn Scanner aktiv
-          if (!scanningActiveRef.current) return;
-          
+          if (isPausedRef.current) return;
+          if (processingRef.current) return;
           if (result) {
+            console.log("📸 QR erkannt:", result.getText());
             handleScan(result.getText());
           }
         }
@@ -252,9 +308,19 @@ export default function Scanner() {
   };
 
   const stopScanner = () => {
-    console.log("🛑 Stoppe Scanner");
-    scanningActiveRef.current = false;
-    stopCurrentStream();
+    if (autoSwitchTimerRef.current) {
+      clearTimeout(autoSwitchTimerRef.current);
+      autoSwitchTimerRef.current = null;
+    }
+    
+    if (codeReaderRef.current) {
+      try { codeReaderRef.current.reset(); } catch (e) {}
+      codeReaderRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
     setIsScanning(false);
   };
 
@@ -284,7 +350,7 @@ export default function Scanner() {
   };
 
   // ============================================
-  // SCAN HANDLER - OFFLINE-FÄHIG
+  // SCAN HANDLER - KORREKTER FLOW
   // ============================================
   const handleScan = async (decodedText) => {
     if (!decodedText) return;
@@ -295,20 +361,18 @@ export default function Scanner() {
       code = decodedText.split("/s/")[1];
     }
     
-    // Gleicher Code? Ignorieren
+    // Gleicher Code?
     if (code === lastScannedCodeRef.current) {
       return;
     }
     
-    // Bereits am Verarbeiten? Ignorieren
-    if (!scanningActiveRef.current) {
-      return;
-    }
+    const offline = !isOnline();
+    setCurrentlyOffline(offline);
+    console.log("📱 Scan:", code, offline ? "(OFFLINE)" : "(online)");
     
-    console.log("📱 Scan:", code, currentlyOffline ? "(OFFLINE)" : "(online)");
-    
-    // Scanner pausieren
-    scanningActiveRef.current = false;
+    // Lock setzen
+    isPausedRef.current = true;
+    processingRef.current = true;
     lastScannedCodeRef.current = code;
     setScannedCode(code);
     
@@ -317,97 +381,149 @@ export default function Scanner() {
       navigator.vibrate([100, 50, 100]);
     }
 
+    // Code prüfen
     setBoxLoading(true);
     setError("");
+    setBoxFromCache(false);
 
     try {
-      // OFFLINE-FÄHIGE BOX-SUCHE
-      const result = await findBoxByQR(code);
-      
-      console.log("📦 findBoxByQR Result:", result);
+      let boxData = null;
+      let fromCache = false;
 
-      // Code nicht gefunden
-      if (!result.success || result.notFound) {
-        if (currentlyOffline) {
+      // ============================================
+      // SCHRITT 1: Box-Daten laden (Online oder Cache)
+      // ============================================
+      if (offline) {
+        // OFFLINE: Aus IndexedDB/localStorage suchen
+        boxData = await findBoxInCache(code);
+        fromCache = true;
+        
+        if (!boxData) {
           setBoxLoading(false);
-          setError("📴 Offline - Box nicht im Cache");
-          setTimeout(() => resetForNextScan(), 3000);
+          setError("📴 Offline - Box nicht im Cache. Bitte online scannen.");
+          setTimeout(() => {
+            lastScannedCodeRef.current = null;
+            processingRef.current = false;
+            isPausedRef.current = false;
+            setError("");
+          }, 3000);
           return;
-        } else {
-          // Direkt zur Objekt-Zuweisung (Box wird dort erstellt)
-          navigate(`/qr/assign-object?code=${code}&newBox=true`);
-          return;
+        }
+      } else {
+        // ONLINE: Von API laden
+        try {
+          const res = await axios.get(`${API}/qr/check/${code}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          console.log("📦 API Response:", res.data);
+
+          // ============================================
+          // FALL 1: Code NICHT in DB → assign-code
+          // ============================================
+          if (!res.data || !res.data.box_id) {
+            navigate(`/qr/assign-code?code=${code}`);
+            return;
+          }
+
+          // ============================================
+          // FALL 2: Box im Pool (kein Objekt) → assign-object
+          // ============================================
+          if (!res.data.object_id) {
+            navigate(`/qr/assign-object?code=${code}&box_id=${res.data.box_id}`);
+            return;
+          }
+
+          // Box-Daten normalisieren
+          boxData = {
+            id: res.data.box_id,
+            qr_code: code,
+            code: code,
+            object_id: res.data.object_id,
+            object_name: res.data.object_name,
+            position_type: res.data.position_type,
+            lat: res.data.lat,
+            lng: res.data.lng,
+            floor_plan_id: res.data.floor_plan_id,
+            pos_x: res.data.pos_x,
+            pos_y: res.data.pos_y,
+            grid_position: res.data.grid_position,
+            number: res.data.number,
+            display_number: res.data.display_number,
+            name: res.data.name,
+            box_type_id: res.data.box_type_id,
+            box_type_name: res.data.box_type_name,
+          };
+
+          // In Cache speichern für Offline
+          saveBoxToCache(boxData);
+
+        } catch (err) {
+          console.error("❌ API Error:", err.response?.status || err.message);
+          
+          // Bei Netzwerkfehler: Aus Cache versuchen
+          if (!err.response) {
+            boxData = await findBoxInCache(code);
+            fromCache = true;
+            
+            if (!boxData) {
+              throw err;
+            }
+          } else {
+            throw err;
+          }
         }
       }
 
-      const boxData = result.data;
+      // ============================================
+      // SCHRITT 2: Box gefunden - Flow fortsetzen
+      // ============================================
+      setCurrentBox(boxData);
+      setBoxFromCache(fromCache);
 
-      // Box im Pool (kein Objekt)
-      if (!boxData.object_id) {
-        if (currentlyOffline) {
-          setBoxLoading(false);
-          setError("📴 Offline - Box muss erst online zugewiesen werden");
-          setTimeout(() => resetForNextScan(), 3000);
-          return;
-        }
-        navigate(`/qr/assign-object?code=${code}&box_id=${boxData.id}`);
-        return;
-      }
-
-      // Box-Daten normalisieren
-      const normalizedBox = {
-        id: boxData.id || boxData.box_id,
-        qr_code: code,
-        code: code,
-        object_id: boxData.object_id,
-        object_name: boxData.object_name || boxData.objects?.name,
-        position_type: boxData.position_type,
-        lat: boxData.lat,
-        lng: boxData.lng,
-        floor_plan_id: boxData.floor_plan_id,
-        pos_x: boxData.pos_x,
-        pos_y: boxData.pos_y,
-        grid_position: boxData.grid_position,
-        number: boxData.number || boxData.display_number,
-        display_number: boxData.display_number || boxData.number,
-        name: boxData.name || boxData.box_name,
-        box_type_id: boxData.box_type_id,
-        box_type_name: boxData.box_type_name || boxData.box_types?.name,
-        current_status: boxData.current_status,
-      };
-
-      setCurrentBox(normalizedBox);
-
-      const hasGPS = normalizedBox.lat && normalizedBox.lng;
-      const hasFloorplan = normalizedBox.floor_plan_id && (normalizedBox.pos_x !== null || normalizedBox.grid_position);
+      const hasGPS = boxData.lat && boxData.lng;
+      const hasFloorplan = boxData.floor_plan_id && (boxData.pos_x !== null && boxData.pos_x !== undefined || boxData.grid_position);
       const isPlaced = hasGPS || hasFloorplan;
-      const isGPSBox = (normalizedBox.position_type === 'gps' || normalizedBox.position_type === 'map') || 
+      const isGPSBox = (boxData.position_type === 'gps' || boxData.position_type === 'map') || 
                        (hasGPS && !hasFloorplan);
 
-      // NICHT PLATZIERT
+      console.log("📍 Box Status:", { hasGPS, hasFloorplan, isPlaced, isGPSBox, offline });
+
+      // ============================================
+      // FALL 3: NICHT PLATZIERT → Platzierungsauswahl
+      // ============================================
       if (!isPlaced) {
-        if (currentlyOffline) {
+        if (offline) {
+          // Offline: Direkt Ersteinrichtung zeigen
           setBoxLoading(false);
           setShowFirstSetup(true);
           return;
         }
-        
+
+        // Online: Lagepläne laden für Auswahl
         try {
-          const layoutResult = await getLayouts(normalizedBox.object_id);
-          setObjectFloorplans(layoutResult.data || []);
-        } catch (err) {}
+          const fpRes = await axios.get(`${API}/floorplans/object/${boxData.object_id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          setObjectFloorplans(fpRes.data || []);
+        } catch (err) {
+          console.log("Keine Lagepläne:", err.message);
+          setObjectFloorplans([]);
+        }
         
         setPendingPlacement({
-          code: normalizedBox.qr_code,
-          boxId: normalizedBox.id,
-          objectId: normalizedBox.object_id
+          code: boxData.qr_code || code,
+          boxId: boxData.id,
+          objectId: boxData.object_id
         });
         setBoxLoading(false);
         setShowPlacementChoice(true);
         return;
       }
 
-      // GPS-Box auf Mobile → Distanz prüfen
+      // ============================================
+      // FALL 4: GPS-Box auf Mobile → Distanz prüfen
+      // ============================================
       if (isGPSBox && hasGPS && isMobile) {
         try {
           const position = await new Promise((resolve, reject) => {
@@ -419,7 +535,7 @@ export default function Scanner() {
           });
 
           setCurrentGPS(position);
-          const distance = calculateDistance(position.lat, position.lng, normalizedBox.lat, normalizedBox.lng);
+          const distance = calculateDistance(position.lat, position.lng, boxData.lat, boxData.lng);
           setGpsDistance(distance);
           setBoxLoading(false);
 
@@ -434,12 +550,15 @@ export default function Scanner() {
         }
       }
 
-      // Direkt zum Dialog
+      // ============================================
+      // FALL 5: Direkt zum Kontrollformular
+      // ============================================
       setBoxLoading(false);
       setShowScanDialog(true);
 
     } catch (err) {
-      console.error("❌ Scan Error:", err);
+      console.error("❌ Scan Error:", err.response?.status || err.message);
+      
       setBoxLoading(false);
       
       if (err.response?.status === 401) {
@@ -447,30 +566,78 @@ export default function Scanner() {
         return;
       }
       
-      setError("Fehler: " + (err.message || "Unbekannter Fehler"));
-      setTimeout(() => resetForNextScan(), 3000);
+      setError("Fehler: " + (err.response?.data?.message || err.message));
+      
+      setTimeout(() => {
+        lastScannedCodeRef.current = null;
+        processingRef.current = false;
+        isPausedRef.current = false;
+        setError("");
+      }, 3000);
     }
   };
 
   // ============================================
-  // RESET FUNKTIONEN
+  // CACHE FUNKTIONEN
   // ============================================
-  
-  // Reset für nächsten Scan (nach Fehler)
-  const resetForNextScan = () => {
-    console.log("🔄 Reset für nächsten Scan");
-    lastScannedCodeRef.current = null;
-    scanningActiveRef.current = true;
-    setError("");
-    setScannedCode(null);
-    setBoxLoading(false);
+  const findBoxInCache = async (code) => {
+    try {
+      // Versuche aus IndexedDB (wenn offlineAPI verfügbar)
+      try {
+        const { findBoxByQR } = await import("../../utils/offlineAPI");
+        const result = await findBoxByQR(code);
+        if (result.success && result.data) {
+          return {
+            id: result.data.id || result.data.box_id,
+            qr_code: code,
+            code: code,
+            object_id: result.data.object_id,
+            object_name: result.data.object_name || result.data.objects?.name,
+            position_type: result.data.position_type,
+            lat: result.data.lat,
+            lng: result.data.lng,
+            floor_plan_id: result.data.floor_plan_id,
+            pos_x: result.data.pos_x,
+            pos_y: result.data.pos_y,
+            grid_position: result.data.grid_position,
+            number: result.data.number || result.data.display_number,
+            display_number: result.data.display_number || result.data.number,
+            name: result.data.name,
+            box_type_id: result.data.box_type_id,
+            box_type_name: result.data.box_type_name || result.data.box_types?.name,
+          };
+        }
+      } catch (e) {
+        console.log("offlineAPI nicht verfügbar:", e.message);
+      }
+
+      // Fallback: localStorage
+      const cached = localStorage.getItem(`trapmap_box_${code}`);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+
+      return null;
+    } catch (err) {
+      console.error("Cache lookup error:", err);
+      return null;
+    }
   };
 
-  // Vollständiger Reset (nach Dialog schließen)
+  const saveBoxToCache = (boxData) => {
+    try {
+      localStorage.setItem(`trapmap_box_${boxData.qr_code || boxData.code}`, JSON.stringify(boxData));
+    } catch (e) {
+      console.log("Cache save error:", e.message);
+    }
+  };
+
+  // ============================================
+  // RESET - Scanner fortsetzen
+  // ============================================
   const resetScanner = () => {
-    console.log("🔄 Vollständiger Reset");
+    console.log("🔄 Reset");
     
-    // State zurücksetzen
     setCurrentBox(null);
     setShowScanDialog(false);
     setShowGPSWarning(false);
@@ -482,27 +649,23 @@ export default function Scanner() {
     setError("");
     setBoxLoading(false);
     setScannedCode(null);
+    setBoxFromCache(false);
     
-    // Scanner wieder aktivieren nach kurzer Pause
+    cameraTriesRef.current = 0;
+    
     setTimeout(() => {
       lastScannedCodeRef.current = null;
-      scanningActiveRef.current = true;
-      console.log("✅ Scanner bereit für nächsten Scan");
-    }, 500);
+      processingRef.current = false;
+      isPausedRef.current = false;
+      console.log("✅ Scanner bereit");
+    }, 800);
   };
 
   // ============================================
-  // HANDLER: DIALOGE
+  // HANDLER: SCAN DIALOG
   // ============================================
   const handleScanCompleted = () => {
-    setSuccessMessage(currentlyOffline ? "📴 Offline gespeichert!" : "✅ Kontrolle gespeichert!");
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 2000);
-    resetScanner();
-  };
-
-  const handleFirstSetupCompleted = () => {
-    setSuccessMessage(currentlyOffline ? "📴 Offline eingerichtet!" : "✅ Box eingerichtet!");
+    setSuccessMessage(currentlyOffline ? "📴 Offline gespeichert!" : "Kontrolle gespeichert!");
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 2000);
     resetScanner();
@@ -511,89 +674,114 @@ export default function Scanner() {
   // ============================================
   // HANDLER: GPS WARNING
   // ============================================
-  const handleUpdateGPS = async () => {
-    if (!currentBox) return;
-    
-    setGpsLoading(true);
-    
-    try {
-      const position = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-          reject,
-          { enableHighAccuracy: true, timeout: 15000 }
-        );
-      });
-
-      const { updateBoxPosition } = await import("../../utils/offlineAPI");
-      await updateBoxPosition(currentBox.id, position.lat, position.lng, 'gps');
-      
-      setCurrentBox(prev => ({ ...prev, lat: position.lat, lng: position.lng }));
-      setShowGPSWarning(false);
-      setShowScanDialog(true);
-      
-    } catch (err) {
-      console.error("GPS Update error:", err);
-      setError("GPS konnte nicht aktualisiert werden");
-    }
-    
-    setGpsLoading(false);
-  };
-
   const handleIgnoreGPSWarning = () => {
     setShowGPSWarning(false);
     setShowScanDialog(true);
   };
 
+  const handleUpdateGPSPosition = async () => {
+    if (!currentGPS || !currentBox) return;
+    
+    setGpsLoading(true);
+    try {
+      if (isOnline()) {
+        await axios.put(`${API}/boxes/${currentBox.id}/position`, {
+          lat: currentGPS.lat,
+          lng: currentGPS.lng,
+          position_type: 'gps'
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+
+      setCurrentBox(prev => ({ ...prev, lat: currentGPS.lat, lng: currentGPS.lng }));
+      setGpsLoading(false);
+      setShowGPSWarning(false);
+      setShowScanDialog(true);
+
+    } catch (err) {
+      console.error("GPS update error:", err);
+      setGpsLoading(false);
+      setShowGPSWarning(false);
+      setShowScanDialog(true);
+    }
+  };
+
   // ============================================
-  // HANDLER: PLATZIERUNG
+  // HANDLER: PLATZIERUNGSAUSWAHL
   // ============================================
   const handleChooseGPS = async () => {
     if (!pendingPlacement) return;
-
-    if (isMobile) {
-      setGpsLoading(true);
-      try {
-        const position = await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-            reject,
-            { enableHighAccuracy: true, timeout: 15000 }
-          );
-        });
-
-        const { updateBoxPosition } = await import("../../utils/offlineAPI");
-        await updateBoxPosition(pendingPlacement.boxId, position.lat, position.lng, 'gps');
-
-        setGpsLoading(false);
-        setShowPlacementChoice(false);
-        setShowFirstSetup(true);
-        
-      } catch (err) {
-        console.error("GPS error:", err);
-        setGpsLoading(false);
-        navigate(`/maps?object_id=${pendingPlacement.objectId}&openBox=${pendingPlacement.boxId}&firstSetup=true`);
-      }
-    } else {
+    
+    if (!isMobile) {
       navigate(`/maps?object_id=${pendingPlacement.objectId}&openBox=${pendingPlacement.boxId}&firstSetup=true`);
+      return;
+    }
+
+    setGpsLoading(true);
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          reject,
+          { enableHighAccuracy: true, timeout: 10000 }
+        );
+      });
+      
+      if (isOnline()) {
+        await axios.put(`${API}/boxes/${pendingPlacement.boxId}/position`, {
+          lat: position.lat,
+          lng: position.lng,
+          position_type: 'gps'
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+
+      setCurrentBox(prev => ({ ...prev, lat: position.lat, lng: position.lng, position_type: 'gps' }));
+      setGpsLoading(false);
+      setShowPlacementChoice(false);
+      setShowFirstSetup(true);
+
+    } catch (err) {
+      console.error("GPS error:", err);
+      setGpsLoading(false);
+      setError("GPS nicht verfügbar");
     }
   };
 
   const handleChooseFloorplan = () => {
     if (!pendingPlacement) return;
-    navigate(`/layouts/${pendingPlacement.objectId}?placeBox=${pendingPlacement.boxId}`);
+    
+    // DIREKT zum Lageplan-Editor navigieren
+    if (objectFloorplans.length === 1) {
+      navigate(`/layouts/${pendingPlacement.objectId}?fp=${objectFloorplans[0].id}&placeBox=${pendingPlacement.boxId}`);
+    } else {
+      navigate(`/layouts/${pendingPlacement.objectId}?placeBox=${pendingPlacement.boxId}`);
+    }
+  };
+
+  // ============================================
+  // HANDLER: ERSTEINRICHTUNG
+  // ============================================
+  const handleFirstSetupCompleted = () => {
+    setSuccessMessage(currentlyOffline ? "📴 Offline eingerichtet!" : "Box eingerichtet!");
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 2000);
+    resetScanner();
   };
 
   // ============================================
   // RENDER
   // ============================================
   return (
-    <div className="fixed inset-0 bg-black text-white z-50 overflow-hidden">
+    <div className="min-h-screen bg-black dark:bg-gray-950 text-white">
+
       {/* Success Toast */}
       {showSuccess && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-green-500 text-white px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-green-600 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
           <CheckCircle size={20} />
-          {successMessage}
+          <span className="font-medium">{successMessage}</span>
         </div>
       )}
 
@@ -603,39 +791,57 @@ export default function Scanner() {
           <WifiOff size={20} className="text-yellow-400" />
           <div className="flex-1">
             <p className="text-yellow-400 font-medium text-sm">Offline-Modus</p>
-            <p className="text-yellow-400/60 text-xs">Scans werden lokal gespeichert</p>
+            <p className="text-yellow-400/60 text-xs">Nur gecachte Boxen verfügbar</p>
           </div>
-          {pendingCount > 0 && (
-            <div className="px-2 py-1 bg-yellow-500/30 rounded text-yellow-400 text-xs">
-              {pendingCount} pending
-            </div>
-          )}
         </div>
       )}
 
-      {/* GPS WARNING DIALOG */}
+      {/* ========== GPS WARNING ========== */}
       {showGPSWarning && currentBox && (
-        <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center p-4">
-          <div className="bg-[#111] rounded-2xl max-w-sm w-full overflow-hidden border border-white/10">
-            <div className="p-6 text-center">
-              <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <AlertTriangle size={32} className="text-yellow-400" />
+        <div className="fixed inset-0 z-[100] bg-black dark:bg-gray-950 overflow-auto">
+          <div className="flex items-center justify-between p-4 bg-[#111] border-b border-white/10">
+            <button onClick={resetScanner} className="p-2 text-gray-400 hover:text-white">
+              <X size={24} />
+            </button>
+            <h1 className="text-lg font-semibold flex items-center gap-2">
+              <AlertTriangle size={20} className="text-yellow-400" />
+              Position prüfen
+            </h1>
+            <div className="w-10" />
+          </div>
+          <div className="p-4 space-y-4">
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle size={24} className="text-yellow-400 flex-shrink-0" />
+                <div>
+                  <h3 className="font-semibold text-yellow-300">Position stimmt nicht überein</h3>
+                  <p className="text-yellow-200/80 text-sm mt-1">
+                    Du bist <strong>{formatDistance(gpsDistance)}</strong> von der gespeicherten Position entfernt.
+                  </p>
+                </div>
               </div>
-              <h2 className="text-xl font-bold mb-2">Entfernung: {formatDistance(gpsDistance)}</h2>
-              <p className="text-gray-400 text-sm mb-4">
-                Du bist {formatDistance(gpsDistance)} von der Box entfernt.
-              </p>
             </div>
-            <div className="p-4 bg-black/50 flex gap-3">
+            <div className="bg-[#111] border border-white/10 rounded-xl p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center">
+                  <Package size={24} className="text-indigo-400" />
+                </div>
+                <div>
+                  <p className="font-semibold">Box #{currentBox.display_number || currentBox.number || currentBox.id}</p>
+                  <p className="text-sm text-gray-400">{currentBox.qr_code}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3">
               <button
-                onClick={handleUpdateGPS}
+                onClick={handleUpdateGPSPosition}
                 disabled={gpsLoading}
-                className="flex-1 py-4 bg-green-600 hover:bg-green-700 rounded-xl font-semibold flex items-center justify-center gap-2"
+                className="flex-1 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 rounded-xl font-semibold flex items-center justify-center gap-2"
               >
                 {gpsLoading ? (
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 ) : (
-                  <Navigation size={18} />
+                  <Navigation size={20} />
                 )}
                 Position aktualisieren
               </button>
@@ -650,7 +856,7 @@ export default function Scanner() {
         </div>
       )}
 
-      {/* BOX SCAN DIALOG */}
+      {/* ========== BOX SCAN DIALOG ========== */}
       {showScanDialog && currentBox && (
         <div className="fixed inset-0 z-[100] bg-black dark:bg-gray-950">
           <BoxScanDialog
@@ -659,8 +865,10 @@ export default function Scanner() {
             onSave={handleScanCompleted}
             onScanCreated={handleScanCompleted}
             onShowDetails={() => {
-              const isFloorplan = currentBox.floor_plan_id && currentBox.pos_x !== null;
+              // GEÄNDERT: Bessere Lageplan-Erkennung
+              const isFloorplan = currentBox.floor_plan_id && (currentBox.pos_x !== null && currentBox.pos_x !== undefined);
               if (isFloorplan) {
+                // GEÄNDERT: Direkt zum Lageplan-Editor
                 navigate(`/layouts/${currentBox.object_id}?fp=${currentBox.floor_plan_id}&openBox=${currentBox.id}`);
               } else {
                 navigate(`/maps?object_id=${currentBox.object_id}&openBox=${currentBox.id}&flyTo=true`);
@@ -670,7 +878,7 @@ export default function Scanner() {
         </div>
       )}
 
-      {/* ERSTEINRICHTUNG */}
+      {/* ========== ERSTEINRICHTUNG ========== */}
       {showFirstSetup && currentBox && (
         <div className="fixed inset-0 z-[100] bg-black dark:bg-gray-950">
           <BoxEditDialog
@@ -683,7 +891,7 @@ export default function Scanner() {
         </div>
       )}
 
-      {/* PLATZIERUNGSAUSWAHL */}
+      {/* ========== PLATZIERUNGSAUSWAHL ========== */}
       {showPlacementChoice && pendingPlacement && (
         <div className="fixed inset-0 z-[100] bg-black dark:bg-gray-950 overflow-auto">
           <div className="flex items-center justify-between p-4 bg-[#111] border-b border-white/10">
@@ -707,7 +915,7 @@ export default function Scanner() {
               <button
                 onClick={handleChooseGPS}
                 disabled={gpsLoading}
-                className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-green-500/50 rounded-xl p-5 text-left"
+                className="w-full bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border border-gray-300 dark:border-white/10 hover:border-green-500 dark:hover:border-green-500/50 rounded-xl p-5 text-left"
               >
                 <div className="flex items-center gap-4">
                   <div className="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center">
@@ -728,7 +936,7 @@ export default function Scanner() {
               {objectFloorplans.length > 0 && (
                 <button
                   onClick={handleChooseFloorplan}
-                  className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-blue-500/50 rounded-xl p-5 text-left"
+                  className="w-full bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border border-gray-300 dark:border-white/10 hover:border-blue-500 dark:hover:border-blue-500/50 rounded-xl p-5 text-left"
                 >
                   <div className="flex items-center gap-4">
                     <div className="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center">
@@ -749,7 +957,7 @@ export default function Scanner() {
         </div>
       )}
 
-      {/* SCANNER */}
+      {/* ========== SCANNER ========== */}
       <div style={{ visibility: hasActiveDialog ? 'hidden' : 'visible' }}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 bg-[#111] border-b border-white/10">
@@ -762,6 +970,7 @@ export default function Scanner() {
             {currentlyOffline && <WifiOff size={14} className="text-yellow-400" />}
           </h1>
           <div className="flex gap-2">
+            {/* Kamera-Wechsel nur bei mehreren Rückkameras */}
             {cameras.length > 1 && (
               <button onClick={switchCamera} className="p-2 text-gray-400 hover:text-white">
                 <SwitchCamera size={20} />
@@ -783,14 +992,11 @@ export default function Scanner() {
           <div className="m-4 p-4 bg-red-900/50 border border-red-500/50 rounded-xl">
             <p className="text-red-300 mb-3">{error}</p>
             <button
-              onClick={() => {
-                setError("");
-                resetForNextScan();
-              }}
+              onClick={initScanner}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg flex items-center gap-2"
             >
               <RotateCcw size={16} />
-              Weiter scannen
+              Erneut versuchen
             </button>
           </div>
         )}
@@ -818,7 +1024,7 @@ export default function Scanner() {
           />
           
           {/* Scan Overlay */}
-          {isScanning && !boxLoading && !hasActiveDialog && !error && (
+          {isScanning && !boxLoading && !hasActiveDialog && (
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
               <div className="relative w-64 h-64">
                 <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-green-400 rounded-tl-lg" />
