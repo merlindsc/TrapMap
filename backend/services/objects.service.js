@@ -1,11 +1,27 @@
 // ============================================
 // OBJECTS SERVICE (GPS ENABLED)
+// Mit Befallsstatus-Berechnung
 // ============================================
 
 const { supabase } = require("../config/supabase");
 
+// ============================================
+// HELPER: Score zu Farbe
+// ============================================
+const getStatusColor = (avgScore) => {
+  if (avgScore === null || avgScore === undefined) return 'gray';
+  if (avgScore <= 0.5) return 'green';
+  if (avgScore <= 1.2) return 'yellow';
+  if (avgScore <= 2.0) return 'orange';
+  return 'red';
+};
+
+// ============================================
+// GET ALL OBJECTS MIT BEFALLS-SCORE
+// ============================================
 exports.getAll = async (organisationId) => {
-  const { data, error } = await supabase
+  // 1. Alle Objekte holen
+  const { data: objects, error } = await supabase
     .from("objects")
     .select("*")
     .eq("organisation_id", organisationId)
@@ -13,7 +29,54 @@ exports.getAll = async (organisationId) => {
 
   if (error) return { success: false, message: error.message };
 
-  return { success: true, data };
+  // 2. Für jedes Objekt den Befalls-Score berechnen
+  const objectsWithScore = await Promise.all(
+    (objects || []).map(async (obj) => {
+      // Alle Boxen des Objekts mit letztem Scan-Status holen
+      const { data: boxes } = await supabase
+        .from("boxes")
+        .select("id, current_status")
+        .eq("object_id", obj.id)
+        .neq("status", "archived");
+
+      const boxCount = boxes?.length || 0;
+      
+      if (boxCount === 0) {
+        return { 
+          ...obj, 
+          box_count: 0, 
+          scanned_count: 0, 
+          avg_score: null, 
+          status_color: 'gray' 
+        };
+      }
+
+      // Score berechnen basierend auf current_status
+      const statusScores = { green: 0, yellow: 1, orange: 2, red: 3 };
+      let totalScore = 0;
+      let scannedCount = 0;
+
+      boxes.forEach(box => {
+        const status = (box.current_status || '').toLowerCase();
+        if (status in statusScores) {
+          totalScore += statusScores[status];
+          scannedCount++;
+        }
+      });
+
+      const avgScore = scannedCount > 0 ? totalScore / scannedCount : null;
+
+      return {
+        ...obj,
+        box_count: boxCount,
+        scanned_count: scannedCount,
+        avg_score: avgScore !== null ? Math.round(avgScore * 100) / 100 : null,
+        status_color: getStatusColor(avgScore)
+      };
+    })
+  );
+
+  return { success: true, data: objectsWithScore };
 };
 
 exports.getOne = async (id, organisationId) => {

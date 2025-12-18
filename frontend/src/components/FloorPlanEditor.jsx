@@ -136,10 +136,6 @@ function BoxListItem({ box, onClick, isFloorplan = false, isUnplaced = false, is
   // Label mit short_code oder Fallback
   const boxLabel = box.short_code ? getBoxShortLabel(box) : `#${displayNum}`;
   const boxName = box.box_name || box.box_type_name || 'Kein Typ';
-  
-  // Label mit short_code oder Fallback
-  const boxLabel = box.short_code ? getBoxShortLabel(box) : `#${displayNum}`;
-  const boxName = box.box_name || box.box_type_name || 'Kein Typ';
 
   // Unplaced Style
   if (isUnplaced) {
@@ -1193,6 +1189,10 @@ function BoxMarkerFloorplan({ box, onClick, disabled, zoom }) {
   const shortQr = getShortQr(box);
   const size = Math.max(20, Math.min(32, 26 / zoom));
   const fontSize = Math.max(8, Math.min(12, 10 / zoom));
+  
+  // Label mit short_code-number Format
+  const label = box.short_code ? getBoxShortLabel(box) : `#${displayNum}`;
+  const shortCode = box.short_code || displayNum;
 
   const colorMap = {
     green: "#10b981",
@@ -1212,15 +1212,15 @@ function BoxMarkerFloorplan({ box, onClick, disabled, zoom }) {
         transform: 'translate(-50%, -50%)'
       }}
     >
-      {/* QR Badge */}
+      {/* Label oben - short_code-number */}
       <div 
-        className="absolute -top-5 left-1/2 -translate-x-1/2 bg-black/90 rounded px-1.5 py-0.5 text-white font-mono shadow-lg border border-white/20 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="absolute -top-6 left-1/2 -translate-x-1/2 bg-black/90 rounded px-1.5 py-0.5 text-white font-semibold shadow-lg border border-white/20 whitespace-nowrap"
         style={{ fontSize: Math.max(8, 10 / zoom) }}
       >
-        {shortQr}
+        {label}
       </div>
 
-      {/* Main Circle */}
+      {/* Main Circle - zeigt short_code */}
       <div
         className={`rounded-full flex items-center justify-center text-white font-bold shadow-lg border-2 border-white ${!disabled ? 'hover:scale-110' : ''} transition-transform`}
         style={{ 
@@ -1230,7 +1230,7 @@ function BoxMarkerFloorplan({ box, onClick, disabled, zoom }) {
           fontSize
         }}
       >
-        {displayNum}
+        {shortCode}
       </div>
 
       {/* Grid Position */}

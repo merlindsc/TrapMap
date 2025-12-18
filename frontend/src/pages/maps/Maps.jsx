@@ -70,10 +70,23 @@ const isMobileDevice = () => {
 /* ============================================================
    ICONS
    ============================================================ */
-const createObjectIcon = () => {
+
+// Objekt-Farbe basierend auf Befalls-Score
+const getObjectStatusColor = (avgScore) => {
+  if (avgScore === null || avgScore === undefined) return '#9CA3AF'; // Grau
+  if (avgScore <= 0.5) return '#22C55E'; // Grün
+  if (avgScore <= 1.2) return '#EAB308'; // Gelb
+  if (avgScore <= 2.0) return '#F97316'; // Orange
+  return '#EF4444'; // Rot
+};
+
+const createObjectIcon = (object) => {
+  const color = getObjectStatusColor(object?.avg_score);
+  const initial = object?.name?.charAt(0)?.toUpperCase() || 'O';
+  
   return L.divIcon({
-    html: `<div style="background: #6366f1; width: 36px; height: 36px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;">
-      <div style="transform: rotate(45deg); color: white; font-size: 18px; font-weight: bold;">O</div>
+    html: `<div style="background: ${color}; width: 36px; height: 36px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;">
+      <div style="transform: rotate(45deg); color: white; font-size: 18px; font-weight: bold;">${initial}</div>
     </div>`,
     className: "custom-object-marker",
     iconSize: [36, 36],
@@ -157,13 +170,13 @@ function BoxMarker({ box, onClick }) {
 }
 
 /* ============================================================
-   OBJECT MARKER
+   OBJECT MARKER - MIT BEFALLSFARBE
    ============================================================ */
 function ObjectMarkerComponent({ object, isSelected, onSelect }) {
   return (
     <Marker
       position={[object.lat, object.lng]}
-      icon={createObjectIcon()}
+      icon={createObjectIcon(object)}
       eventHandlers={{ click: () => onSelect(object) }}
     />
   );
