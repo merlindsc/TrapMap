@@ -44,6 +44,32 @@
   .maps-header-modern {
     display: none;
   }
+
+  /* 📱 Layer-Switch für Mobile optimieren */
+  .layer-switch-btn {
+    width: 44px !important;
+    height: 44px !important;
+    background: var(--bg-card) !important;
+    border: 2px solid var(--border-color) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+  }
+
+  .layer-switch-btn:hover {
+    border-color: var(--accent-blue) !important;
+    background: var(--bg-hover) !important;
+  }
+
+  /* Mobile Dropdown größer */
+  .style-dropdown {
+    min-width: 160px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  }
+
+  .style-dropdown button {
+    padding: 14px 16px;
+    font-size: 14px;
+  }
 }
 
 .header-left {

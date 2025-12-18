@@ -1164,9 +1164,15 @@ export default function Maps() {
             </button>
           )}
 
+          {/* 📱 Layer-Switch auch auf Mobile verfügbar */}
           <div className="map-style-toggle">
-            <button onClick={() => setStyleOpen(!styleOpen)}>
-              <Layers3 size={18} />
+            <button 
+              className="layer-switch-btn"
+              onClick={() => setStyleOpen(!styleOpen)}
+              title="Karten-Stil wechseln"
+            >
+              <Layers3 size={isMobile ? 20 : 18} />
+              {!isMobile && <span>Layer</span>}
             </button>
             {styleOpen && (
               <div className="style-dropdown">
