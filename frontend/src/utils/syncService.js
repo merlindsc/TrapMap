@@ -1,251 +1,448 @@
 /* ============================================================
-   TRAPMAP — SYNC SERVICE
-   Automatische Synchronisation bei Netzwerkverfügbarkeit
+   TRAPMAP – SYNC SERVICE
+   Automatische Synchronisation von Offline-Daten
+   
+   FEATURES:
+   - Auto-Sync bei Verbindungswiederherstellung
+   - Periodischer Sync im Hintergrund
+   - Retry-Logik mit Backoff
+   - Event-System für UI-Updates
+   - Priorisierte Sync-Reihenfolge
    ============================================================ */
 
 import {
+  // Getters
   getUnsyncedScans,
   getUnsyncedBoxes,
+  getUnsyncedPositionUpdates,
+  getUnsyncedReturnToPool,
+  
+  // Markers
   markScanAsSynced,
   markBoxAsSynced,
+  markPositionUpdateAsSynced,
+  markReturnToPoolAsSynced,
+  incrementScanAttempts,
+  
+  // Deleters
   deletePendingScan,
   deletePendingBox,
-  getOfflineStats
-} from './offlineDB';
+  
+  // Sync Functions
+  syncSingleScan,
+  syncSingleBoxUpdate,
+  syncSinglePositionUpdate,
+  syncSingleReturnToPool,
+  
+  // Cache
+  refreshAllCaches,
+  addSyncLog,
+  
+  // Status
+  isOnline
+} from './offlineAPI';
 
-const API = import.meta.env.VITE_API_URL;
+// ============================================
+// KONFIGURATION
+// ============================================
 
-// Sync-Status
+const CONFIG = {
+  AUTO_SYNC_INTERVAL: 30000,      // 30 Sekunden
+  MAX_RETRY_ATTEMPTS: 5,          // Maximale Wiederholungen pro Item
+  RETRY_DELAY_BASE: 1000,         // Basis-Verzögerung für Retry (1s)
+  RETRY_DELAY_MAX: 30000,         // Maximale Retry-Verzögerung (30s)
+  SYNC_BATCH_SIZE: 5,             // Items pro Batch
+  CONNECTION_CHECK_INTERVAL: 5000 // Verbindungscheck alle 5s
+};
+
+// ============================================
+// STATE
+// ============================================
+
+let autoSyncTimer = null;
 let isSyncing = false;
 let syncListeners = [];
+let lastSyncTime = null;
+
+// ============================================
+// EVENT SYSTEM
+// ============================================
 
 /**
- * Event-Listener für Sync-Status registrieren
+ * Listener für Sync-Events registrieren
+ * @param {Function} callback - Wird mit { type, data } aufgerufen
+ * @returns {Function} Unsubscribe-Funktion
  */
 export const addSyncListener = (callback) => {
   syncListeners.push(callback);
   return () => {
-    syncListeners = syncListeners.filter(cb => cb !== callback);
+    syncListeners = syncListeners.filter(l => l !== callback);
   };
 };
 
 /**
- * Benachrichtigt alle Listener
+ * Event an alle Listener senden
  */
-const notifyListeners = (event) => {
-  syncListeners.forEach(cb => cb(event));
-};
-
-/**
- * Prüft ob das Gerät online ist
- */
-export const isOnline = () => {
-  return navigator.onLine;
-};
-
-/**
- * Holt den Auth-Token
- */
-const getToken = () => {
-  try {
-    return localStorage.getItem('trapmap_token');
-  } catch {
-    return null;
-  }
-};
-
-/**
- * Synchronisiert einen einzelnen Scan
- */
-const syncScan = async (scan) => {
-  const token = getToken();
-  if (!token) throw new Error('Nicht authentifiziert');
-
-  const formData = new FormData();
-  formData.append('box_id', scan.box_id);
-  formData.append('status', scan.status);
-  formData.append('notes', scan.notes || '');
-  
-  // Optionale Felder
-  if (scan.consumption !== undefined) formData.append('consumption', scan.consumption);
-  if (scan.trap_state !== undefined) formData.append('trap_state', scan.trap_state);
-  if (scan.quantity !== undefined) formData.append('quantity', scan.quantity);
-  if (scan.offline_created_at) formData.append('offline_created_at', scan.offline_created_at);
-  
-  // Photo als Base64 wenn vorhanden
-  if (scan.photo_base64) {
-    // Convert Base64 to Blob
-    const byteCharacters = atob(scan.photo_base64.split(',')[1]);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
+const emitSyncEvent = (type, data = {}) => {
+  const event = { type, data, timestamp: new Date().toISOString() };
+  syncListeners.forEach(listener => {
+    try {
+      listener(event);
+    } catch (e) {
+      console.error('Sync listener error:', e);
     }
-    const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], { type: 'image/jpeg' });
-    formData.append('photo', blob, 'offline_photo.jpg');
-  }
-
-  const response = await fetch(`${API}/scans`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-    body: formData
   });
+};
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || `Sync fehlgeschlagen: ${response.status}`);
-  }
+// Event Types:
+// - 'start': Sync gestartet
+// - 'complete': Sync abgeschlossen
+// - 'error': Fehler aufgetreten
+// - 'progress': Fortschritt (items synced)
+// - 'scan_synced': Einzelner Scan synchronisiert
+// - 'box_synced': Einzelne Box synchronisiert
+// - 'position_synced': Position synchronisiert
+// - 'return_synced': Return-to-Pool synchronisiert
+// - 'offline': Offline gegangen
+// - 'online': Online gegangen
 
-  return await response.json();
+// ============================================
+// SYNC LOGIK
+// ============================================
+
+/**
+ * Berechnet Retry-Delay mit exponentialem Backoff
+ */
+const getRetryDelay = (attempts) => {
+  const delay = CONFIG.RETRY_DELAY_BASE * Math.pow(2, attempts);
+  return Math.min(delay, CONFIG.RETRY_DELAY_MAX);
 };
 
 /**
- * Synchronisiert eine einzelne Box
+ * Synchronisiert alle ausstehenden Scans
  */
-const syncBox = async (box) => {
-  const token = getToken();
-  if (!token) throw new Error('Nicht authentifiziert');
-
-  const response = await fetch(`${API}/boxes`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify({
-      qr_code: box.qr_code,
-      box_name: box.box_name,
-      box_type_id: box.box_type_id,
-      object_id: box.object_id,
-      zone_id: box.zone_id,
-      lat: box.lat,
-      lng: box.lng,
-      notes: box.notes,
-      offline_created_at: box.created_at // Original-Erstellungszeit
-    })
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || `Box-Sync fehlgeschlagen: ${response.status}`);
-  }
-
-  return await response.json();
-};
-
-/**
- * Führt die komplette Synchronisation durch
- */
-export const syncAll = async () => {
-  if (isSyncing) {
-    console.log('⏳ Sync bereits aktiv');
-    return { skipped: true };
-  }
-
-  if (!isOnline()) {
-    console.log('📴 Offline - Sync übersprungen');
-    return { offline: true };
-  }
-
-  isSyncing = true;
-  notifyListeners({ type: 'start' });
-
-  const results = {
-    scans: { success: 0, failed: 0 },
-    boxes: { success: 0, failed: 0 },
-    errors: []
-  };
-
-  try {
-    // 1. Boxen synchronisieren (müssen zuerst erstellt werden für Scans)
-    const pendingBoxes = await getUnsyncedBoxes();
-    console.log(`📦 ${pendingBoxes.length} Boxen zu synchronisieren`);
-
-    for (const box of pendingBoxes) {
-      try {
-        const serverBox = await syncBox(box);
-        await markBoxAsSynced(box.localId, serverBox.id);
-        results.boxes.success++;
-        notifyListeners({ type: 'box_synced', box: serverBox });
-      } catch (error) {
-        console.error('❌ Box-Sync Fehler:', error);
-        results.boxes.failed++;
-        results.errors.push({ type: 'box', localId: box.localId, error: error.message });
-      }
+const syncScans = async () => {
+  const scans = await getUnsyncedScans();
+  const results = { success: 0, failed: 0, skipped: 0 };
+  
+  for (const scan of scans) {
+    // Zu viele Versuche → überspringen
+    if ((scan.attempts || 0) >= CONFIG.MAX_RETRY_ATTEMPTS) {
+      results.skipped++;
+      console.warn(`⏭️ Scan ${scan.localId} übersprungen (zu viele Versuche)`);
+      continue;
     }
-
-    // 2. Scans synchronisieren
-    const pendingScans = await getUnsyncedScans();
-    console.log(`📝 ${pendingScans.length} Scans zu synchronisieren`);
-
-    for (const scan of pendingScans) {
-      try {
-        const serverScan = await syncScan(scan);
-        await deletePendingScan(scan.localId); // Scan nach erfolgreichem Sync löschen
-        results.scans.success++;
-        notifyListeners({ type: 'scan_synced', scan: serverScan });
-      } catch (error) {
-        console.error('❌ Scan-Sync Fehler:', error);
-        results.scans.failed++;
-        results.errors.push({ type: 'scan', localId: scan.localId, error: error.message });
-      }
+    
+    try {
+      const serverResult = await syncSingleScan(scan);
+      await markScanAsSynced(scan.localId, serverResult?.id);
+      results.success++;
+      
+      emitSyncEvent('scan_synced', { 
+        localId: scan.localId, 
+        serverId: serverResult?.id,
+        boxId: scan.box_id 
+      });
+      
+      console.log(`✅ Scan ${scan.localId} synchronisiert`);
+    } catch (error) {
+      results.failed++;
+      await incrementScanAttempts(scan.localId);
+      console.error(`❌ Scan ${scan.localId} Sync fehlgeschlagen:`, error.message);
     }
-
-    console.log('✅ Sync abgeschlossen:', results);
-    notifyListeners({ type: 'complete', results });
-
-  } catch (error) {
-    console.error('❌ Sync-Fehler:', error);
-    notifyListeners({ type: 'error', error });
-  } finally {
-    isSyncing = false;
   }
-
+  
   return results;
 };
 
 /**
- * Startet die automatische Synchronisation
+ * Synchronisiert alle ausstehenden Box-Updates
  */
-export const startAutoSync = (intervalMs = 30000) => {
-  // Event Listener für Online-Status
-  window.addEventListener('online', () => {
-    console.log('🌐 Online - Starte Sync...');
-    setTimeout(syncAll, 1000); // Kurze Verzögerung
-  });
-
-  window.addEventListener('offline', () => {
-    console.log('📴 Offline');
-    notifyListeners({ type: 'offline' });
-  });
-
-  // Periodische Synchronisation
-  const intervalId = setInterval(async () => {
-    if (isOnline()) {
-      const stats = await getOfflineStats();
-      if (stats.totalPending > 0) {
-        console.log(`🔄 Auto-Sync: ${stats.totalPending} ausstehende Einträge`);
-        syncAll();
-      }
+const syncBoxUpdates = async () => {
+  const boxes = await getUnsyncedBoxes();
+  const results = { success: 0, failed: 0, skipped: 0 };
+  
+  for (const boxUpdate of boxes) {
+    if ((boxUpdate.attempts || 0) >= CONFIG.MAX_RETRY_ATTEMPTS) {
+      results.skipped++;
+      continue;
     }
-  }, intervalMs);
+    
+    try {
+      const serverResult = await syncSingleBoxUpdate(boxUpdate);
+      await markBoxAsSynced(boxUpdate.localId, serverResult?.id);
+      results.success++;
+      
+      emitSyncEvent('box_synced', { 
+        localId: boxUpdate.localId, 
+        boxId: boxUpdate.box_id 
+      });
+      
+      console.log(`✅ Box-Update ${boxUpdate.localId} synchronisiert`);
+    } catch (error) {
+      results.failed++;
+      console.error(`❌ Box-Update ${boxUpdate.localId} Sync fehlgeschlagen:`, error.message);
+    }
+  }
+  
+  return results;
+};
 
-  console.log('🔄 Auto-Sync gestartet');
+/**
+ * Synchronisiert alle ausstehenden Position-Updates
+ */
+const syncPositionUpdates = async () => {
+  const positions = await getUnsyncedPositionUpdates();
+  const results = { success: 0, failed: 0, skipped: 0 };
+  
+  for (const pos of positions) {
+    try {
+      await syncSinglePositionUpdate(pos);
+      await markPositionUpdateAsSynced(pos.localId);
+      results.success++;
+      
+      emitSyncEvent('position_synced', { 
+        localId: pos.localId, 
+        boxId: pos.box_id 
+      });
+      
+      console.log(`✅ Position ${pos.localId} synchronisiert`);
+    } catch (error) {
+      results.failed++;
+      console.error(`❌ Position ${pos.localId} Sync fehlgeschlagen:`, error.message);
+    }
+  }
+  
+  return results;
+};
 
+/**
+ * Synchronisiert alle ausstehenden Return-to-Pool Operationen
+ */
+const syncReturnToPool = async () => {
+  const returns = await getUnsyncedReturnToPool();
+  const results = { success: 0, failed: 0, skipped: 0 };
+  
+  for (const item of returns) {
+    try {
+      await syncSingleReturnToPool(item);
+      await markReturnToPoolAsSynced(item.localId);
+      results.success++;
+      
+      emitSyncEvent('return_synced', { 
+        localId: item.localId, 
+        boxId: item.box_id 
+      });
+      
+      console.log(`✅ Return-to-Pool ${item.localId} synchronisiert`);
+    } catch (error) {
+      results.failed++;
+      console.error(`❌ Return-to-Pool ${item.localId} Sync fehlgeschlagen:`, error.message);
+    }
+  }
+  
+  return results;
+};
+
+/**
+ * Hauptsynchronisationsfunktion
+ * Synchronisiert alle ausstehenden Daten in priorisierter Reihenfolge
+ */
+export const syncAll = async () => {
+  // Verhindere parallele Syncs
+  if (isSyncing) {
+    console.log('⏳ Sync bereits aktiv, überspringe...');
+    return null;
+  }
+  
+  // Offline-Check
+  if (!isOnline()) {
+    console.log('🔴 Offline - Sync nicht möglich');
+    emitSyncEvent('offline');
+    return null;
+  }
+  
+  isSyncing = true;
+  emitSyncEvent('start');
+  
+  console.log('🔄 Starte Synchronisation...');
+  
+  const results = {
+    scans: { success: 0, failed: 0, skipped: 0 },
+    boxes: { success: 0, failed: 0, skipped: 0 },
+    positions: { success: 0, failed: 0, skipped: 0 },
+    returns: { success: 0, failed: 0, skipped: 0 },
+    timestamp: new Date().toISOString()
+  };
+  
+  try {
+    // Sync-Reihenfolge:
+    // 1. Return-to-Pool (wichtig für Box-Status)
+    // 2. Position-Updates
+    // 3. Box-Updates
+    // 4. Scans (abhängig von Boxen)
+    
+    results.returns = await syncReturnToPool();
+    emitSyncEvent('progress', { type: 'returns', ...results.returns });
+    
+    results.positions = await syncPositionUpdates();
+    emitSyncEvent('progress', { type: 'positions', ...results.positions });
+    
+    results.boxes = await syncBoxUpdates();
+    emitSyncEvent('progress', { type: 'boxes', ...results.boxes });
+    
+    results.scans = await syncScans();
+    emitSyncEvent('progress', { type: 'scans', ...results.scans });
+    
+    // Cache nach erfolgreichem Sync aktualisieren
+    const totalSuccess = results.scans.success + results.boxes.success + 
+                         results.positions.success + results.returns.success;
+    
+    if (totalSuccess > 0) {
+      console.log('🔄 Cache wird aktualisiert...');
+      await refreshAllCaches();
+    }
+    
+    // Sync-Log speichern
+    const hasErrors = results.scans.failed + results.boxes.failed + 
+                     results.positions.failed + results.returns.failed > 0;
+    
+    await addSyncLog(!hasErrors, {
+      scans: results.scans,
+      boxes: results.boxes,
+      positions: results.positions,
+      returns: results.returns
+    });
+    
+    lastSyncTime = new Date();
+    
+    console.log('✅ Synchronisation abgeschlossen:', {
+      scans: `${results.scans.success}/${results.scans.success + results.scans.failed}`,
+      boxes: `${results.boxes.success}/${results.boxes.success + results.boxes.failed}`,
+      positions: `${results.positions.success}/${results.positions.success + results.positions.failed}`,
+      returns: `${results.returns.success}/${results.returns.success + results.returns.failed}`
+    });
+    
+  } catch (error) {
+    console.error('❌ Sync-Fehler:', error);
+    emitSyncEvent('error', { error: error.message });
+    
+    await addSyncLog(false, { error: error.message });
+  } finally {
+    isSyncing = false;
+    emitSyncEvent('complete', { results });
+  }
+  
+  return results;
+};
+
+// ============================================
+// AUTO-SYNC
+// ============================================
+
+/**
+ * Startet automatische Synchronisation
+ * @param {number} interval - Intervall in ms (default: 30s)
+ * @returns {Function} Stop-Funktion
+ */
+export const startAutoSync = (interval = CONFIG.AUTO_SYNC_INTERVAL) => {
+  // Bestehenden Timer stoppen
+  stopAutoSync();
+  
+  console.log(`🔄 Auto-Sync gestartet (alle ${interval / 1000}s)`);
+  
+  // Initial sync
+  setTimeout(() => {
+    if (isOnline()) {
+      syncAll().catch(console.error);
+    }
+  }, 2000);
+  
+  // Periodischer Sync
+  autoSyncTimer = setInterval(() => {
+    if (isOnline() && !isSyncing) {
+      syncAll().catch(console.error);
+    }
+  }, interval);
+  
+  // Online/Offline Event Listeners
+  const handleOnline = () => {
+    console.log('🌐 Verbindung wiederhergestellt - starte Sync...');
+    emitSyncEvent('online');
+    
+    // Kurze Verzögerung für stabile Verbindung
+    setTimeout(() => {
+      syncAll().catch(console.error);
+    }, 1000);
+  };
+  
+  const handleOffline = () => {
+    console.log('🔴 Verbindung verloren');
+    emitSyncEvent('offline');
+  };
+  
+  window.addEventListener('online', handleOnline);
+  window.addEventListener('offline', handleOffline);
+  
+  // Visibility Change Handler (Sync wenn App wieder sichtbar wird)
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible' && isOnline() && !isSyncing) {
+      console.log('👁️ App wieder sichtbar - prüfe Sync...');
+      syncAll().catch(console.error);
+    }
+  };
+  
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  
+  // Cleanup-Funktion
   return () => {
-    clearInterval(intervalId);
-    console.log('⏹️ Auto-Sync gestoppt');
+    stopAutoSync();
+    window.removeEventListener('online', handleOnline);
+    window.removeEventListener('offline', handleOffline);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
   };
 };
 
 /**
- * Gibt den aktuellen Sync-Status zurück
+ * Stoppt automatische Synchronisation
  */
-export const getSyncStatus = async () => {
-  const stats = await getOfflineStats();
-  return {
-    isOnline: isOnline(),
-    isSyncing,
-    ...stats
-  };
+export const stopAutoSync = () => {
+  if (autoSyncTimer) {
+    clearInterval(autoSyncTimer);
+    autoSyncTimer = null;
+    console.log('⏹️ Auto-Sync gestoppt');
+  }
 };
+
+// ============================================
+// STATUS & INFO
+// ============================================
+
+/**
+ * Prüft ob gerade synchronisiert wird
+ */
+export const getIsSyncing = () => isSyncing;
+
+/**
+ * Gibt letzten Sync-Zeitpunkt zurück
+ */
+export const getLastSyncTime = () => lastSyncTime;
+
+/**
+ * Manueller Sync-Trigger
+ */
+export const triggerSync = async () => {
+  if (!isOnline()) {
+    return { success: false, message: 'Keine Internetverbindung' };
+  }
+  
+  if (isSyncing) {
+    return { success: false, message: 'Synchronisation läuft bereits' };
+  }
+  
+  const results = await syncAll();
+  return { success: true, results };
+};
+
+// Re-export isOnline für Convenience
+export { isOnline };

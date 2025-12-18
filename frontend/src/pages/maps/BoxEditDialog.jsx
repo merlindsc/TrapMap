@@ -1,15 +1,32 @@
 /* ============================================================
-   TRAPMAP - BOX EDIT DIALOG V2
+   TRAPMAP - BOX EDIT DIALOG V3 (OFFLINE-FÄHIG)
    Bearbeiten einer Box - Mit Box-Name/Nummer Anzeige
    + QR-Code Info wenn unterschiedlich
    + Insektentyp-Auswahl für Insektenmonitore
+   + VOLLSTÄNDIGE OFFLINE-UNTERSTÜTZUNG
+   
+   FEATURES:
+   - 🆕 BoxTypes aus Cache laden
+   - 🆕 Offline-Speicherung von Änderungen
+   - 🆕 GPS-Position offline speichern
+   - 🆕 Visueller Offline-Indikator
    ============================================================ */
 
 import { useState, useEffect } from "react";
-import { X, Save, CheckCircle, MapPin, Navigation, Clock, Bug, Hash, Tag, Maximize2 } from "lucide-react";
+import { X, Save, CheckCircle, MapPin, Navigation, Clock, Bug, Hash, Tag, Maximize2, WifiOff, Cloud } from "lucide-react";
 import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+
+// 🆕 Offline API Imports
+import { 
+  getBoxTypes, 
+  updateBoxOffline, 
+  createSetupScan,
+  updateBoxPosition,
+  isOnline 
+} from "../utils/offlineAPI";
+import { useOffline } from "../context/OfflineContext";
 
 // Mini-Karte Icon
 const gpsMarkerIcon = L.divIcon({
@@ -41,8 +58,6 @@ function MapCenterer({ position }) {
   return null;
 }
 
-const API = import.meta.env.VITE_API_URL;
-
 // QR-Nummer extrahieren
 const getShortQr = (box) => {
   if (box?.qr_code) {
@@ -61,51 +76,14 @@ export default function BoxEditDialog({
   onSetGPS,
   isFirstSetup = false
 }) {
-  const token = localStorage.getItem("trapmap_token");
+  // 🆕 Offline Context
+  const { isOnline: contextIsOnline, pendingCount, updatePendingCount } = useOffline();
+  const currentlyOffline = !isOnline();
   
-  // BoxTypes State - selbst laden wenn keine übergeben
+  // BoxTypes State - 🆕 mit Offline-Support
   const [boxTypes, setBoxTypes] = useState(propBoxTypes);
   const [boxTypesLoading, setBoxTypesLoading] = useState(false);
-
-  // BoxTypes laden wenn leer
-  useEffect(() => {
-    if (boxTypes.length === 0 && !boxTypesLoading) {
-      loadBoxTypes();
-    }
-  }, []);
-
-  // Prop-Update übernehmen
-  useEffect(() => {
-    if (propBoxTypes.length > 0) {
-      setBoxTypes(propBoxTypes);
-    }
-  }, [propBoxTypes]);
-
-  const loadBoxTypes = async () => {
-    setBoxTypesLoading(true);
-    try {
-      // Beide Endpunkte versuchen
-      let res;
-      try {
-        res = await fetch(`${API}/boxtypes`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-      } catch (e) {
-        res = await fetch(`${API}/box-types`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-      }
-      
-      if (res.ok) {
-        const data = await res.json();
-        setBoxTypes(Array.isArray(data) ? data : data?.data || []);
-        console.log("✅ BoxTypes geladen:", data.length || data?.data?.length);
-      }
-    } catch (err) {
-      console.error("BoxTypes laden fehlgeschlagen:", err);
-    }
-    setBoxTypesLoading(false);
-  };
+  const [boxTypesOffline, setBoxTypesOffline] = useState(false);
 
   // Required Fields
   const [requiredFields, setRequiredFields] = useState({
@@ -130,7 +108,7 @@ export default function BoxEditDialog({
     }
   }, []);
 
-  // Form State - NEU: Box-Name und Display-Number editierbar
+  // Form State
   const [boxName, setBoxName] = useState(box?.name || box?.box_name || "");
   const [displayNumber, setDisplayNumber] = useState(box?.display_number || box?.number || "");
   const [boxTypeId, setBoxTypeId] = useState(box?.box_type_id || "");
@@ -194,6 +172,38 @@ export default function BoxEditDialog({
     { value: 90, label: "90 Tage", sub: "quartalsweise" }
   ];
 
+  // 🆕 BoxTypes laden - OFFLINE-FÄHIG
+  useEffect(() => {
+    if (boxTypes.length === 0 && !boxTypesLoading) {
+      loadBoxTypes();
+    }
+  }, []);
+
+  // Prop-Update übernehmen
+  useEffect(() => {
+    if (propBoxTypes.length > 0) {
+      setBoxTypes(propBoxTypes);
+    }
+  }, [propBoxTypes]);
+
+  const loadBoxTypes = async () => {
+    setBoxTypesLoading(true);
+    try {
+      const result = await getBoxTypes();
+      
+      if (result.success) {
+        setBoxTypes(result.data || []);
+        setBoxTypesOffline(result.offline || false);
+        console.log("✅ BoxTypes geladen:", result.data.length, result.offline ? "(offline)" : "(online)");
+      } else {
+        console.error("BoxTypes laden fehlgeschlagen");
+      }
+    } catch (err) {
+      console.error("BoxTypes laden fehlgeschlagen:", err);
+    }
+    setBoxTypesLoading(false);
+  };
+
   // Initialisiere Box-Daten
   useEffect(() => {
     if (box?.box_type_id) setBoxTypeId(box.box_type_id);
@@ -235,21 +245,10 @@ export default function BoxEditDialog({
   }, [box]);
 
   // AUTOMATISCH GPS anfordern bei Ersteinrichtung auf Mobile
-  // NUR wenn Box noch KEINE GPS Position hat!
   useEffect(() => {
-    // Warten bis Box-Daten geladen sind (box.id muss existieren)
     if (!box?.id) return;
-    
-    // Nur bei Ersteinrichtung auf Mobile
     if (!isFirstSetup || !isMobile) return;
-    
-    // Wenn Box schon GPS hat, nicht nochmal anfordern
-    if (box?.lat && box?.lng) {
-      console.log("📍 Box hat schon GPS, überspringe Anforderung");
-      return;
-    }
-    
-    // Nur einmal anfordern
+    if (box?.lat && box?.lng) return;
     if (gpsRequested || gpsLoading) return;
     
     console.log("📍 Ersteinrichtung: Fordere GPS an...");
@@ -257,7 +256,7 @@ export default function BoxEditDialog({
     requestGPSPosition();
   }, [box?.id, isFirstSetup, isMobile, box?.lat, box?.lng, gpsRequested, gpsLoading]);
 
-  // GPS-Position anfordern und speichern
+  // 🆕 GPS-Position anfordern und speichern - OFFLINE-FÄHIG
   const requestGPSPosition = async () => {
     if (!navigator.geolocation) {
       setGpsError("GPS nicht verfügbar");
@@ -280,27 +279,18 @@ export default function BoxEditDialog({
       console.log("📍 GPS Position erhalten:", position);
       setGpsPosition(position);
 
-      // Sofort in DB speichern
+      // 🆕 Position speichern - OFFLINE-FÄHIG
       if (box?.id) {
         try {
-          const response = await fetch(`${API}/boxes/${box.id}/position`, {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              lat: position.lat,
-              lng: position.lng,
-              position_type: "gps"
-            })
-          });
+          const result = await updateBoxPosition(box.id, position.lat, position.lng, 'gps');
 
-          if (response.ok) {
-            console.log("✅ GPS Position gespeichert");
+          if (result.success) {
+            console.log(result.online ? "✅ GPS Position online gespeichert" : "📴 GPS Position offline gespeichert");
             setGpsSaved(true);
-          } else {
-            console.error("GPS save error:", await response.text());
+            
+            if (updatePendingCount) {
+              updatePendingCount();
+            }
           }
         } catch (saveErr) {
           console.error("GPS save error:", saveErr);
@@ -337,6 +327,7 @@ export default function BoxEditDialog({
     return finalNotes;
   };
 
+  // 🆕 handleSave - OFFLINE-FÄHIG
   const handleSave = async () => {
     if (!boxTypeId) {
       setError("Bitte Box-Typ auswählen");
@@ -372,39 +363,34 @@ export default function BoxEditDialog({
         control_interval_days: finalInterval
       };
       
-      // NEU: Box-Name und Nummer speichern
+      // Box-Name und Nummer speichern
       if (boxName.trim()) updateData.name = boxName.trim();
       if (displayNumber) updateData.number = displayNumber.toString();
-      
       if (isRodentStation && finalBait) updateData.bait = finalBait;
 
-      const updateRes = await fetch(`${API}/boxes/${box.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(updateData)
-      });
+      // 🆕 Offline-fähigen Update-Call
+      const updateResult = await updateBoxOffline(box.id, updateData);
 
-      if (!updateRes.ok) {
-        const err = await updateRes.json();
-        throw new Error(err.error || "Fehler beim Speichern");
+      if (!updateResult.success) {
+        throw new Error(updateResult.message || "Fehler beim Speichern");
+      }
+      
+      console.log(updateResult.online ? "✅ Box online aktualisiert" : "📴 Box offline aktualisiert");
+
+      // Bei Ersteinrichtung: Setup-Scan erstellen
+      if (isFirstSetup) {
+        const scanResult = await createSetupScan(
+          box.id, 
+          { bait: finalBait, insect_type: finalInsectType },
+          box.object_id || box.objects?.id
+        );
+        
+        console.log(scanResult.online ? "✅ Setup-Scan online erstellt" : "📴 Setup-Scan offline erstellt");
       }
 
-      // Bei Ersteinrichtung: Scan erstellen
-      if (isFirstSetup) {
-        const scanData = {
-          box_id: box.id,
-          object_id: box.object_id || box.objects?.id,
-          status: "green",
-          activity: "keine",
-          quantity: "0",
-          notes: "Ersteinrichtung" + (finalBait ? ` | Köder: ${finalBait}` : "") + (insectType ? ` | Ziel: ${insectType}` : ""),
-          scan_type: "setup"
-        };
-        await fetch(`${API}/scans`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify(scanData)
-        });
+      // Pending Count aktualisieren
+      if (updatePendingCount) {
+        updatePendingCount();
       }
 
       onSave && onSave();
@@ -431,25 +417,29 @@ export default function BoxEditDialog({
         onClick={(e) => e.stopPropagation()}
         className="bg-white dark:bg-gray-900 rounded-xl w-full max-w-md max-h-[90vh] border border-gray-200 dark:border-white/10 shadow-2xl overflow-hidden flex flex-col"
       >
-        {/* Header - MIT QR-INFO */}
+        {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-white/10 dark:border-white/20 bg-gray-950 dark:bg-black">
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 ${isFirstSetup ? 'bg-green-500/20 dark:bg-green-500/30 text-green-400' : 'bg-indigo-500/20 dark:bg-indigo-500/30 text-indigo-400'} rounded-lg flex items-center justify-center font-bold text-sm`}>
               {getBoxHeaderNumber()}
             </div>
             <div>
-              <h2 className="font-semibold text-white dark:text-gray-100">
+              <h2 className="font-semibold text-white dark:text-gray-100 flex items-center gap-2">
                 {isFirstSetup ? "Ersteinrichtung" : "Box bearbeiten"}
+                {/* 🆕 Offline-Badge */}
+                {currentlyOffline && (
+                  <span className="px-2 py-0.5 bg-yellow-500/20 rounded text-yellow-400 text-xs flex items-center gap-1">
+                    <WifiOff size={10} /> Offline
+                  </span>
+                )}
               </h2>
               <div className="flex items-center gap-2 text-xs text-gray-500">
-                {/* QR-Code Badge */}
                 {qrNumber && (
                   <span className="bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded flex items-center gap-1 font-mono text-gray-900 dark:text-gray-100">
                     <Hash size={10} />
                     QR {qrNumber}
                   </span>
                 )}
-                {/* Hinweis wenn Nummer anders */}
                 {hasCustomNumber && (
                   <span className="text-yellow-400">
                     (Nr. {displayNumber})
@@ -465,6 +455,27 @@ export default function BoxEditDialog({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          
+          {/* 🆕 Offline-Status Banner */}
+          {(currentlyOffline || pendingCount > 0) && (
+            <div className={`rounded-lg p-3 flex items-center gap-2 text-sm ${
+              currentlyOffline 
+                ? "bg-yellow-500/10 border border-yellow-500/20 text-yellow-400"
+                : "bg-blue-500/10 border border-blue-500/20 text-blue-400"
+            }`}>
+              {currentlyOffline ? (
+                <>
+                  <WifiOff size={16} />
+                  <span>Offline-Modus - Änderungen werden später synchronisiert</span>
+                </>
+              ) : (
+                <>
+                  <Cloud size={16} />
+                  <span>{pendingCount} ausstehende Synchronisation(en)</span>
+                </>
+              )}
+            </div>
+          )}
           
           {/* Ersteinrichtung Info */}
           {isFirstSetup && (
@@ -539,7 +550,6 @@ export default function BoxEditDialog({
                   <Marker position={[gpsPosition.lat, gpsPosition.lng]} icon={gpsMarkerIcon} />
                   <MapCenterer position={[gpsPosition.lat, gpsPosition.lng]} />
                 </MapContainer>
-                {/* Label */}
                 <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-sm px-2 py-1 rounded text-xs text-green-400 flex items-center gap-1">
                   <CheckCircle size={12} />
                   Position gesetzt
@@ -555,10 +565,16 @@ export default function BoxEditDialog({
             </div>
           )}
 
-          {/* ========== BOX-TYP - WICHTIG: Als erstes! ========== */}
+          {/* BOX-TYP */}
           <div>
-            <label className="block text-xs font-medium text-gray-400 mb-2">
+            <label className="block text-xs font-medium text-gray-400 mb-2 flex items-center gap-2">
               📦 Box-Typ *
+              {/* 🆕 Offline-Badge für BoxTypes */}
+              {boxTypesOffline && (
+                <span className="px-1.5 py-0.5 bg-yellow-500/20 rounded text-yellow-400 text-[10px] flex items-center gap-1">
+                  <WifiOff size={8} /> Cache
+                </span>
+              )}
             </label>
             {boxTypesLoading ? (
               <div className="w-full px-3 py-2.5 bg-gray-950 dark:bg-black border border-white/10 dark:border-white/20 rounded-lg text-gray-500 text-sm">
@@ -566,7 +582,7 @@ export default function BoxEditDialog({
               </div>
             ) : boxTypes.length === 0 ? (
               <div className="w-full px-3 py-2.5 bg-red-900/20 border border-red-500/30 rounded-lg text-red-400 text-sm">
-                ⚠️ Keine Box-Typen gefunden
+                ⚠️ Keine Box-Typen verfügbar {currentlyOffline && "- Cache leer"}
               </div>
             ) : (
               <select
@@ -576,10 +592,8 @@ export default function BoxEditDialog({
               >
                 <option value="">Bitte auswählen...</option>
                 
-                {/* Prüfen ob categories vorhanden sind */}
                 {boxTypes.some(t => t.category) ? (
                   <>
-                    {/* Mit Categories - gruppiert */}
                     {boxTypes.filter(t => t.category === 'bait_box').length > 0 && (
                       <optgroup label="🐀 Nager - Köder">
                         {boxTypes
@@ -627,7 +641,6 @@ export default function BoxEditDialog({
                     )}
                   </>
                 ) : (
-                  /* Ohne Categories - einfache Liste */
                   boxTypes
                     .sort((a, b) => a.name.localeCompare(b.name, 'de'))
                     .map(type => (
@@ -638,7 +651,7 @@ export default function BoxEditDialog({
             )}
           </div>
 
-          {/* ========== BOX-NAME ========== */}
+          {/* BOX-NAME */}
           <div>
             <label className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2">
               <Tag size={12} />
@@ -654,7 +667,7 @@ export default function BoxEditDialog({
             <p className="text-xs text-gray-600 mt-1">Eigener Name zur leichteren Identifikation</p>
           </div>
 
-          {/* ========== DISPLAY-NUMMER ========== */}
+          {/* DISPLAY-NUMMER */}
           <div>
             <label className="flex items-center gap-2 text-xs font-medium text-gray-400 mb-2">
               <Hash size={12} />
@@ -928,8 +941,9 @@ export default function BoxEditDialog({
                 : "bg-green-500 hover:bg-green-600 text-white"
             }`}
           >
+            {currentlyOffline && <WifiOff size={14} />}
             <Save size={16} />
-            {saving ? "..." : isFirstSetup ? "Einrichten" : "Speichern"}
+            {saving ? "..." : isFirstSetup ? (currentlyOffline ? "Offline einrichten" : "Einrichten") : (currentlyOffline ? "Offline speichern" : "Speichern")}
           </button>
         </div>
       </div>

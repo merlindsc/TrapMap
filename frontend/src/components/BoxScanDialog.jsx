@@ -1,22 +1,33 @@
 /* ============================================================
-   TRAPMAP - BOX SCAN DIALOG V4
+   TRAPMAP - BOX SCAN DIALOG V5 (OFFLINE-FÄHIG)
    Kontrolle + Verlauf + Mini-Karte + Box-Name/Nummer Anzeige
    + Bestätigungsdialog für "Zurück ins Lager"
+   + VOLLSTÄNDIGE OFFLINE-UNTERSTÜTZUNG
    
    FEATURES:
    - Mini-Karte für GPS-Boxen mit Live-Distanz
    - Zeigt Box-Name/Nummer wenn anders als QR-Code
    - Nach Speichern → Scanner wieder aktiv (via onScanCreated)
    - Bestätigungsdialog für Return to Pool
+   - 🆕 Offline-Speicherung von Kontrollen
+   - 🆕 Offline-History aus Cache
+   - 🆕 Visueller Offline-Indikator
    ============================================================ */
 
 import { useState, useEffect } from "react";
-import { X, Save, Camera, Clock, CheckCircle, AlertCircle, Edit3, MapPin, Navigation, Maximize2, Hash, Archive, AlertTriangle } from "lucide-react";
+import { X, Save, Camera, Clock, CheckCircle, AlertCircle, Edit3, MapPin, Navigation, Maximize2, Hash, Archive, AlertTriangle, WifiOff, Cloud } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-const API = import.meta.env.VITE_API_URL;
+// 🆕 Offline API Imports
+import { 
+  createScanOffline, 
+  getBoxHistory, 
+  returnBoxToPool,
+  isOnline 
+} from "../utils/offlineAPI";
+import { useOffline } from "../context/OfflineContext";
 
 const STATUS = {
   green: { label: "OK", color: "#238636" },
@@ -166,7 +177,7 @@ function MapFitter({ boxPos, userPos }) {
 // ============================================
 // BESTÄTIGUNGSDIALOG KOMPONENTE
 // ============================================
-function ConfirmReturnDialog({ box, onConfirm, onCancel, loading }) {
+function ConfirmReturnDialog({ box, onConfirm, onCancel, loading, isOffline }) {
   const boxInfo = getBoxDisplayInfo(box);
   
   return (
@@ -204,6 +215,20 @@ function ConfirmReturnDialog({ box, onConfirm, onCancel, loading }) {
 
         {/* Body */}
         <div style={{ padding: 20 }}>
+          {/* 🆕 Offline-Hinweis */}
+          {isOffline && (
+            <div style={{
+              marginBottom: 12, padding: "8px 12px",
+              background: "rgba(234, 179, 8, 0.15)",
+              border: "1px solid rgba(234, 179, 8, 0.3)",
+              borderRadius: 6, display: "flex", alignItems: "center", gap: 8,
+              fontSize: 11, color: "#eab308"
+            }}>
+              <WifiOff size={14} />
+              Wird offline gespeichert
+            </div>
+          )}
+          
           <p style={{ color: "#c9d1d9", fontSize: 13, lineHeight: 1.5, margin: 0 }}>
             Die Box wird vollständig zurückgesetzt:
           </p>
@@ -277,6 +302,37 @@ function ConfirmReturnDialog({ box, onConfirm, onCancel, loading }) {
 }
 
 // ============================================
+// 🆕 OFFLINE INDICATOR KOMPONENTE
+// ============================================
+function OfflineIndicator({ isOffline, pendingCount }) {
+  if (!isOffline && pendingCount === 0) return null;
+  
+  return (
+    <div style={{
+      padding: "6px 10px",
+      background: isOffline ? "rgba(234, 179, 8, 0.15)" : "rgba(59, 130, 246, 0.15)",
+      border: `1px solid ${isOffline ? "rgba(234, 179, 8, 0.3)" : "rgba(59, 130, 246, 0.3)"}`,
+      borderRadius: 6,
+      display: "flex", alignItems: "center", gap: 8,
+      marginBottom: 10,
+      fontSize: 11
+    }}>
+      {isOffline ? (
+        <>
+          <WifiOff size={14} style={{ color: "#eab308" }} />
+          <span style={{ color: "#eab308" }}>Offline-Modus aktiv</span>
+        </>
+      ) : (
+        <>
+          <Cloud size={14} style={{ color: "#3b82f6" }} />
+          <span style={{ color: "#3b82f6" }}>{pendingCount} ausstehende Sync(s)</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ============================================
 // HAUPTKOMPONENTE
 // ============================================
 export default function BoxScanDialog({ 
@@ -290,7 +346,9 @@ export default function BoxScanDialog({
   onShowDetails,
   onReturnToStorage
 }) {
-  const token = localStorage.getItem("trapmap_token");
+  // 🆕 Offline Context
+  const { isOnline: contextIsOnline, pendingCount, updatePendingCount } = useOffline();
+  const currentlyOffline = !isOnline();
   
   const [tab, setTab] = useState("scan");
   const [loading, setLoading] = useState(false);
@@ -308,15 +366,14 @@ export default function BoxScanDialog({
   // History
   const [history, setHistory] = useState([]);
   const [histLoading, setHistLoading] = useState(false);
+  const [historyOffline, setHistoryOffline] = useState(false);
 
   // GPS für Mini-Karte
   const [userPosition, setUserPosition] = useState(null);
   const [gpsError, setGpsError] = useState(null);
   const [distance, setDistance] = useState(null);
 
-  // ============================================
-  // NEU: State für Bestätigungsdialog
-  // ============================================
+  // State für Bestätigungsdialog
   const [showReturnConfirm, setShowReturnConfirm] = useState(false);
   const [returnLoading, setReturnLoading] = useState(false);
 
@@ -374,7 +431,7 @@ export default function BoxScanDialog({
     setStatus(newStatus);
   }, [consumption, quantity, trapState, boxType]);
 
-  // History laden
+  // 🆕 History laden - OFFLINE-FÄHIG
   useEffect(() => {
     loadHistory();
   }, [box?.id]);
@@ -382,17 +439,21 @@ export default function BoxScanDialog({
   const loadHistory = async () => {
     if (!box?.id) return;
     setHistLoading(true);
+    
     try {
-      const r = await fetch(`${API}/scans?box_id=${box.id}&limit=20`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (r.ok) {
-        const d = await r.json();
-        setHistory(Array.isArray(d) ? d : d.data || []);
+      const result = await getBoxHistory(box.id, 20);
+      
+      if (result.success) {
+        setHistory(result.data || []);
+        setHistoryOffline(result.offline || false);
+      } else {
+        setHistory([]);
       }
     } catch (e) {
-      console.error(e);
+      console.error('History load error:', e);
+      setHistory([]);
     }
+    
     setHistLoading(false);
   };
 
@@ -404,32 +465,41 @@ export default function BoxScanDialog({
     }
   };
 
+  // 🆕 Submit - OFFLINE-FÄHIG
   const submit = async () => {
     setLoading(true);
     try {
-      const fd = new FormData();
-      fd.append("box_id", box.id);
-      fd.append("object_id", box.object_id || box.objects?.id || "");
-      fd.append("status", status);
-      fd.append("notes", notes);
-      if (photo) fd.append("photo", photo);
+      const scanData = {
+        box_id: box.id,
+        object_id: box.object_id || box.objects?.id || "",
+        status: status,
+        notes: notes
+      };
       
+      // Typ-spezifische Felder
       if (boxType === "schlagfalle") {
-        fd.append("trap_state", trapState);
+        scanData.trap_state = trapState;
       } else if (boxType === "monitoring_insect") {
-        fd.append("quantity", quantity);
+        scanData.quantity = quantity;
       } else {
-        fd.append("consumption", consumption);
+        scanData.consumption = consumption;
       }
 
-      const r = await fetch(`${API}/scans`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd
-      });
+      // 🆕 Offline-fähigen API-Call nutzen
+      const result = await createScanOffline(scanData, photo);
 
-      if (r.ok) {
-        setToast({ type: "success", msg: "Kontrolle gespeichert!" });
+      if (result.success) {
+        // Toast anzeigen
+        if (result.online) {
+          setToast({ type: "success", msg: "Kontrolle gespeichert!" });
+        } else {
+          setToast({ type: "success", msg: "📴 Offline gespeichert - wird synchronisiert" });
+        }
+        
+        // Pending Count aktualisieren
+        if (updatePendingCount) {
+          updatePendingCount();
+        }
         
         setTimeout(() => { 
           if (onScanCreated) {
@@ -439,7 +509,7 @@ export default function BoxScanDialog({
           }
         }, 600);
       } else {
-        throw new Error("Fehler beim Speichern");
+        throw new Error(result.message || "Fehler beim Speichern");
       }
     } catch (e) {
       setToast({ type: "error", msg: e.message });
@@ -447,23 +517,25 @@ export default function BoxScanDialog({
     }
   };
 
-  // ============================================
-  // NEU: Return to Storage Handler
-  // ============================================
+  // 🆕 Return to Storage Handler - OFFLINE-FÄHIG
   const handleReturnToStorage = async () => {
     setReturnLoading(true);
     try {
-      const r = await fetch(`${API}/boxes/${box.id}/return-to-pool`, {
-        method: "POST",
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        }
-      });
+      const result = await returnBoxToPool(box.id);
 
-      if (r.ok) {
-        setToast({ type: "success", msg: "Box zurück ins Lager!" });
+      if (result.success) {
+        if (result.online) {
+          setToast({ type: "success", msg: "Box zurück ins Lager!" });
+        } else {
+          setToast({ type: "success", msg: "📴 Wird bei Verbindung zurückgesetzt" });
+        }
+        
         setShowReturnConfirm(false);
+        
+        // Pending Count aktualisieren
+        if (updatePendingCount) {
+          updatePendingCount();
+        }
         
         setTimeout(() => {
           if (onReturnToStorage) {
@@ -475,8 +547,7 @@ export default function BoxScanDialog({
           }
         }, 600);
       } else {
-        const err = await r.json();
-        throw new Error(err.error || "Fehler beim Zurücksetzen");
+        throw new Error(result.message || "Fehler beim Zurücksetzen");
       }
     } catch (e) {
       setToast({ type: "error", msg: e.message });
@@ -486,6 +557,11 @@ export default function BoxScanDialog({
   };
 
   const getUserName = (scan) => {
+    // 🆕 Offline-Scans kennzeichnen
+    if (scan.offline || scan.pending) {
+      return scan.users?.email?.split('@')[0] || "Du (offline)";
+    }
+    
     if (scan.users) {
       const u = scan.users;
       if (u.first_name || u.last_name) {
@@ -514,15 +590,14 @@ export default function BoxScanDialog({
         </div>
       )}
 
-      {/* ============================================
-          BESTÄTIGUNGSDIALOG
-          ============================================ */}
+      {/* BESTÄTIGUNGSDIALOG */}
       {showReturnConfirm && (
         <ConfirmReturnDialog
           box={box}
           onConfirm={handleReturnToStorage}
           onCancel={() => setShowReturnConfirm(false)}
           loading={returnLoading}
+          isOffline={currentlyOffline}
         />
       )}
 
@@ -555,6 +630,17 @@ export default function BoxScanDialog({
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#e6edf3", display: "flex", alignItems: "center", gap: 8 }}>
                   {boxInfo.hasName ? boxInfo.boxName : `Box #${boxInfo.displayNumber}`}
+                  
+                  {/* 🆕 Offline-Badge im Header */}
+                  {currentlyOffline && (
+                    <span style={{
+                      padding: "2px 6px", background: "rgba(234, 179, 8, 0.2)",
+                      borderRadius: 4, fontSize: 9, color: "#eab308",
+                      display: "flex", alignItems: "center", gap: 3
+                    }}>
+                      <WifiOff size={9} /> Offline
+                    </span>
+                  )}
                   
                   {onEdit && (
                     <button
@@ -620,6 +706,7 @@ export default function BoxScanDialog({
               fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6
             }}>
               <Clock size={13}/> Verlauf ({history.length})
+              {historyOffline && <WifiOff size={10} style={{ color: "#eab308" }} />}
             </button>
           </div>
 
@@ -627,6 +714,9 @@ export default function BoxScanDialog({
           <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
             {tab === "scan" ? (
               <>
+                {/* 🆕 Offline Indicator */}
+                <OfflineIndicator isOffline={currentlyOffline} pendingCount={pendingCount} />
+                
                 {/* Mini-Karte für GPS-Boxen */}
                 {hasGPS && boxPosition && (
                   <div style={{ marginBottom: 14 }}>
@@ -938,72 +1028,99 @@ export default function BoxScanDialog({
                 )}
               </>
             ) : (
-              /* History */
-              histLoading ? (
-                <div style={{ textAlign: "center", color: "#8b949e", padding: 24, fontSize: 12 }}>Lade...</div>
-              ) : history.length === 0 ? (
-                <div style={{ textAlign: "center", color: "#8b949e", padding: 24, fontSize: 12 }}>Keine Kontrollen</div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {history.map((s, i) => (
-                    <div key={s.id || i} style={{
-                      padding: "12px", background: "#161b22", borderRadius: 6, border: "1px solid #21262d"
-                    }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                        <div style={{ width: 10, height: 10, borderRadius: "50%", background: STATUS[s.status]?.color || "#8b949e" }}/>
-                        <div style={{ flex: 1, fontSize: 12, color: "#e6edf3", fontWeight: 500 }}>
-                          {new Date(s.scanned_at || s.created_at).toLocaleDateString("de-DE", {
-                            day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
-                          })}
-                        </div>
-                        {s.consumption !== undefined && s.consumption !== null && (
-                          <div style={{ fontSize: 11, color: "#8b949e", background: "#21262d", padding: "2px 8px", borderRadius: 4 }}>
-                            {s.consumption}%
+              /* History Tab */
+              <>
+                {/* 🆕 History Offline-Hinweis */}
+                {historyOffline && (
+                  <div style={{
+                    marginBottom: 10, padding: "8px 12px",
+                    background: "rgba(234, 179, 8, 0.1)",
+                    border: "1px solid rgba(234, 179, 8, 0.2)",
+                    borderRadius: 6, fontSize: 11, color: "#eab308",
+                    display: "flex", alignItems: "center", gap: 8
+                  }}>
+                    <WifiOff size={12} />
+                    Offline - zeigt gecachte Daten
+                  </div>
+                )}
+                
+                {histLoading ? (
+                  <div style={{ textAlign: "center", color: "#8b949e", padding: 24, fontSize: 12 }}>Lade...</div>
+                ) : history.length === 0 ? (
+                  <div style={{ textAlign: "center", color: "#8b949e", padding: 24, fontSize: 12 }}>Keine Kontrollen</div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {history.map((s, i) => (
+                      <div key={s.id || i} style={{
+                        padding: "12px", background: "#161b22", borderRadius: 6, border: "1px solid #21262d",
+                        // 🆕 Offline-Scans visuell markieren
+                        ...(s.offline || s.pending ? { borderColor: "rgba(234, 179, 8, 0.3)" } : {})
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                          <div style={{ width: 10, height: 10, borderRadius: "50%", background: STATUS[s.status]?.color || "#8b949e" }}/>
+                          <div style={{ flex: 1, fontSize: 12, color: "#e6edf3", fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
+                            {new Date(s.scanned_at || s.created_at || s.offline_created_at).toLocaleDateString("de-DE", {
+                              day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
+                            })}
+                            {/* 🆕 Pending Badge */}
+                            {(s.offline || s.pending) && (
+                              <span style={{
+                                padding: "1px 5px", background: "rgba(234, 179, 8, 0.2)",
+                                borderRadius: 3, fontSize: 9, color: "#eab308"
+                              }}>
+                                ⏳ Pending
+                              </span>
+                            )}
                           </div>
-                        )}
-                        {s.trap_state !== undefined && s.trap_state !== null && (
-                          <div style={{ 
-                            fontSize: 11, 
-                            color: s.trap_state === 0 ? "#3fb950" : s.trap_state === 1 ? "#d29922" : "#f85149", 
-                            background: "#21262d", padding: "2px 8px", borderRadius: 4 
-                          }}>
-                            {s.trap_state === 0 ? "✓ OK" : s.trap_state === 1 ? "⚠️ Ausgelöst" : "🐀 Tier"}
-                          </div>
-                        )}
-                        {s.quantity && s.quantity !== "none" && (
-                          <div style={{ fontSize: 11, color: "#8b949e", background: "#21262d", padding: "2px 8px", borderRadius: 4 }}>
-                            🪲 {s.quantity}
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div style={{ fontSize: 11, color: "#8b949e", display: "flex", flexDirection: "column", gap: 3 }}>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <span style={{ color: "#6e7681" }}>Kontrolleur:</span>
-                          <span style={{ color: "#e6edf3" }}>{getUserName(s)}</span>
+                          {s.consumption !== undefined && s.consumption !== null && (
+                            <div style={{ fontSize: 11, color: "#8b949e", background: "#21262d", padding: "2px 8px", borderRadius: 4 }}>
+                              {s.consumption}%
+                            </div>
+                          )}
+                          {s.trap_state !== undefined && s.trap_state !== null && (
+                            <div style={{ 
+                              fontSize: 11, 
+                              color: s.trap_state === 0 ? "#3fb950" : s.trap_state === 1 ? "#d29922" : "#f85149", 
+                              background: "#21262d", padding: "2px 8px", borderRadius: 4 
+                            }}>
+                              {s.trap_state === 0 ? "✓ OK" : s.trap_state === 1 ? "⚠️ Ausgelöst" : "🐀 Tier"}
+                            </div>
+                          )}
+                          {s.quantity && s.quantity !== "none" && (
+                            <div style={{ fontSize: 11, color: "#8b949e", background: "#21262d", padding: "2px 8px", borderRadius: 4 }}>
+                              🪲 {s.quantity}
+                            </div>
+                          )}
                         </div>
                         
-                        {s.notes && !s.notes.startsWith("Ersteinrichtung") && (
+                        <div style={{ fontSize: 11, color: "#8b949e", display: "flex", flexDirection: "column", gap: 3 }}>
                           <div style={{ display: "flex", gap: 6 }}>
-                            <span style={{ color: "#6e7681" }}>Notiz:</span>
-                            <span style={{ color: "#e6edf3" }}>{s.notes}</span>
+                            <span style={{ color: "#6e7681" }}>Kontrolleur:</span>
+                            <span style={{ color: "#e6edf3" }}>{getUserName(s)}</span>
                           </div>
-                        )}
-                        
-                        {s.scan_type === "setup" && (
-                          <div style={{ 
-                            marginTop: 4, fontSize: 10, color: "#3fb950", 
-                            background: "rgba(35,134,54,0.15)", padding: "2px 6px", 
-                            borderRadius: 3, display: "inline-block", width: "fit-content"
-                          }}>
-                            Ersteinrichtung
-                          </div>
-                        )}
+                          
+                          {s.notes && !s.notes.startsWith("Ersteinrichtung") && (
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <span style={{ color: "#6e7681" }}>Notiz:</span>
+                              <span style={{ color: "#e6edf3" }}>{s.notes}</span>
+                            </div>
+                          )}
+                          
+                          {s.scan_type === "setup" && (
+                            <div style={{ 
+                              marginTop: 4, fontSize: 10, color: "#3fb950", 
+                              background: "rgba(35,134,54,0.15)", padding: "2px 6px", 
+                              borderRadius: 3, display: "inline-block", width: "fit-content"
+                            }}>
+                              Ersteinrichtung
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -1016,10 +1133,11 @@ export default function BoxScanDialog({
                 fontSize: 13, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 6
               }}>
-                <Save size={14}/> {loading ? "Speichern..." : "Kontrolle speichern"}
+                {currentlyOffline && <WifiOff size={12} />}
+                <Save size={14}/> {loading ? "Speichern..." : currentlyOffline ? "Offline speichern" : "Kontrolle speichern"}
               </button>
               
-              {/* Return to Storage Button - ÖFFNET BESTÄTIGUNGSDIALOG */}
+              {/* Return to Storage Button */}
               {box?.object_id && (
                 <button 
                   onClick={() => setShowReturnConfirm(true)} 

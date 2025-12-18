@@ -1,30 +1,83 @@
 /* ============================================================
-   TRAPMAP — OFFLINE API WRAPPER
-   Ermöglicht Offline-Funktionalität für Scans, Boxen & Kontrollen
+   TRAPMAP – OFFLINE API WRAPPER
+   Vollständige Offline-Fähigkeit für alle API-Operationen
+   
+   FEATURES:
+   - Automatischer Online/Offline Fallback
+   - Foto-Support mit Base64 Konvertierung
+   - Cache-Management für Stammdaten
+   - Queue-Management für ausstehende Operationen
    ============================================================ */
 
 import { 
+  // Pending Operations
   addPendingScan, 
-  addPendingBox, 
+  addPendingBoxUpdate, 
+  addPendingPositionUpdate,
+  addPendingReturnToPool,
+  getPendingBoxByQR,
+  getPendingBoxById,
+  getUnsyncedScans,
+  getUnsyncedBoxes,
+  getUnsyncedPositionUpdates,
+  getUnsyncedReturnToPool,
+  markScanAsSynced,
+  markBoxAsSynced,
+  markPositionUpdateAsSynced,
+  markReturnToPoolAsSynced,
+  incrementScanAttempts,
+  deletePendingScan,
+  deletePendingBox,
+  
+  // Cached Data
   getCachedBoxByQR,
+  getCachedBox,
   getCachedBoxes,
   getCachedObjects,
+  getCachedBoxTypes,
+  getCachedLayouts,
+  getCachedHistoryForBox,
+  getCachedUser,
   cacheBoxes,
+  cacheBox,
   cacheObjects,
-  getPendingBoxByQR,
-  getUnsyncedScans,
-  getUnsyncedBoxes
+  cacheBoxTypes,
+  cacheLayouts,
+  cacheHistory,
+  cacheUser,
+  updateCachedBox,
+  addOfflineScanToHistory,
+  
+  // Stats
+  getOfflineStats,
+  addSyncLog
 } from './offlineDB';
-import { isOnline, syncAll } from './syncService';
 
 const API = import.meta.env.VITE_API_URL;
 
+// ============================================
+// HELPER FUNKTIONEN
+// ============================================
+
 /**
- * Holt den Auth-Token
+ * Prüft ob wir online sind
  */
-const getToken = () => {
+export const isOnline = () => {
+  return navigator.onLine;
+};
+
+/**
+ * Holt den Auth-Token aus localStorage oder Cache
+ */
+const getToken = async () => {
   try {
-    return localStorage.getItem('trapmap_token');
+    // Erst localStorage versuchen
+    const token = localStorage.getItem('trapmap_token');
+    if (token) return token;
+    
+    // Fallback auf IndexedDB Cache
+    const cached = await getCachedUser();
+    return cached?.token || null;
   } catch {
     return null;
   }
@@ -35,6 +88,10 @@ const getToken = () => {
  */
 const fileToBase64 = (file) => {
   return new Promise((resolve, reject) => {
+    if (!file) {
+      resolve(null);
+      return;
+    }
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = () => resolve(reader.result);
@@ -42,24 +99,66 @@ const fileToBase64 = (file) => {
   });
 };
 
+/**
+ * Base64 zurück zu Blob konvertieren (für Sync)
+ */
+const base64ToBlob = (base64, mimeType = 'image/jpeg') => {
+  try {
+    const byteString = atob(base64.split(',')[1]);
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) {
+      ia[i] = byteString.charCodeAt(i);
+    }
+    return new Blob([ab], { type: mimeType });
+  } catch (e) {
+    console.error('Base64 to Blob error:', e);
+    return null;
+  }
+};
+
+/**
+ * Standard Fetch mit Auth Header
+ */
+const authFetch = async (url, options = {}) => {
+  const token = await getToken();
+  
+  const headers = {
+    ...options.headers
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  // Content-Type nur setzen wenn kein FormData
+  if (!(options.body instanceof FormData) && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+  
+  return fetch(url, { ...options, headers });
+};
+
 // ============================================
-// SCANS (Kontrolle)
+// SCAN OPERATIONEN (Kontrollen)
 // ============================================
 
 /**
  * Erstellt einen Scan - Online oder Offline
+ * @param {Object} scanData - { box_id, status, notes, consumption, trap_state, quantity }
+ * @param {File|null} photo - Optional: Foto-Datei
  */
 export const createScanOffline = async (scanData, photo = null) => {
-  const token = getToken();
-  
   // Offline-Daten vorbereiten
   const offlineScan = {
     box_id: scanData.box_id,
+    object_id: scanData.object_id,
     status: scanData.status,
     notes: scanData.notes || '',
     consumption: scanData.consumption,
     trap_state: scanData.trap_state,
     quantity: scanData.quantity,
+    scan_type: scanData.scan_type || 'control',
     offline_created_at: new Date().toISOString()
   };
 
@@ -67,22 +166,28 @@ export const createScanOffline = async (scanData, photo = null) => {
   if (photo) {
     try {
       offlineScan.photo_base64 = await fileToBase64(photo);
+      offlineScan.photo_name = photo.name || 'photo.jpg';
     } catch (e) {
       console.warn('⚠️ Photo konnte nicht konvertiert werden:', e);
     }
   }
 
   // Wenn online, versuche direkten Upload
-  if (isOnline() && token) {
+  if (isOnline()) {
     try {
+      const token = await getToken();
+      if (!token) throw new Error('Nicht authentifiziert');
+      
       const formData = new FormData();
       formData.append('box_id', scanData.box_id);
       formData.append('status', scanData.status);
       formData.append('notes', scanData.notes || '');
       
+      if (scanData.object_id) formData.append('object_id', scanData.object_id);
       if (scanData.consumption !== undefined) formData.append('consumption', scanData.consumption);
       if (scanData.trap_state !== undefined) formData.append('trap_state', scanData.trap_state);
       if (scanData.quantity !== undefined) formData.append('quantity', scanData.quantity);
+      if (scanData.scan_type) formData.append('scan_type', scanData.scan_type);
       if (photo) formData.append('photo', photo);
 
       const response = await fetch(`${API}/scans`, {
@@ -94,18 +199,42 @@ export const createScanOffline = async (scanData, photo = null) => {
       if (response.ok) {
         const result = await response.json();
         console.log('✅ Scan online gespeichert:', result);
+        
+        // Cache aktualisieren
+        if (scanData.box_id) {
+          await updateCachedBox(scanData.box_id, { 
+            current_status: scanData.status,
+            last_scan_at: new Date().toISOString()
+          });
+        }
+        
         return { success: true, online: true, data: result };
       }
       
       // Bei Server-Fehler offline speichern
-      console.warn('⚠️ Server-Fehler, speichere offline');
+      const errorText = await response.text();
+      console.warn('⚠️ Server-Fehler, speichere offline:', errorText);
     } catch (error) {
-      console.warn('⚠️ Netzwerk-Fehler, speichere offline:', error);
+      console.warn('⚠️ Netzwerk-Fehler, speichere offline:', error.message);
     }
   }
 
   // Offline speichern
   const localId = await addPendingScan(offlineScan);
+  
+  // Auch zur lokalen History hinzufügen
+  await addOfflineScanToHistory(scanData.box_id, {
+    ...offlineScan,
+    scanned_at: offlineScan.offline_created_at,
+    users: await getCachedUser().then(u => u?.user || { email: 'Offline' })
+  });
+  
+  // Lokalen Box-Status aktualisieren
+  await updateCachedBox(scanData.box_id, { 
+    current_status: scanData.status,
+    last_scan_at: offlineScan.offline_created_at
+  });
+  
   console.log('📝 Scan offline gespeichert:', localId);
   
   return { 
@@ -116,59 +245,131 @@ export const createScanOffline = async (scanData, photo = null) => {
   };
 };
 
+/**
+ * Lädt Scan-Historie für eine Box - Online oder aus Cache
+ */
+export const getBoxHistory = async (boxId, limit = 20) => {
+  // Wenn online, Server abfragen
+  if (isOnline()) {
+    try {
+      const token = await getToken();
+      const response = await authFetch(`${API}/scans?box_id=${boxId}&limit=${limit}`);
+
+      if (response.ok) {
+        const data = await response.json();
+        const scans = Array.isArray(data) ? data : data.data || [];
+        
+        // Cache aktualisieren
+        await cacheHistory(boxId, scans);
+        
+        return { success: true, online: true, data: scans };
+      }
+    } catch (error) {
+      console.warn('⚠️ History-Laden fehlgeschlagen, verwende Cache:', error.message);
+    }
+  }
+
+  // Fallback auf Cache
+  const cachedHistory = await getCachedHistoryForBox(boxId);
+  
+  // Auch pending offline scans hinzufügen
+  const pendingScans = await getUnsyncedScans();
+  const boxPendingScans = pendingScans
+    .filter(s => s.box_id === boxId)
+    .map(s => ({
+      ...s,
+      id: `pending_${s.localId}`,
+      scanned_at: s.offline_created_at,
+      offline: true,
+      pending: true
+    }));
+  
+  const combined = [...boxPendingScans, ...cachedHistory]
+    .sort((a, b) => new Date(b.scanned_at || b.created_at) - new Date(a.scanned_at || a.created_at))
+    .slice(0, limit);
+  
+  return { 
+    success: true, 
+    online: false, 
+    cached: true,
+    data: combined 
+  };
+};
+
 // ============================================
-// BOXEN (Ersteinrichtung)
+// BOX OPERATIONEN
 // ============================================
 
 /**
- * Erstellt eine neue Box - Online oder Offline
+ * Aktualisiert eine Box - Online oder Offline
  */
-export const createBoxOffline = async (boxData) => {
-  const token = getToken();
-
+export const updateBoxOffline = async (boxId, updateData) => {
   // Wenn online, versuche direkten Upload
-  if (isOnline() && token) {
+  if (isOnline()) {
     try {
-      const response = await fetch(`${API}/boxes`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(boxData)
+      const response = await authFetch(`${API}/boxes/${boxId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updateData)
       });
 
       if (response.ok) {
         const result = await response.json();
-        console.log('✅ Box online erstellt:', result);
+        console.log('✅ Box online aktualisiert:', result);
+        
+        // Cache aktualisieren
+        await updateCachedBox(boxId, updateData);
+        
         return { success: true, online: true, data: result };
       }
       
-      console.warn('⚠️ Server-Fehler, speichere offline');
+      const errorText = await response.text();
+      console.warn('⚠️ Server-Fehler, speichere offline:', errorText);
     } catch (error) {
-      console.warn('⚠️ Netzwerk-Fehler, speichere offline:', error);
+      console.warn('⚠️ Netzwerk-Fehler, speichere offline:', error.message);
     }
   }
 
   // Offline speichern
-  const { localId, tempId } = await addPendingBox(boxData);
-  console.log('📦 Box offline gespeichert:', localId, tempId);
+  const { localId, tempId } = await addPendingBoxUpdate({
+    box_id: boxId,
+    ...updateData
+  }, 'update');
+  
+  // Lokalen Cache aktualisieren
+  await updateCachedBox(boxId, updateData);
+  
+  console.log('📦 Box-Update offline gespeichert:', localId);
   
   return { 
     success: true, 
     online: false, 
     localId,
     tempId,
-    message: 'Box wurde offline gespeichert und wird bei Verbindung synchronisiert.'
+    message: 'Änderungen wurden offline gespeichert.'
   };
 };
 
 /**
- * Sucht eine Box per QR-Code - Online und Offline
+ * Erstellt Ersteinrichtungs-Scan für Box
+ */
+export const createSetupScan = async (boxId, boxData, objectId) => {
+  const scanData = {
+    box_id: boxId,
+    object_id: objectId,
+    status: 'green',
+    notes: 'Ersteinrichtung' + 
+      (boxData.bait ? ` | Köder: ${boxData.bait}` : '') + 
+      (boxData.insect_type ? ` | Ziel: ${boxData.insect_type}` : ''),
+    scan_type: 'setup'
+  };
+  
+  return await createScanOffline(scanData);
+};
+
+/**
+ * Sucht eine Box per QR-Code - Online, Cache und Pending
  */
 export const findBoxByQR = async (qrCode) => {
-  const token = getToken();
-
   // Zuerst in Offline-Pending-Boxen suchen
   const pendingBox = await getPendingBoxByQR(qrCode);
   if (pendingBox) {
@@ -177,7 +378,7 @@ export const findBoxByQR = async (qrCode) => {
       offline: true, 
       pending: true,
       data: pendingBox,
-      message: 'Diese Box wurde offline erstellt und wartet auf Synchronisation.'
+      message: 'Diese Box wurde offline bearbeitet und wartet auf Synchronisation.'
     };
   }
 
@@ -185,23 +386,24 @@ export const findBoxByQR = async (qrCode) => {
   const cachedBox = await getCachedBoxByQR(qrCode);
   
   // Wenn online, Server abfragen
-  if (isOnline() && token) {
+  if (isOnline()) {
     try {
-      const response = await fetch(`${API}/qr/${qrCode}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await authFetch(`${API}/qr/${qrCode}`);
 
       if (response.ok) {
         const result = await response.json();
+        
+        // Cache aktualisieren
+        await cacheBox(result);
+        
         return { success: true, online: true, data: result };
       }
       
       if (response.status === 404) {
-        // Box existiert nicht - kann neu erstellt werden
         return { success: false, notFound: true };
       }
     } catch (error) {
-      console.warn('⚠️ Netzwerk-Fehler, verwende Cache');
+      console.warn('⚠️ Netzwerk-Fehler, verwende Cache:', error.message);
     }
   }
 
@@ -224,78 +426,328 @@ export const findBoxByQR = async (qrCode) => {
   };
 };
 
+/**
+ * Holt Box-Details per ID
+ */
+export const getBoxById = async (boxId) => {
+  // Pending Update prüfen
+  const pendingBox = await getPendingBoxById(boxId);
+  
+  // Wenn online, Server abfragen
+  if (isOnline()) {
+    try {
+      const response = await authFetch(`${API}/boxes/${boxId}`);
+
+      if (response.ok) {
+        let result = await response.json();
+        
+        // Pending Updates mergen
+        if (pendingBox) {
+          result = { ...result, ...pendingBox, _hasPendingUpdates: true };
+        }
+        
+        // Cache aktualisieren
+        await cacheBox(result);
+        
+        return { success: true, online: true, data: result };
+      }
+    } catch (error) {
+      console.warn('⚠️ Netzwerk-Fehler, verwende Cache');
+    }
+  }
+
+  // Fallback auf Cache
+  let cachedBox = await getCachedBox(boxId);
+  
+  if (cachedBox) {
+    // Pending Updates mergen
+    if (pendingBox) {
+      cachedBox = { ...cachedBox, ...pendingBox, _hasPendingUpdates: true };
+    }
+    
+    return { 
+      success: true, 
+      offline: true, 
+      cached: true,
+      data: cachedBox
+    };
+  }
+
+  return { success: false, notFound: true };
+};
+
+/**
+ * Box zurück ins Lager - Online oder Offline
+ */
+export const returnBoxToPool = async (boxId) => {
+  if (isOnline()) {
+    try {
+      const response = await authFetch(`${API}/boxes/${boxId}/return-to-pool`, {
+        method: 'POST'
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        // Cache aktualisieren - Box resetten
+        await updateCachedBox(boxId, {
+          object_id: null,
+          layout_id: null,
+          lat: null,
+          lng: null,
+          position_type: null,
+          grid_position: null,
+          current_status: null
+        });
+        
+        return { success: true, online: true, data: result };
+      }
+      
+      const error = await response.json();
+      throw new Error(error.error || 'Fehler beim Zurücksetzen');
+    } catch (error) {
+      if (error.message !== 'Failed to fetch') {
+        throw error;
+      }
+      console.warn('⚠️ Netzwerk-Fehler, speichere offline');
+    }
+  }
+
+  // Offline speichern
+  const localId = await addPendingReturnToPool(boxId);
+  
+  // Lokalen Cache aktualisieren
+  await updateCachedBox(boxId, {
+    object_id: null,
+    layout_id: null,
+    current_status: null,
+    _pendingReturnToPool: true
+  });
+  
+  return { 
+    success: true, 
+    online: false, 
+    localId,
+    message: 'Box wird bei Verbindung zurück ins Lager gesetzt.'
+  };
+};
+
+/**
+ * GPS-Position einer Box aktualisieren
+ */
+export const updateBoxPosition = async (boxId, lat, lng, positionType = 'gps') => {
+  if (isOnline()) {
+    try {
+      const response = await authFetch(`${API}/boxes/${boxId}/position`, {
+        method: 'PUT',
+        body: JSON.stringify({ lat, lng, position_type: positionType })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        // Cache aktualisieren
+        await updateCachedBox(boxId, { lat, lng, position_type: positionType });
+        
+        return { success: true, online: true, data: result };
+      }
+    } catch (error) {
+      console.warn('⚠️ Netzwerk-Fehler, speichere offline');
+    }
+  }
+
+  // Offline speichern
+  const localId = await addPendingPositionUpdate(boxId, lat, lng, positionType);
+  
+  // Cache aktualisieren
+  await updateCachedBox(boxId, { lat, lng, position_type: positionType });
+  
+  return { 
+    success: true, 
+    online: false, 
+    localId,
+    message: 'Position wird bei Verbindung gespeichert.'
+  };
+};
+
+// ============================================
+// STAMMDATEN (Box-Typen, Objekte, Layouts)
+// ============================================
+
+/**
+ * Lädt Box-Typen - Online oder aus Cache
+ */
+export const getBoxTypes = async () => {
+  if (isOnline()) {
+    try {
+      // Beide Endpunkte versuchen
+      let response;
+      try {
+        response = await authFetch(`${API}/boxtypes`);
+      } catch (e) {
+        response = await authFetch(`${API}/box-types`);
+      }
+
+      if (response.ok) {
+        const data = await response.json();
+        const boxTypes = Array.isArray(data) ? data : data?.data || [];
+        
+        // Cache aktualisieren
+        await cacheBoxTypes(boxTypes);
+        
+        return { success: true, online: true, data: boxTypes };
+      }
+    } catch (error) {
+      console.warn('⚠️ BoxTypes-Laden fehlgeschlagen, verwende Cache');
+    }
+  }
+
+  // Fallback auf Cache
+  const cached = await getCachedBoxTypes();
+  
+  if (cached.length > 0) {
+    return { success: true, offline: true, cached: true, data: cached };
+  }
+  
+  return { success: false, data: [], message: 'Keine Box-Typen verfügbar' };
+};
+
+/**
+ * Lädt alle Objekte - Online oder aus Cache
+ */
+export const getObjects = async () => {
+  if (isOnline()) {
+    try {
+      const response = await authFetch(`${API}/objects`);
+
+      if (response.ok) {
+        const data = await response.json();
+        const objects = Array.isArray(data) ? data : data?.data || [];
+        
+        await cacheObjects(objects);
+        
+        return { success: true, online: true, data: objects };
+      }
+    } catch (error) {
+      console.warn('⚠️ Objects-Laden fehlgeschlagen, verwende Cache');
+    }
+  }
+
+  const cached = await getCachedObjects();
+  
+  if (cached.length > 0) {
+    return { success: true, offline: true, cached: true, data: cached };
+  }
+  
+  return { success: false, data: [] };
+};
+
+/**
+ * Lädt alle Boxen - Online oder aus Cache
+ */
+export const getBoxes = async () => {
+  if (isOnline()) {
+    try {
+      const response = await authFetch(`${API}/boxes`);
+
+      if (response.ok) {
+        const data = await response.json();
+        const boxes = Array.isArray(data) ? data : data?.data || [];
+        
+        await cacheBoxes(boxes);
+        
+        return { success: true, online: true, data: boxes };
+      }
+    } catch (error) {
+      console.warn('⚠️ Boxes-Laden fehlgeschlagen, verwende Cache');
+    }
+  }
+
+  const cached = await getCachedBoxes();
+  
+  if (cached.length > 0) {
+    return { success: true, offline: true, cached: true, data: cached };
+  }
+  
+  return { success: false, data: [] };
+};
+
+/**
+ * Lädt alle Layouts - Online oder aus Cache
+ */
+export const getLayouts = async () => {
+  if (isOnline()) {
+    try {
+      const response = await authFetch(`${API}/layouts`);
+
+      if (response.ok) {
+        const data = await response.json();
+        const layouts = Array.isArray(data) ? data : data?.data || [];
+        
+        await cacheLayouts(layouts);
+        
+        return { success: true, online: true, data: layouts };
+      }
+    } catch (error) {
+      console.warn('⚠️ Layouts-Laden fehlgeschlagen, verwende Cache');
+    }
+  }
+
+  const cached = await getCachedLayouts();
+  
+  if (cached.length > 0) {
+    return { success: true, offline: true, cached: true, data: cached };
+  }
+  
+  return { success: false, data: [] };
+};
+
 // ============================================
 // CACHE MANAGEMENT
 // ============================================
 
 /**
- * Lädt alle Boxen und speichert sie im Cache
- */
-export const refreshBoxCache = async () => {
-  const token = getToken();
-  
-  if (!isOnline() || !token) {
-    console.log('📴 Offline oder nicht authentifiziert - Cache-Refresh übersprungen');
-    return false;
-  }
-
-  try {
-    const response = await fetch(`${API}/boxes`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    if (response.ok) {
-      const boxes = await response.json();
-      await cacheBoxes(boxes);
-      console.log(`✅ ${boxes.length} Boxen im Cache aktualisiert`);
-      return true;
-    }
-  } catch (error) {
-    console.error('❌ Cache-Refresh fehlgeschlagen:', error);
-  }
-
-  return false;
-};
-
-/**
- * Lädt alle Objekte und speichert sie im Cache
- */
-export const refreshObjectCache = async () => {
-  const token = getToken();
-  
-  if (!isOnline() || !token) {
-    console.log('📴 Offline oder nicht authentifiziert - Cache-Refresh übersprungen');
-    return false;
-  }
-
-  try {
-    const response = await fetch(`${API}/objects`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-
-    if (response.ok) {
-      const objects = await response.json();
-      await cacheObjects(objects);
-      console.log(`✅ ${objects.length} Objekte im Cache aktualisiert`);
-      return true;
-    }
-  } catch (error) {
-    console.error('❌ Object-Cache-Refresh fehlgeschlagen:', error);
-  }
-
-  return false;
-};
-
-/**
- * Vollständiger Cache-Refresh
+ * Vollständiger Cache-Refresh aller Stammdaten
  */
 export const refreshAllCaches = async () => {
-  const results = await Promise.all([
-    refreshBoxCache(),
-    refreshObjectCache()
+  if (!isOnline()) {
+    console.log('🔴 Offline - Cache-Refresh übersprungen');
+    return false;
+  }
+
+  console.log('🔄 Starte Cache-Refresh...');
+  
+  const results = await Promise.allSettled([
+    getBoxTypes(),
+    getObjects(),
+    getBoxes(),
+    getLayouts()
   ]);
   
-  return results.every(r => r);
+  const success = results.every(r => r.status === 'fulfilled' && r.value?.success);
+  
+  console.log(success ? '✅ Cache-Refresh abgeschlossen' : '⚠️ Cache-Refresh teilweise fehlgeschlagen');
+  
+  return success;
+};
+
+/**
+ * Cache User und Token
+ */
+export const cacheCurrentUser = async () => {
+  try {
+    const token = localStorage.getItem('trapmap_token');
+    const userStr = localStorage.getItem('trapmap_user');
+    
+    if (token && userStr) {
+      const user = JSON.parse(userStr);
+      await cacheUser(user, token);
+      return true;
+    }
+  } catch (e) {
+    console.warn('User-Caching fehlgeschlagen:', e);
+  }
+  return false;
 };
 
 // ============================================
@@ -306,33 +758,152 @@ export const refreshAllCaches = async () => {
  * Gibt Offline-Statistiken zurück
  */
 export const getOfflineInfo = async () => {
-  const pendingScans = await getUnsyncedScans();
-  const pendingBoxes = await getUnsyncedBoxes();
-  const cachedBoxes = await getCachedBoxes();
-  const cachedObjects = await getCachedObjects();
+  const stats = await getOfflineStats();
 
   return {
     isOnline: isOnline(),
-    pending: {
-      scans: pendingScans.length,
-      boxes: pendingBoxes.length,
-      total: pendingScans.length + pendingBoxes.length
-    },
-    cached: {
-      boxes: cachedBoxes.length,
-      objects: cachedObjects.length
-    }
+    ...stats
   };
 };
 
+// ============================================
+// SYNC FUNKTIONEN (werden von syncService aufgerufen)
+// ============================================
+
 /**
- * Manueller Sync-Trigger
+ * Synchronisiert einen einzelnen Offline-Scan
  */
-export const triggerSync = async () => {
-  if (!isOnline()) {
-    return { success: false, message: 'Keine Internetverbindung' };
+export const syncSingleScan = async (scan) => {
+  const token = await getToken();
+  if (!token) throw new Error('Nicht authentifiziert');
+
+  const formData = new FormData();
+  formData.append('box_id', scan.box_id);
+  formData.append('status', scan.status);
+  formData.append('notes', scan.notes || '');
+  
+  if (scan.object_id) formData.append('object_id', scan.object_id);
+  if (scan.consumption !== undefined) formData.append('consumption', scan.consumption);
+  if (scan.trap_state !== undefined) formData.append('trap_state', scan.trap_state);
+  if (scan.quantity !== undefined) formData.append('quantity', scan.quantity);
+  if (scan.scan_type) formData.append('scan_type', scan.scan_type);
+  
+  // Base64 Photo zurück zu Blob
+  if (scan.photo_base64) {
+    const blob = base64ToBlob(scan.photo_base64);
+    if (blob) {
+      formData.append('photo', blob, scan.photo_name || 'photo.jpg');
+    }
+  }
+  
+  // Offline-Zeitstempel hinzufügen
+  if (scan.offline_created_at) {
+    formData.append('offline_created_at', scan.offline_created_at);
   }
 
-  const results = await syncAll();
-  return { success: true, results };
+  const response = await fetch(`${API}/scans`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error || 'Sync fehlgeschlagen');
+  }
+
+  return await response.json();
+};
+
+/**
+ * Synchronisiert ein einzelnes Box-Update
+ */
+export const syncSingleBoxUpdate = async (boxUpdate) => {
+  const token = await getToken();
+  if (!token) throw new Error('Nicht authentifiziert');
+
+  const { box_id, operation, localId, tempId, created_at, synced, attempts, ...updateData } = boxUpdate;
+
+  const response = await fetch(`${API}/boxes/${box_id}`, {
+    method: 'PATCH',
+    headers: { 
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}` 
+    },
+    body: JSON.stringify(updateData)
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error || 'Box-Sync fehlgeschlagen');
+  }
+
+  return await response.json();
+};
+
+/**
+ * Synchronisiert ein Position-Update
+ */
+export const syncSinglePositionUpdate = async (posUpdate) => {
+  const token = await getToken();
+  if (!token) throw new Error('Nicht authentifiziert');
+
+  const response = await fetch(`${API}/boxes/${posUpdate.box_id}/position`, {
+    method: 'PUT',
+    headers: { 
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}` 
+    },
+    body: JSON.stringify({
+      lat: posUpdate.lat,
+      lng: posUpdate.lng,
+      position_type: posUpdate.position_type
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error || 'Position-Sync fehlgeschlagen');
+  }
+
+  return await response.json();
+};
+
+/**
+ * Synchronisiert Return-to-Pool
+ */
+export const syncSingleReturnToPool = async (returnItem) => {
+  const token = await getToken();
+  if (!token) throw new Error('Nicht authentifiziert');
+
+  const response = await fetch(`${API}/boxes/${returnItem.box_id}/return-to-pool`, {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}` 
+    }
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error || 'Return-to-Pool-Sync fehlgeschlagen');
+  }
+
+  return await response.json();
+};
+
+// Export für Sync Service
+export {
+  getUnsyncedScans,
+  getUnsyncedBoxes,
+  getUnsyncedPositionUpdates,
+  getUnsyncedReturnToPool,
+  markScanAsSynced,
+  markBoxAsSynced,
+  markPositionUpdateAsSynced,
+  markReturnToPoolAsSynced,
+  incrementScanAttempts,
+  deletePendingScan,
+  deletePendingBox,
+  addSyncLog
 };
