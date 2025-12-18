@@ -69,20 +69,19 @@ export default defineConfig({
             }
           },
           
-          // 🗺️ Mapbox Tiles (Hauptkarten: Streets, Satellite, Hybrid)
+          // 🗺️ Mapbox Tiles (alle Tile-Varianten, inkl. digitaler Zoom)
           {
-            urlPattern: /^https:\/\/api\.mapbox\.com\/styles\/v1\/mapbox\/.+\/tiles\/512\//,
+            urlPattern: /^https:\/\/api\.mapbox\.com\/styles\/v1\/mapbox\/.+\/tiles\//,
             handler: 'CacheFirst',
             options: {
               cacheName: 'mapbox-tiles',
               expiration: {
-                maxEntries: 2000, // Weniger Tiles da 512px = 4x effizienter
+                maxEntries: 2000, // 512px und 256px Tiles, digitaler Zoom
                 maxAgeSeconds: 30 * 24 * 60 * 60 // 30 Tage
               },
               cacheableResponse: {
                 statuses: [200]
               },
-              // 📴 Bessere Offline-Behandlung (Service Worker übernimmt das)
               plugins: [{
                 cacheKeyWillBeUsed: async ({request}) => request.url
               }]

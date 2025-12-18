@@ -1274,7 +1274,7 @@ export default function Maps() {
           <MapContainer
             center={[51.1657, 10.4515]}
             zoom={6}
-            maxZoom={18}              // 🆕 Reduziert von 22 auf 18 - spart Tiles
+            maxZoom={22}              // Erhöht für mehr Zoom (digital)
             zoomControl={false}
             scrollWheelZoom={true}
             preferCanvas={true}       // 🆕 Schnelleres Rendering
@@ -1288,8 +1288,8 @@ export default function Maps() {
               attribution='&copy; Mapbox'
               tileSize={512}
               zoomOffset={-1}
-              maxNativeZoom={20}
-              maxZoom={22}
+              maxNativeZoom={22} // Mapbox liefert bis Zoom 22
+              maxZoom={24}      // Leaflet skaliert darüber hinaus
             />
             {mapStyle === "hybrid" && (
               <TileLayer 
@@ -1298,8 +1298,8 @@ export default function Maps() {
                 tileSize={512}
                 zoomOffset={-1}
                 opacity={0.6} 
-                maxNativeZoom={20}
-                maxZoom={22}
+                maxNativeZoom={22}
+                maxZoom={24}
               />
             )}
 
