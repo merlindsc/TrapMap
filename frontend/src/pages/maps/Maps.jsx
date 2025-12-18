@@ -11,13 +11,11 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   MapContainer,
+  TileLayer,
   Marker,
   useMap,
   useMapEvents,
 } from "react-leaflet";
-
-// 📴 Offline-freundlicher Tile Layer
-import OfflineFriendlyTileLayer from "../../components/OfflineFriendlyTileLayer";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { getBoxShortLabel, getBoxLabel } from "../../utils/boxUtils";
@@ -69,17 +67,9 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 /* ============================================================
    MAPBOX TILE URLS
    ============================================================ */
-// 🆕 512px Tiles für 4x weniger Requests!
-// TEMPORÄR: OSM Fallback für Debugging (wenn Mapbox Probleme macht)
-const OSM_FALLBACK = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-
-// 512px Tiles für 4x weniger Requests (offline-freundlich)  
-const MAPBOX_STREETS = MAPBOX_TOKEN ? 
-  `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}` : 
-  OSM_FALLBACK;
-const MAPBOX_SAT = MAPBOX_TOKEN ? 
-  `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/512/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}` : 
-  OSM_FALLBACK;
+// 512px Tiles für 4x weniger Requests
+const MAPBOX_STREETS = `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/512/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
+const MAPBOX_SAT = `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/512/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`;
 
 /* ============================================================
    MOBILE DETECTION
@@ -1292,30 +1282,24 @@ export default function Maps() {
             wheelPxPerZoomLevel={120} // 🆕 Langsameres Zoomen = weniger Tile-Loads
             style={{ width: "100%", height: "100%" }}
           >
-            <OfflineFriendlyTileLayer
+            <TileLayer
               key={`base-${mapStyle}`}
               url={getTileUrl()}
-              attribution={MAPBOX_TOKEN ? '&copy; Mapbox' : '&copy; OpenStreetMap'}
-              tileSize={MAPBOX_TOKEN ? 512 : 256}    // OSM=256px, Mapbox=512px  
-              zoomOffset={MAPBOX_TOKEN ? -1 : 0}     // Nur für Mapbox 512px nötig
-              maxNativeZoom={19}        // 📐 Moderater Zoom ohne Performance-Probleme
-              maxZoom={19}              // 📐 Kein digitales Zoomen
-              keepBuffer={4}            // 🆕 Mehr Tiles im RAM behalten (Standard: 2)
-              updateWhenZooming={false} // 🆕 Nicht während Zoom nachladen
-              updateWhenIdle={true}     // 🆕 Nur nachladen wenn Karte still steht
+              attribution='&copy; Mapbox'
+              tileSize={512}
+              zoomOffset={-1}
+              maxNativeZoom={22}
+              maxZoom={22}
             />
             {mapStyle === "hybrid" && (
-              <OfflineFriendlyTileLayer 
+              <TileLayer 
                 key="hybrid-labels" 
                 url={MAPBOX_STREETS} 
-                tileSize={512}            // 🚀 512px für Konsistenz
-                zoomOffset={-1}           // 🚀 Erforderlich für 512px
+                tileSize={512}
+                zoomOffset={-1}
                 opacity={0.6} 
-                maxNativeZoom={19}        // 📐 Konsistent mit Base Layer
-                maxZoom={19}              // 📐 Kein digitales Zoomen
-                keepBuffer={4}            // 🆕 Mehr Tiles im RAM behalten
-                updateWhenZooming={false} // 🆕 Nicht während Zoom nachladen
-                updateWhenIdle={true}     // 🆕 Nur nachladen wenn Karte still steht
+                maxNativeZoom={22}
+                maxZoom={22}
               />
             )}
 
