@@ -1,8 +1,10 @@
 /* ============================================================
-   TRAPMAP - QR SCANNER V11 (OFFLINE-FÄHIG)
+   TRAPMAP - QR SCANNER V12 (OFFLINE-FÄHIG, KEIN AUTO-SWITCH)
    
-   Saubere Version mit @zxing/browser
-   + OFFLINE SUPPORT: Scannt auch ohne Internet aus Cache
+   ÄNDERUNGEN V12:
+   - Auto-Switch komplett entfernt (nervte)
+   - Reset-Bug gefixt
+   - Bessere Offline-Behandlung
    ============================================================ */
 
 import React, { useEffect, useRef, useState } from "react";
@@ -12,13 +14,13 @@ import { useAuth } from "../../context/AuthContext";
 import { 
   Camera, X, RotateCcw, Flashlight, SwitchCamera,
   Package, Navigation, Layers, AlertTriangle,
-  MapPin, CheckCircle, WifiOff
+  CheckCircle, WifiOff
 } from "lucide-react";
 
 import BoxScanDialog from "../../components/BoxScanDialog";
 import BoxEditDialog from "../maps/BoxEditDialog";
 
-// 🆕 Offline API Imports
+// Offline API Imports
 import { 
   findBoxByQR, 
   getBoxTypes,
@@ -52,8 +54,9 @@ export default function Scanner() {
   const navigate = useNavigate();
   const { token } = useAuth();
   
-  // 🆕 Offline Context
-  const { isOnline: contextIsOnline, pendingCount } = useOffline();
+  // Offline Context
+  const offlineCtx = useOffline();
+  const pendingCount = offlineCtx?.pendingCount || 0;
   const currentlyOffline = !isOnline();
   
   // Refs
@@ -61,12 +64,7 @@ export default function Scanner() {
   const codeReaderRef = useRef(null);
   const streamRef = useRef(null);
   const lastScannedCodeRef = useRef(null);
-  const isPausedRef = useRef(false);
-  const processingRef = useRef(false);
-  const autoSwitchTimerRef = useRef(null);
-  const cameraTriesRef = useRef(0);
-  const dialogOpenRef = useRef(false);
-  const camerasRef = useRef([]);
+  const scanningActiveRef = useRef(false);
   
   // Scanner State
   const [isScanning, setIsScanning] = useState(false);
@@ -82,7 +80,6 @@ export default function Scanner() {
   // Box State
   const [currentBox, setCurrentBox] = useState(null);
   const [boxLoading, setBoxLoading] = useState(false);
-  const [boxFromCache, setBoxFromCache] = useState(false); // 🆕
   
   // Dialog States
   const [showScanDialog, setShowScanDialog] = useState(false);
@@ -109,16 +106,6 @@ export default function Scanner() {
 
   // Helper
   const hasActiveDialog = showScanDialog || showGPSWarning || showPlacementChoice || showFirstSetup;
-  
-  // dialogOpenRef mit State synchronisieren
-  useEffect(() => {
-    dialogOpenRef.current = hasActiveDialog;
-  }, [hasActiveDialog]);
-
-  // camerasRef synchronisieren
-  useEffect(() => {
-    camerasRef.current = cameras;
-  }, [cameras]);
 
   // ============================================
   // INIT
@@ -132,13 +119,12 @@ export default function Scanner() {
     };
   }, []);
 
-  // 🆕 BoxTypes laden - OFFLINE-FÄHIG
   const loadBoxTypes = async () => {
     try {
       const result = await getBoxTypes();
       if (result.success) {
         setBoxTypes(result.data || []);
-        console.log("✅ BoxTypes geladen:", result.data?.length, result.offline ? "(offline)" : "(online)");
+        console.log("✅ BoxTypes geladen:", result.data?.length);
       }
     } catch (err) {
       console.error("Load box types error:", err);
@@ -155,25 +141,19 @@ export default function Scanner() {
       codeReaderRef.current = new BrowserMultiFormatReader();
       
       const devices = await BrowserMultiFormatReader.listVideoInputDevices();
-      console.log("📷 Kameras gefunden:", devices.length, devices.map(d => d.label));
+      console.log("📷 Kameras gefunden:", devices.length);
       
       if (!devices || devices.length === 0) {
         setError("Keine Kamera gefunden");
         return;
       }
 
-      // Kameras sortieren: Beste zuerst
+      // Kameras sortieren: Rückkamera bevorzugen
       const sortedCameras = sortCamerasByQuality(devices);
-      console.log("📷 Sortiert:", sortedCameras.map(d => d.label));
-      
       setCameras(sortedCameras);
       setCurrentCameraIndex(0);
-      cameraTriesRef.current = 0;
       
       await startScanning(sortedCameras[0].deviceId);
-      
-      // Auto-Switch Timer starten (wechselt nach 6 Sek ohne Scan)
-      startAutoSwitchTimer();
       
     } catch (err) {
       console.error("Init error:", err);
@@ -181,24 +161,22 @@ export default function Scanner() {
     }
   };
 
-  // Kameras nach Qualität sortieren (beste für QR-Scanning zuerst)
+  // Kameras sortieren (Rückkamera zuerst, Frontkamera raus)
   const sortCamerasByQuality = (devices) => {
     const getScore = (device) => {
       const label = device.label.toLowerCase();
       
+      // Frontkamera ausschließen
       if (label.includes("front") || label.includes("user") || label.includes("selfie") || label.includes("facetime")) {
         return -100;
       }
       
       let score = 0;
-      
-      if (label.includes("wide") && !label.includes("ultra")) score += 50;
-      if (label.includes("back camera") || label.includes("rear camera")) score += 40;
-      if (label.includes("0") && label.includes("back")) score += 30;
-      if (label.includes("ultra")) score -= 30;
-      if (label.includes("tele") || label.includes("zoom")) score -= 20;
-      if (label.includes("macro")) score -= 40;
-      if (label.includes("back") || label.includes("rear") || label.includes("environment")) score += 10;
+      if (label.includes("back") || label.includes("rear") || label.includes("environment")) score += 20;
+      if (label.includes("wide") && !label.includes("ultra")) score += 10;
+      if (label.includes("ultra")) score -= 10;
+      if (label.includes("tele") || label.includes("zoom")) score -= 5;
+      if (label.includes("macro")) score -= 15;
       
       return score;
     };
@@ -210,72 +188,49 @@ export default function Scanner() {
       .map(d => d.device);
   };
 
-  // Auto-Switch: Wechselt Kamera wenn nach 6 Sekunden kein QR erkannt
-  const startAutoSwitchTimer = () => {
-    if (autoSwitchTimerRef.current) {
-      clearTimeout(autoSwitchTimerRef.current);
-    }
+  // Manuell Kamera wechseln
+  const switchCamera = async () => {
+    if (cameras.length <= 1) return;
     
-    autoSwitchTimerRef.current = setTimeout(() => {
-      const cams = camerasRef.current;
-      if (!dialogOpenRef.current && !processingRef.current && cams.length > 1) {
-        const nextTry = cameraTriesRef.current + 1;
-        
-        if (nextTry < cams.length && nextTry < 3) {
-          console.log(`📷 Auto-Switch: Kamera ${nextTry + 1}/${cams.length}`);
-          cameraTriesRef.current = nextTry;
-          switchToCamera(nextTry);
-        }
-      }
-    }, 6000);
-  };
-
-  // Zu bestimmter Kamera wechseln
-  const switchToCamera = async (index) => {
-    const cams = camerasRef.current;
-    if (index >= cams.length) return;
-    
-    setCurrentCameraIndex(index);
+    const nextIndex = (currentCameraIndex + 1) % cameras.length;
+    setCurrentCameraIndex(nextIndex);
     setTorchOn(false);
     
+    // Aktuellen Stream stoppen
+    stopCurrentStream();
+    
+    // Neuen Stream starten
+    await startScanning(cameras[nextIndex].deviceId);
+  };
+
+  const stopCurrentStream = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
-    
     if (codeReaderRef.current) {
       try { codeReaderRef.current.reset(); } catch (e) {}
     }
-    
-    await startScanning(cams[index].deviceId);
-    startAutoSwitchTimer();
-  };
-
-  // Manuell Kamera wechseln
-  const switchCamera = () => {
-    const nextIndex = (currentCameraIndex + 1) % cameras.length;
-    cameraTriesRef.current = nextIndex;
-    switchToCamera(nextIndex);
   };
 
   // ============================================
-  // SCANNING STARTEN
+  // SCANNING
   // ============================================
   const startScanning = async (deviceId) => {
     if (!codeReaderRef.current || !videoRef.current) return;
     
     try {
       console.log("🎥 Starte Scanner...");
-      isPausedRef.current = false;
-      processingRef.current = false;
+      scanningActiveRef.current = true;
       
       await codeReaderRef.current.decodeFromVideoDevice(
         deviceId,
         videoRef.current,
         (result, error) => {
-          if (isPausedRef.current) return;
-          if (processingRef.current) return;
+          // Nur verarbeiten wenn Scanner aktiv
+          if (!scanningActiveRef.current) return;
+          
           if (result) {
-            console.log("📸 QR erkannt:", result.getText());
             handleScan(result.getText());
           }
         }
@@ -297,19 +252,9 @@ export default function Scanner() {
   };
 
   const stopScanner = () => {
-    if (autoSwitchTimerRef.current) {
-      clearTimeout(autoSwitchTimerRef.current);
-      autoSwitchTimerRef.current = null;
-    }
-    
-    if (codeReaderRef.current) {
-      try { codeReaderRef.current.reset(); } catch (e) {}
-      codeReaderRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
+    console.log("🛑 Stoppe Scanner");
+    scanningActiveRef.current = false;
+    stopCurrentStream();
     setIsScanning(false);
   };
 
@@ -339,7 +284,7 @@ export default function Scanner() {
   };
 
   // ============================================
-  // 🆕 SCAN HANDLER - OFFLINE-FÄHIG
+  // SCAN HANDLER - OFFLINE-FÄHIG
   // ============================================
   const handleScan = async (decodedText) => {
     if (!decodedText) return;
@@ -350,21 +295,20 @@ export default function Scanner() {
       code = decodedText.split("/s/")[1];
     }
     
-    // Gleicher Code?
+    // Gleicher Code? Ignorieren
     if (code === lastScannedCodeRef.current) {
+      return;
+    }
+    
+    // Bereits am Verarbeiten? Ignorieren
+    if (!scanningActiveRef.current) {
       return;
     }
     
     console.log("📱 Scan:", code, currentlyOffline ? "(OFFLINE)" : "(online)");
     
-    // Auto-Switch Timer stoppen
-    if (autoSwitchTimerRef.current) {
-      clearTimeout(autoSwitchTimerRef.current);
-    }
-    
-    // Lock setzen
-    isPausedRef.current = true;
-    processingRef.current = true;
+    // Scanner pausieren
+    scanningActiveRef.current = false;
     lastScannedCodeRef.current = code;
     setScannedCode(code);
     
@@ -373,13 +317,11 @@ export default function Scanner() {
       navigator.vibrate([100, 50, 100]);
     }
 
-    // Code prüfen
     setBoxLoading(true);
     setError("");
-    setBoxFromCache(false);
 
     try {
-      // 🆕 OFFLINE-FÄHIGE BOX-SUCHE
+      // OFFLINE-FÄHIGE BOX-SUCHE
       const result = await findBoxByQR(code);
       
       console.log("📦 findBoxByQR Result:", result);
@@ -387,38 +329,24 @@ export default function Scanner() {
       // Code nicht gefunden
       if (!result.success || result.notFound) {
         if (currentlyOffline) {
-          // Offline und nicht im Cache → Fehler anzeigen
           setBoxLoading(false);
-          setError("📴 Offline - Box nicht im Cache. Bitte online scannen.");
-          setTimeout(() => {
-            lastScannedCodeRef.current = null;
-            processingRef.current = false;
-            isPausedRef.current = false;
-            setError("");
-          }, 3000);
+          setError("📴 Offline - Box nicht im Cache");
+          setTimeout(() => resetForNextScan(), 3000);
           return;
         } else {
-          // Online aber nicht gefunden → Zur Zuweisung
           navigate(`/qr/assign-code?code=${code}`);
           return;
         }
       }
 
-      // Box gefunden (online oder aus Cache)
       const boxData = result.data;
-      setBoxFromCache(result.offline || result.cached || false);
 
       // Box im Pool (kein Objekt)
       if (!boxData.object_id) {
         if (currentlyOffline) {
           setBoxLoading(false);
-          setError("📴 Offline - Box muss zuerst online zugewiesen werden.");
-          setTimeout(() => {
-            lastScannedCodeRef.current = null;
-            processingRef.current = false;
-            isPausedRef.current = false;
-            setError("");
-          }, 3000);
+          setError("📴 Offline - Box muss erst online zugewiesen werden");
+          setTimeout(() => resetForNextScan(), 3000);
           return;
         }
         navigate(`/qr/assign-object?code=${code}&box_id=${boxData.id}`);
@@ -445,8 +373,6 @@ export default function Scanner() {
         box_type_id: boxData.box_type_id,
         box_type_name: boxData.box_type_name || boxData.box_types?.name,
         current_status: boxData.current_status,
-        // Für Offline-Scans wichtig
-        _fromCache: result.offline || result.cached
       };
 
       setCurrentBox(normalizedBox);
@@ -457,20 +383,17 @@ export default function Scanner() {
       const isGPSBox = (normalizedBox.position_type === 'gps' || normalizedBox.position_type === 'map') || 
                        (hasGPS && !hasFloorplan);
 
-      // NICHT PLATZIERT → Platzierungsauswahl (nur online möglich)
+      // NICHT PLATZIERT
       if (!isPlaced) {
         if (currentlyOffline) {
-          // Offline: Trotzdem Scan-Dialog zeigen für Ersteinrichtung
           setBoxLoading(false);
           setShowFirstSetup(true);
           return;
         }
         
-        // Online: Lagepläne laden für Platzierungsauswahl
         try {
-          const layoutResult = await getLayouts();
-          const objectLayouts = (layoutResult.data || []).filter(l => l.object_id === normalizedBox.object_id);
-          setObjectFloorplans(objectLayouts);
+          const layoutResult = await getLayouts(normalizedBox.object_id);
+          setObjectFloorplans(layoutResult.data || []);
         } catch (err) {}
         
         setPendingPlacement({
@@ -516,7 +439,6 @@ export default function Scanner() {
 
     } catch (err) {
       console.error("❌ Scan Error:", err);
-      
       setBoxLoading(false);
       
       if (err.response?.status === 401) {
@@ -525,22 +447,29 @@ export default function Scanner() {
       }
       
       setError("Fehler: " + (err.message || "Unbekannter Fehler"));
-      
-      setTimeout(() => {
-        lastScannedCodeRef.current = null;
-        processingRef.current = false;
-        isPausedRef.current = false;
-        setError("");
-      }, 3000);
+      setTimeout(() => resetForNextScan(), 3000);
     }
   };
 
   // ============================================
-  // RESET - Scanner fortsetzen
+  // RESET FUNKTIONEN
   // ============================================
+  
+  // Reset für nächsten Scan (nach Fehler)
+  const resetForNextScan = () => {
+    console.log("🔄 Reset für nächsten Scan");
+    lastScannedCodeRef.current = null;
+    scanningActiveRef.current = true;
+    setError("");
+    setScannedCode(null);
+    setBoxLoading(false);
+  };
+
+  // Vollständiger Reset (nach Dialog schließen)
   const resetScanner = () => {
-    console.log("🔄 Reset");
+    console.log("🔄 Vollständiger Reset");
     
+    // State zurücksetzen
     setCurrentBox(null);
     setShowScanDialog(false);
     setShowGPSWarning(false);
@@ -552,31 +481,27 @@ export default function Scanner() {
     setError("");
     setBoxLoading(false);
     setScannedCode(null);
-    setBoxFromCache(false);
     
-    cameraTriesRef.current = 0;
-    
+    // Scanner wieder aktivieren nach kurzer Pause
     setTimeout(() => {
       lastScannedCodeRef.current = null;
-      processingRef.current = false;
-      isPausedRef.current = false;
-      startAutoSwitchTimer();
-      console.log("✅ Scanner bereit");
-    }, 800);
+      scanningActiveRef.current = true;
+      console.log("✅ Scanner bereit für nächsten Scan");
+    }, 500);
   };
 
   // ============================================
-  // HANDLER: SCAN DIALOG
+  // HANDLER: DIALOGE
   // ============================================
   const handleScanCompleted = () => {
-    setSuccessMessage(currentlyOffline ? "📴 Offline gespeichert!" : "Kontrolle gespeichert!");
+    setSuccessMessage(currentlyOffline ? "📴 Offline gespeichert!" : "✅ Kontrolle gespeichert!");
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 2000);
     resetScanner();
   };
 
   const handleFirstSetupCompleted = () => {
-    setSuccessMessage(currentlyOffline ? "📴 Offline eingerichtet!" : "Box eingerichtet!");
+    setSuccessMessage(currentlyOffline ? "📴 Offline eingerichtet!" : "✅ Box eingerichtet!");
     setShowSuccess(true);
     setTimeout(() => setShowSuccess(false), 2000);
     resetScanner();
@@ -599,7 +524,6 @@ export default function Scanner() {
         );
       });
 
-      // 🆕 Offline-fähiges Position-Update
       const { updateBoxPosition } = await import("../../utils/offlineAPI");
       await updateBoxPosition(currentBox.id, position.lat, position.lng, 'gps');
       
@@ -637,7 +561,6 @@ export default function Scanner() {
           );
         });
 
-        // 🆕 Offline-fähiges Position-Update
         const { updateBoxPosition } = await import("../../utils/offlineAPI");
         await updateBoxPosition(pendingPlacement.boxId, position.lat, position.lng, 'gps');
 
@@ -673,7 +596,7 @@ export default function Scanner() {
         </div>
       )}
 
-      {/* 🆕 Offline Banner */}
+      {/* Offline Banner */}
       {currentlyOffline && !hasActiveDialog && (
         <div className="fixed top-16 left-4 right-4 z-[150] bg-yellow-500/20 border border-yellow-500/30 rounded-xl p-3 flex items-center gap-3">
           <WifiOff size={20} className="text-yellow-400" />
@@ -701,11 +624,6 @@ export default function Scanner() {
               <p className="text-gray-400 text-sm mb-4">
                 Du bist {formatDistance(gpsDistance)} von der Box entfernt.
               </p>
-              {currentGPS && (
-                <p className="text-xs text-gray-500 mb-4">
-                  Dein Standort: {currentGPS.lat.toFixed(5)}, {currentGPS.lng.toFixed(5)}
-                </p>
-              )}
             </div>
             <div className="p-4 bg-black/50 flex gap-3">
               <button
@@ -740,7 +658,7 @@ export default function Scanner() {
             onSave={handleScanCompleted}
             onScanCreated={handleScanCompleted}
             onShowDetails={() => {
-              const isFloorplan = currentBox.floor_plan_id && (currentBox.pos_x !== null && currentBox.pos_x !== undefined);
+              const isFloorplan = currentBox.floor_plan_id && currentBox.pos_x !== null;
               if (isFloorplan) {
                 navigate(`/layouts/${currentBox.object_id}?fp=${currentBox.floor_plan_id}&openBox=${currentBox.id}`);
               } else {
@@ -788,7 +706,7 @@ export default function Scanner() {
               <button
                 onClick={handleChooseGPS}
                 disabled={gpsLoading}
-                className="w-full bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border border-gray-300 dark:border-white/10 hover:border-green-500 dark:hover:border-green-500/50 rounded-xl p-5 text-left"
+                className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-green-500/50 rounded-xl p-5 text-left"
               >
                 <div className="flex items-center gap-4">
                   <div className="w-14 h-14 bg-green-500/20 rounded-xl flex items-center justify-center">
@@ -809,7 +727,7 @@ export default function Scanner() {
               {objectFloorplans.length > 0 && (
                 <button
                   onClick={handleChooseFloorplan}
-                  className="w-full bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 border border-gray-300 dark:border-white/10 hover:border-blue-500 dark:hover:border-blue-500/50 rounded-xl p-5 text-left"
+                  className="w-full bg-[#111] hover:bg-[#1a1a1a] border border-white/10 hover:border-blue-500/50 rounded-xl p-5 text-left"
                 >
                   <div className="flex items-center gap-4">
                     <div className="w-14 h-14 bg-blue-500/20 rounded-xl flex items-center justify-center">
@@ -864,11 +782,14 @@ export default function Scanner() {
           <div className="m-4 p-4 bg-red-900/50 border border-red-500/50 rounded-xl">
             <p className="text-red-300 mb-3">{error}</p>
             <button
-              onClick={initScanner}
+              onClick={() => {
+                setError("");
+                resetForNextScan();
+              }}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg flex items-center gap-2"
             >
               <RotateCcw size={16} />
-              Erneut versuchen
+              Weiter scannen
             </button>
           </div>
         )}
@@ -896,7 +817,7 @@ export default function Scanner() {
           />
           
           {/* Scan Overlay */}
-          {isScanning && !boxLoading && !hasActiveDialog && (
+          {isScanning && !boxLoading && !hasActiveDialog && !error && (
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
               <div className="relative w-64 h-64">
                 <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-green-400 rounded-tl-lg" />
