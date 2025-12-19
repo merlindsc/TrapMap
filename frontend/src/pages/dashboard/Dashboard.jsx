@@ -144,11 +144,16 @@ export default function Dashboard() {
       .map(box => ({
         id: `box-${box.id}`,
         box_id: box.id,
+        box_name: box.name || `Box ${box.id}`,
+        box_qr_code: box.qr_code,
+        object_id: box.object_id,
+        object_name: box.object_name,
+        created_at: box.last_scan_at,
         scanned_at: box.last_scan_at,
         status: box.current_status,
-        qr_code: box.qr_code,
-        notes: box.notes || '',
-        user: { email: 'System' } // Fallback da wir keinen User haben
+        message: box.notes || '',
+        technician_name: box.last_scan_user || 'System',
+        user: { email: box.last_scan_user || 'System' }
       }));
   }
 
