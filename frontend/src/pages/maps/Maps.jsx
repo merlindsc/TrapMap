@@ -692,40 +692,51 @@ export default function Maps() {
 
     const boxesToAssign = poolBoxes.slice(0, count);
     
-    setRequesting(true);
-    setRequestMessage({ type: "info", text: `Weise ${count} Boxen zu...` });
-
-    let successCount = 0;
-    let errorCount = 0;
-
-    for (const qr of boxesToAssign) {
-      const boxId = qr.boxes?.id || qr.box_id;
-      if (!boxId) {
-        errorCount++;
-        continue;
-      }
-
-      try {
-        const res = await fetch(`${API}/boxes/${boxId}/assign`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify({ object_id: selectedObject.id })
-        });
-
-        if (res.ok) successCount++;
-        else errorCount++;
-      } catch (err) {
-        errorCount++;
-      }
+    // Extract and validate box IDs before proceeding
+    const boxIds = boxesToAssign
+      .map(box => box.id || box.boxes?.id || box.box_id)
+      .filter(id => id != null);
+    
+    if (boxIds.length === 0) {
+      console.error("❌ Keine gültigen Box-IDs gefunden:", boxesToAssign);
+      setRequestMessage({ type: "error", text: "Keine gültigen Box-IDs gefunden" });
+      return;
     }
     
-    if (errorCount === 0) {
-      setRequestMessage({ type: "success", text: `✓ ${successCount} Boxen zugewiesen` });
-    } else {
-      setRequestMessage({ type: "warning", text: `${successCount} OK, ${errorCount} Fehler` });
+    if (boxIds.length < count) {
+      console.warn(`⚠️ Nur ${boxIds.length} von ${count} Boxen haben gültige IDs`);
+    }
+    
+    setRequesting(true);
+    setRequestMessage({ type: "info", text: `Weise ${boxIds.length} Boxen zu...` });
+
+    try {
+      // Use bulk-assign API for better performance
+      const res = await fetch(`${API}/boxes/bulk-assign`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          box_ids: boxIds,
+          object_id: selectedObject.id 
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const assignedCount = data.count || boxIds.length;
+        setRequestMessage({ type: "success", text: `✓ ${assignedCount} Boxen zugewiesen` });
+        console.log(`✅ ${assignedCount} Boxen erfolgreich zugewiesen`);
+      } else {
+        const error = await res.json().catch(() => ({ error: "Unbekannter Fehler" }));
+        console.error("❌ Bulk-Assign Fehler:", error);
+        setRequestMessage({ type: "error", text: error.error || "Fehler beim Zuweisen" });
+      }
+    } catch (err) {
+      console.error("❌ Fehler bei Boxen-Zuweisung:", err);
+      setRequestMessage({ type: "error", text: "Netzwerkfehler" });
     }
 
     setRequestCount("");
