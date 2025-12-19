@@ -662,8 +662,18 @@ export const getCachedBoxesByLayout = (layoutId) =>
 export const updateCachedBox = async (boxId, updates) => {
   const box = await getCachedBox(boxId);
   if (box) {
+    // Box existiert - aktualisieren
     await putToStore(STORES.CACHED_BOXES, { 
       ...box, 
+      ...updates, 
+      cached_at: new Date().toISOString() 
+    });
+    console.log('📦 Cache-Box aktualisiert:', boxId, updates);
+  } else {
+    // Box existiert nicht - neu erstellen mit Updates
+    console.log('📦 Cache-Box nicht gefunden, erstelle neu:', boxId, updates);
+    await putToStore(STORES.CACHED_BOXES, { 
+      id: boxId,
       ...updates, 
       cached_at: new Date().toISOString() 
     });

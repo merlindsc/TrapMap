@@ -855,11 +855,22 @@ export default function Scanner() {
           timestamp: new Date().toISOString()
         });
         
-        // Lokalen Cache aktualisieren
+        // Lokalen Cache aktualisieren - ALLE relevanten Felder
         await updateCachedBox(pendingPoolBox.id, {
           object_id: object.id,
-          object_name: object.name
+          object_name: object.name,
+          // Wichtig: Pool-Status entfernen
+          status: null,
+          // Ursprüngliche Box-Daten beibehalten
+          qr_code: pendingPoolBox.qr_code,
+          number: pendingPoolBox.number,
+          display_number: pendingPoolBox.display_number,
+          box_type_id: pendingPoolBox.box_type_id,
+          box_type_name: pendingPoolBox.box_type_name,
+          short_code: pendingPoolBox.short_code
         });
+        
+        console.log('📴 Box offline Objekt zugewiesen:', pendingPoolBox.id, '→', object.name);
         
         // Lagepläne aus Cache laden
         const { getCachedLayoutsByObject } = await import("../../utils/offlineDB");
