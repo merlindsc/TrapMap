@@ -22,6 +22,7 @@ import AGB from "./pages/legal/AGB";
 import CookieConsent from "./components/CookieConsent";
 import UpdateWidget from "./components/UpdateWidget";
 import FeedbackWidget from "./components/FeedbackWidget";
+import PushPermissionDialog from "./components/PushPermissionDialog";
 
 // Partner Components (lazy loaded)
 const PartnerLogin = lazy(() => import("./pages/PartnerLogin").catch(() => ({ default: () => <div className="min-h-screen flex items-center justify-center bg-gray-900 text-red-400">PartnerLogin.jsx nicht gefunden</div> })));
@@ -204,6 +205,10 @@ function MainApp() {
   const isSuperAdmin = SUPER_ADMINS.includes(user.email);
 
   return (
+    <>
+    {/* Push Permission Dialog - nur für eingeloggte User */}
+    <PushPermissionDialog />
+    
     <Routes>
       {/* Public Pages auch wenn eingeloggt erreichbar */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -279,5 +284,6 @@ function MainApp() {
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
+    </>
   );
 }

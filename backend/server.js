@@ -83,6 +83,17 @@ try {
   console.log('⚠️ Feedback routes failed to load:', e.message);
 }
 
+// Push Notification Routes
+let pushRoutes = null;
+let reminderJob = null;
+try { 
+  pushRoutes = require('./routes/push.routes'); 
+  reminderJob = require('./jobs/reminder.job');
+  console.log('✅ Push Notification routes loaded'); 
+} catch (e) {
+  console.log('⚠️ Push routes failed to load:', e.message);
+}
+
 // ============================================
 // AUDIT REPORT ROUTES (PDF Generator)
 // ============================================
@@ -246,6 +257,7 @@ if (partnerRoutes) {
 if (adminRoutes) app.use('/api/admin', adminRoutes);
 if (demoRoutes) app.use('/api/demo', demoRoutes);
 if (feedbackRoutes) app.use('/api/feedback', feedbackRoutes);
+if (pushRoutes) app.use('/api/push', pushRoutes);
 
 // ============================================
 // AUDIT REPORT ROUTES (PDF Generator)
@@ -308,6 +320,7 @@ app.listen(PORT, () => {
   console.log(`   Admin: ${adminRoutes ? '✅' : '❌'}`);
   console.log(`   Demo: ${demoRoutes ? '✅' : '❌'}`);
   console.log(`   Audit Reports (PDF): ${auditReportRoutes ? '✅' : '❌'}`);
+  console.log(`   Push Notifications: ${pushRoutes ? '✅' : '❌'}`);
   console.log('═════════════════════════════════════════════');
   console.log('🔐 Security Status:');
   console.log(`   Helmet: ✅ Active`);
@@ -316,6 +329,12 @@ app.listen(PORT, () => {
   console.log(`   Login Protection: ${security ? '✅ Active' : '⚠️ Not loaded'}`);
   console.log(`   JWT Secret: ${process.env.JWT_SECRET ? '✅ Set' : '⚠️ Using default!'}`);
   console.log('═════════════════════════════════════════════');
+  
+  // 🔔 Reminder Job starten (nur wenn Push geladen)
+  if (reminderJob && reminderJob.startReminderJob) {
+    reminderJob.startReminderJob();
+    console.log('🔔 Reminder Job: ✅ Running');
+  }
 });
 
 // Graceful Shutdown

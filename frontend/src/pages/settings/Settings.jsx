@@ -1,10 +1,21 @@
 /* ============================================================
    TRAPMAP — SETTINGS / EINSTELLUNGEN
    Logo-Upload, Organisationsdaten, Passwort ändern
+   + PUSH BENACHRICHTIGUNGEN
    ============================================================ */
 
 import { useState, useEffect } from "react";
-import { Upload, Image, Check, Loader, Building2, Save, MapPin, Phone, Mail, User, Key, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { Upload, Image, Check, Loader, Building2, Save, MapPin, Phone, Mail, User, Key, Eye, EyeOff, AlertCircle, Bell, BellOff, Clock, Send, Smartphone } from "lucide-react";
+import { 
+  isPushSupported, 
+  getPermissionStatus, 
+  subscribeToPush, 
+  unsubscribeFromPush, 
+  isSubscribed, 
+  getPushSettings, 
+  updatePushSettings, 
+  sendTestNotification 
+} from "../../utils/pushService";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -32,6 +43,17 @@ export default function Settings() {
   });
   const [changingPassword, setChangingPassword] = useState(false);
 
+  // Push-Benachrichtigungen
+  const [pushSupported] = useState(isPushSupported());
+  const [pushPermission, setPushPermission] = useState(getPermissionStatus());
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushSettings, setPushSettings] = useState({
+    reminderEnabled: true,
+    reminderDaysBefore: 1,
+    reminderTime: '08:00'
+  });
+
   // Daten laden
   useEffect(() => {
     const loadData = async () => {
@@ -52,12 +74,30 @@ export default function Settings() {
           });
           setLogoUrl(org.logo_url);
         }
+        
+        // Push-Status laden
+        if (pushSupported) {
+          const subscribed = await isSubscribed();
+          setPushSubscribed(subscribed);
+          setPushPermission(getPermissionStatus());
+          
+          if (subscribed) {
+            try {
+              const settings = await getPushSettings();
+              if (settings.settings) {
+                setPushSettings(settings.settings);
+              }
+            } catch (e) {
+              console.log('Push settings not loaded:', e);
+            }
+          }
+        }
       } catch (e) {
         console.error("Load error:", e);
       }
     };
     loadData();
-  }, [token]);
+  }, [token, pushSupported]);
 
   // Logo hochladen
   const handleLogoUpload = async (e) => {
@@ -177,6 +217,74 @@ export default function Settings() {
     setShowPasswords(prev => ({ ...prev, [field]: !prev[field] }));
   };
 
+  // Push aktivieren
+  const handleEnablePush = async () => {
+    setPushLoading(true);
+    setMessage(null);
+    
+    try {
+      await subscribeToPush(pushSettings);
+      setPushSubscribed(true);
+      setPushPermission(getPermissionStatus());
+      setMessage({ type: 'success', text: 'Push-Benachrichtigungen aktiviert!' });
+    } catch (error) {
+      console.error('Push subscribe error:', error);
+      setMessage({ type: 'error', text: error.message || 'Fehler beim Aktivieren' });
+      setPushPermission(getPermissionStatus());
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  // Push deaktivieren
+  const handleDisablePush = async () => {
+    setPushLoading(true);
+    setMessage(null);
+    
+    try {
+      await unsubscribeFromPush();
+      setPushSubscribed(false);
+      setMessage({ type: 'success', text: 'Push-Benachrichtigungen deaktiviert' });
+    } catch (error) {
+      console.error('Push unsubscribe error:', error);
+      setMessage({ type: 'error', text: error.message || 'Fehler beim Deaktivieren' });
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  // Push-Einstellungen speichern
+  const handleSavePushSettings = async () => {
+    setPushLoading(true);
+    setMessage(null);
+    
+    try {
+      await updatePushSettings(pushSettings);
+      setMessage({ type: 'success', text: 'Erinnerungs-Einstellungen gespeichert!' });
+    } catch (error) {
+      console.error('Push settings error:', error);
+      setMessage({ type: 'error', text: error.message || 'Fehler beim Speichern' });
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  // Test-Benachrichtigung
+  const handleTestPush = async () => {
+    setPushLoading(true);
+    setMessage(null);
+    
+    try {
+      await sendTestNotification();
+      setMessage({ type: 'success', text: 'Test-Benachrichtigung gesendet!' });
+    } catch (error) {
+      console.error('Test push error:', error);
+      setMessage({ type: 'error', text: error.message || 'Fehler beim Senden' });
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto">
       <h1 className="text-3xl font-bold text-primary mb-2">Einstellungen</h1>
@@ -219,6 +327,126 @@ export default function Settings() {
             <p className="text-primary">{orgData.name || `ID: ${user?.organisation_id}`}</p>
           </div>
         </div>
+      </div>
+
+      {/* Push-Benachrichtigungen Card */}
+      <div className="bg-card border border-theme rounded-xl p-6 mb-6">
+        <h2 className="text-lg font-semibold text-primary mb-4 flex items-center gap-2">
+          <Bell size={20} className="text-indigo-400" />
+          Push-Benachrichtigungen
+        </h2>
+        
+        {!pushSupported ? (
+          <div className="p-4 bg-yellow-900/20 border border-yellow-500/30 rounded-lg text-yellow-400 text-sm">
+            <AlertCircle size={16} className="inline mr-2" />
+            Push-Benachrichtigungen werden von diesem Browser nicht unterstützt.
+          </div>
+        ) : pushPermission === 'denied' ? (
+          <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg text-red-400 text-sm">
+            <BellOff size={16} className="inline mr-2" />
+            Push-Benachrichtigungen wurden blockiert. Bitte in den Browser-Einstellungen erlauben.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Toggle */}
+            <div className="flex items-center justify-between p-4 bg-card border border-theme rounded-lg">
+              <div className="flex items-center gap-3">
+                <Smartphone size={20} className="text-indigo-400" />
+                <div>
+                  <p className="text-primary font-medium">Benachrichtigungen</p>
+                  <p className="text-sm text-muted">Erhalte Erinnerungen für fällige Kontrollen</p>
+                </div>
+              </div>
+              <button
+                onClick={pushSubscribed ? handleDisablePush : handleEnablePush}
+                disabled={pushLoading}
+                className={`relative w-14 h-7 rounded-full transition-colors ${
+                  pushSubscribed ? 'bg-green-600' : 'bg-gray-600'
+                } ${pushLoading ? 'opacity-50' : ''}`}
+              >
+                <span className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${
+                  pushSubscribed ? 'translate-x-7' : ''
+                }`} />
+              </button>
+            </div>
+
+            {pushSubscribed && (
+              <>
+                {/* Erinnerungs-Einstellungen */}
+                <div className="p-4 bg-card border border-theme rounded-lg space-y-4">
+                  <h3 className="font-medium text-primary flex items-center gap-2">
+                    <Clock size={16} />
+                    Erinnerungs-Einstellungen
+                  </h3>
+                  
+                  {/* Tage vor Fälligkeit */}
+                  <div>
+                    <label className="block text-sm text-muted mb-2">Erinnere mich</label>
+                    <select
+                      value={pushSettings.reminderDaysBefore}
+                      onChange={(e) => setPushSettings(prev => ({ 
+                        ...prev, 
+                        reminderDaysBefore: parseFloat(e.target.value) 
+                      }))}
+                      className="w-full bg-card border border-theme rounded-lg px-4 py-2 text-primary"
+                    >
+                      <option value={0.5}>12 Stunden vorher</option>
+                      <option value={1}>1 Tag vorher</option>
+                      <option value={1.5}>1,5 Tage vorher</option>
+                      <option value={2}>2 Tage vorher</option>
+                      <option value={3}>3 Tage vorher</option>
+                      <option value={7}>1 Woche vorher</option>
+                    </select>
+                  </div>
+
+                  {/* Uhrzeit */}
+                  <div>
+                    <label className="block text-sm text-muted mb-2">Bevorzugte Uhrzeit</label>
+                    <select
+                      value={pushSettings.reminderTime}
+                      onChange={(e) => setPushSettings(prev => ({ 
+                        ...prev, 
+                        reminderTime: e.target.value 
+                      }))}
+                      className="w-full bg-card border border-theme rounded-lg px-4 py-2 text-primary"
+                    >
+                      <option value="06:00">06:00 Uhr</option>
+                      <option value="07:00">07:00 Uhr</option>
+                      <option value="08:00">08:00 Uhr</option>
+                      <option value="09:00">09:00 Uhr</option>
+                      <option value="10:00">10:00 Uhr</option>
+                      <option value="12:00">12:00 Uhr</option>
+                      <option value="18:00">18:00 Uhr</option>
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={handleSavePushSettings}
+                    disabled={pushLoading}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50 text-sm"
+                  >
+                    {pushLoading ? <Loader size={16} className="animate-spin" /> : <Save size={16} />}
+                    Einstellungen speichern
+                  </button>
+                </div>
+
+                {/* Test senden */}
+                <button
+                  onClick={handleTestPush}
+                  disabled={pushLoading}
+                  className="flex items-center gap-2 px-4 py-2 bg-card border border-theme hover:border-indigo-500/50 text-primary rounded-lg transition-colors disabled:opacity-50 text-sm"
+                >
+                  {pushLoading ? <Loader size={16} className="animate-spin" /> : <Send size={16} />}
+                  Test-Benachrichtigung senden
+                </button>
+              </>
+            )}
+
+            <p className="text-xs text-muted">
+              Beispiel-Nachricht: "In 1 Tag müssen in Objekt 'Muster GmbH' 5 Boxen kontrolliert werden"
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Passwort ändern Card */}
