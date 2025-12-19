@@ -18,6 +18,7 @@ import {
 import { createBoxOffline, createScanOffline, findBoxByQR } from "../../utils/offlineAPI";
 import { OfflineContext } from "../../context/OfflineContext";
 import { getCachedObjects } from "../../utils/offlineDB";
+import { getBoxShortLabel } from "../../utils/boxUtils";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -792,17 +793,8 @@ export default function ScanFlowV2() {
   if (mode === "control" && boxData) {
     const boxType = getBoxType();
     
-    // Box-Nummer aus QR-Code oder direkt
-    const getDisplayNumber = () => {
-      if (boxData.number) return boxData.number;
-      if (boxData.display_number) return boxData.display_number;
-      if (boxData.qr_code) {
-        const match = boxData.qr_code.match(/(\d+)/);
-        return match ? parseInt(match[1], 10) : boxData.id;
-      }
-      return boxData.id;
-    };
-    const displayNumber = getDisplayNumber();
+    // Box-Label aus short_code + QR-Nummer (z.B. "RK123")
+    const displayNumber = getBoxShortLabel(boxData);
 
     return (
       <div className="scan-flow-container">
@@ -818,7 +810,7 @@ export default function ScanFlowV2() {
         <div className="scan-form">
           {/* Box Info */}
           <div className="box-info-card">
-            <div className="box-number">Box {displayNumber} {boxData.qr_code || ''}</div>
+            <div className="box-number">Box {displayNumber}</div>
             <div className="box-details">
               <span>{boxData.object_name}</span>
               <span>{boxData.box_type_name || boxData.type_name}</span>

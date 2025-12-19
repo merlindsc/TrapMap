@@ -136,10 +136,11 @@ const getBoxIcon = (box) => {
   return "B";
 };
 
-// Marker mit short_code-number Label oben und Kürzel im Kreis
+// Marker mit short_code+number Label oben und Kürzel im Kreis
 const createBoxIcon = (box, status = "green") => {
   const color = getStatusHex(status);
-  const label = box?.short_code ? getBoxShortLabel(box) : (box?.display_number || '?');
+  // Immer getBoxShortLabel verwenden - extrahiert Nummer aus QR-Code
+  const label = getBoxShortLabel(box);
   const shortCode = box?.short_code || getBoxIcon(box);
 
   return L.divIcon({
@@ -246,7 +247,7 @@ function BoxListItem({ box, onClick, onFlyTo, onReturnToStorage, showFlyTo = fal
     return date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
   };
 
-  const displayNum = box.display_number || '?';
+  const boxLabel = getBoxShortLabel(box); // z.B. "RK123" oder "IM456"
   const shortQr = getShortQr(box);
   const statusColor = getStatusColor(box.current_status || box.status);
   const canFlyTo = showFlyTo && isGpsBox(box) && onFlyTo;
@@ -255,11 +256,11 @@ function BoxListItem({ box, onClick, onFlyTo, onReturnToStorage, showFlyTo = fal
     <div className={`box-item-detailed ${isFloorplan ? 'floorplan' : ''} group`} onClick={onClick}>
       <div className="box-item-main">
         <div className={`box-number-badge ${statusColor}`}>
-          {displayNum}
+          {boxLabel}
         </div>
         <div className="box-item-info">
           <div className="box-item-name">
-            <span>Box #{displayNum}</span>
+            <span>Box {boxLabel}</span>
             <span className="qr-badge">{shortQr}</span>
             {isFloorplan && <LayoutGrid size={12} className="floorplan-badge" />}
           </div>
@@ -913,7 +914,7 @@ export default function Maps() {
         setBoxToReturn(null);
         
         // Show success notification
-        setRequestMessage({ type: "success", text: `Box #${boxToReturn.display_number || boxToReturn.number} zurück ins Lager` });
+        setRequestMessage({ type: "success", text: `Box ${getBoxShortLabel(boxToReturn)} zurück ins Lager` });
         setTimeout(() => setRequestMessage(null), 3000);
       } else {
         const error = await response.json();
@@ -1228,7 +1229,7 @@ export default function Maps() {
       {repositionBox && (
         <div className="placing-hint reposition">
           <Navigation size={18} />
-          <span>Klicke auf die Karte um Box #{repositionBox.display_number || '?'} zu verschieben</span>
+          <span>Klicke auf die Karte um Box {getBoxShortLabel(repositionBox)} zu verschieben</span>
           <button onClick={() => setRepositionBox(null)}>
             <X size={16} /> Abbrechen
           </button>
@@ -1238,7 +1239,7 @@ export default function Maps() {
       {boxToPlace && (
         <div className="placing-hint" style={{ borderColor: "#10b981", color: "#10b981" }}>
           <MapPin size={18} />
-          <span>Tippe auf die Karte um Box #{boxToPlace.display_number || getShortQr(boxToPlace)} zu platzieren</span>
+          <span>Tippe auf die Karte um Box {getBoxShortLabel(boxToPlace)} zu platzieren</span>
           <button onClick={() => setBoxToPlace(null)} style={{ background: "rgba(16, 185, 129, 0.15)" }}>
             <X size={16} /> Abbrechen
           </button>
@@ -1575,7 +1576,7 @@ export default function Maps() {
                         >
                           <span className="box-icon">{getBoxIcon(box)}</span>
                           <div className="box-info">
-                            <h4>#{box.display_number || '?'} <span className="qr-badge-small">{getShortQr(box)}</span></h4>
+                            <h4>{getBoxShortLabel(box)} <span className="qr-badge-small">{getShortQr(box)}</span></h4>
                             <p>{box.box_type_name || 'Kein Typ'}</p>
                           </div>
                           <span className="drag-hint" style={{ color: boxToPlace?.id === box.id ? '#10b981' : undefined }}>
@@ -1661,7 +1662,7 @@ export default function Maps() {
             </div>
             <h3>Box zurück ins Lager?</h3>
             <p>
-              Möchtest du <strong>Box #{boxToReturn.display_number || boxToReturn.number}</strong> 
+              Möchtest du <strong>Box {getBoxShortLabel(boxToReturn)}</strong> 
               {boxToReturn.box_type_name && <> ({boxToReturn.box_type_name})</>} 
               wirklich zurück ins Lager verschieben?
             </p>

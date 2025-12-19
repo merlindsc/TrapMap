@@ -34,6 +34,7 @@ import {
 
 import BoxScanDialog from "../../components/BoxScanDialog";
 import BoxEditDialog from "../maps/BoxEditDialog";
+import { getBoxShortLabel } from "../../utils/boxUtils";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -1194,7 +1195,7 @@ export default function Scanner() {
                   <Package size={24} className="text-indigo-400" />
                 </div>
                 <div>
-                  <p className="font-semibold">Box {currentBox.display_number || currentBox.number || currentBox.id} {currentBox.qr_code || ''}</p>
+                  <p className="font-semibold">Box {getBoxShortLabel(currentBox)}</p>
                   <p className="text-sm text-gray-400">{currentBox.object_name || 'Kein Objekt'}</p>
                 </div>
               </div>
