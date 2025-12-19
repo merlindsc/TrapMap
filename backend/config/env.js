@@ -47,6 +47,11 @@ const config = {
 
 // Validierung
 function validateConfig() {
+  // Skip validation in test environment
+  if (process.env.NODE_ENV === 'test') {
+    return;
+  }
+  
   const required = ["jwtSecret", "supabaseUrl", "supabaseServiceKey"];
   const missing = required.filter((key) => !config[key] || config[key] === "");
 
