@@ -100,8 +100,17 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
         return item.boxes.id;
       }
       // If it's a direct box object, use its ID
+      if (!item.id) {
+        console.error("❌ Box ohne ID gefunden:", item);
+      }
       return item.id;
     }).filter(Boolean);
+    
+    console.log(`📦 Schnellauswahl: ${n} Boxen, ${ids.length} IDs extrahiert`);
+    if (ids.length !== n) {
+      console.warn(`⚠️ Warnung: ${n} Boxen ausgewählt, aber nur ${ids.length} gültige IDs!`);
+    }
+    
     setSelectedBoxIds(new Set(ids));
     setBoxCount(n);
   };
@@ -125,8 +134,17 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
       if (item.boxes && item.boxes.id) {
         return item.boxes.id;
       }
+      if (!item.id) {
+        console.error("❌ Box ohne ID gefunden:", item);
+      }
       return item.id;
     }).filter(Boolean);
+    
+    console.log(`📦 Alle auswählen: ${poolBoxes.length} Boxen, ${ids.length} IDs extrahiert`);
+    if (ids.length !== poolBoxes.length) {
+      console.warn(`⚠️ Warnung: ${poolBoxes.length} Boxen vorhanden, aber nur ${ids.length} gültige IDs!`);
+    }
+    
     setSelectedBoxIds(new Set(ids));
     setBoxCount(poolBoxes.length);
   };

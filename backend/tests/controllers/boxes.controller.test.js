@@ -203,6 +203,46 @@ describe('Boxes Controller', () => {
     });
   });
 
+  describe('GET /api/boxes/pool - Get pool boxes', () => {
+    it('should return boxes without object_id', async () => {
+      const mockPoolBoxes = [
+        {
+          id: 'box-1',
+          qr_code: 'DSE-0001',
+          number: 1,
+          object_id: null,
+          status: 'active'
+        },
+        {
+          id: 'box-2',
+          qr_code: 'DSE-0002',
+          number: 2,
+          object_id: null,
+          status: 'active'
+        }
+      ];
+
+      boxesService.getPoolBoxes.mockResolvedValue({
+        success: true,
+        data: mockPoolBoxes
+      });
+
+      const response = await request(app)
+        .get('/api/boxes/pool')
+        .set('Authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body).toHaveLength(2);
+      // Verify structure - boxes should have direct id field
+      expect(response.body[0]).toHaveProperty('id');
+      expect(response.body[0]).toHaveProperty('qr_code');
+      expect(response.body[0].object_id).toBeNull();
+      // Verify no nested 'boxes' property
+      expect(response.body[0]).not.toHaveProperty('boxes');
+    });
+  });
+
   describe('POST /api/boxes/bulk-assign - Bulk assign boxes to object', () => {
     it('should assign multiple boxes to an object', async () => {
       const mockResponse = {
