@@ -91,45 +91,32 @@ export default function ObjectEditDialog({ object, onClose, onSave, onDelete, bo
   };
 
   // ============================================
-  // ARCHIVIEREN: Boxen zurück ins Lager, dann Objekt löschen
+  // ARCHIVIEREN: Neuer API-Endpoint mit Grund
   // ============================================
+  const [archiveReason, setArchiveReason] = useState("");
+  
   const handleArchive = async () => {
     setArchiveLoading(true);
     
     try {
-      // 1. Alle Boxen des Objekts zurück ins Lager
-      if (boxCount > 0) {
-        const boxRes = await fetch(`${API}/boxes/archive-object-boxes`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ object_id: object.id }),
-        });
-
-        if (!boxRes.ok) {
-          const err = await boxRes.json();
-          throw new Error(err.error || "Fehler beim Zurücksetzen der Boxen");
-        }
-
-        const boxData = await boxRes.json();
-        console.log(`✅ ${boxData.count} Boxen zurück ins Lager`);
-      }
-
-      // 2. Objekt deaktivieren/löschen
-      const res = await fetch(`${API}/objects/${object.id}`, {
-        method: "DELETE",
+      const res = await fetch(`${API}/objects/${object.id}/archive`, {
+        method: "POST",
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({ reason: archiveReason || null }),
       });
 
       if (!res.ok) {
-        throw new Error("Objekt konnte nicht archiviert werden");
+        const err = await res.json();
+        throw new Error(err.error || "Objekt konnte nicht archiviert werden");
       }
 
-      setToast({ type: "success", msg: "Objekt archiviert, Boxen im Lager" });
+      const result = await res.json();
+      console.log(`✅ Objekt archiviert, ${result.boxesReturned || 0} Boxen zurück ins Lager`);
+      
+      setToast({ type: "success", msg: `Objekt archiviert${result.boxesReturned > 0 ? `, ${result.boxesReturned} Boxen im Lager` : ''}` });
       
       setTimeout(() => {
         if (onDelete) onDelete(object.id);
@@ -280,6 +267,28 @@ export default function ObjectEditDialog({ object, onClose, onSave, onDelete, bo
                   </span>
                 </div>
               )}
+              
+              {/* Grund für Archivierung (optional) */}
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: "block", color: "#fca5a5", fontSize: 12, marginBottom: 4 }}>
+                  Grund (optional)
+                </label>
+                <input
+                  type="text"
+                  value={archiveReason}
+                  onChange={(e) => setArchiveReason(e.target.value)}
+                  placeholder="z.B. Kunde gekündigt, Projekt abgeschlossen"
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    borderRadius: 6,
+                    border: "1px solid #991b1b",
+                    background: "rgba(0,0,0,0.3)",
+                    color: "#fecaca",
+                    fontSize: 13
+                  }}
+                />
+              </div>
               
               <div style={{ display: "flex", gap: 8 }}>
                 <button

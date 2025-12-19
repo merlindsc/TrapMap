@@ -42,6 +42,12 @@ import {
   isOnline
 } from './offlineAPI';
 
+import {
+  getSyncQueue,
+  removeSyncQueueItem,
+  updateSyncQueueItem
+} from './offlineDB';
+
 // ============================================
 // KONFIGURATION
 // ============================================
@@ -246,6 +252,81 @@ const syncReturnToPool = async () => {
 };
 
 /**
+ * Synchronisiert alle ausstehenden Sync-Queue Operationen
+ * (z.B. assign_object, update_position für neue Pool-Boxen)
+ */
+const syncQueueOperations = async () => {
+  const API = import.meta.env.VITE_API_URL;
+  const token = localStorage.getItem('token');
+  
+  const queueItems = await getSyncQueue();
+  const results = { success: 0, failed: 0, skipped: 0 };
+  
+  for (const item of queueItems) {
+    try {
+      switch (item.operation) {
+        case 'assign_object':
+          // Box einem Objekt zuweisen
+          await fetch(`${API}/qr/assign-object`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              box_id: parseInt(item.box_id),
+              object_id: parseInt(item.object_id)
+            })
+          });
+          break;
+          
+        case 'update_position':
+          // GPS-Position aktualisieren
+          await fetch(`${API}/boxes/${item.box_id}/position`, {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              lat: item.lat,
+              lng: item.lng,
+              position_type: item.position_type || 'gps'
+            })
+          });
+          break;
+          
+        default:
+          console.warn(`⚠️ Unbekannte Sync-Queue Operation: ${item.operation}`);
+          results.skipped++;
+          continue;
+      }
+      
+      // Erfolgreich - aus Queue entfernen
+      await removeSyncQueueItem(item.id);
+      results.success++;
+      
+      emitSyncEvent('queue_synced', { 
+        id: item.id, 
+        operation: item.operation 
+      });
+      
+      console.log(`✅ Queue-Operation ${item.operation} synchronisiert`);
+    } catch (error) {
+      results.failed++;
+      await updateSyncQueueItem(item.id, { 
+        status: 'failed', 
+        error: error.message,
+        last_attempt: new Date().toISOString()
+      });
+      console.error(`❌ Queue-Operation ${item.operation} fehlgeschlagen:`, error.message);
+    }
+  }
+  
+  return results;
+};
+
+/**
  * Hauptsynchronisationsfunktion
  * Synchronisiert alle ausstehenden Daten in priorisierter Reihenfolge
  */
@@ -273,15 +354,20 @@ export const syncAll = async () => {
     boxes: { success: 0, failed: 0, skipped: 0 },
     positions: { success: 0, failed: 0, skipped: 0 },
     returns: { success: 0, failed: 0, skipped: 0 },
+    queue: { success: 0, failed: 0, skipped: 0 },
     timestamp: new Date().toISOString()
   };
   
   try {
     // Sync-Reihenfolge:
+    // 0. Sync-Queue (assign_object, update_position zuerst!)
     // 1. Return-to-Pool (wichtig für Box-Status)
     // 2. Position-Updates
     // 3. Box-Updates
     // 4. Scans (abhängig von Boxen)
+    
+    results.queue = await syncQueueOperations();
+    emitSyncEvent('progress', { type: 'queue', ...results.queue });
     
     results.returns = await syncReturnToPool();
     emitSyncEvent('progress', { type: 'returns', ...results.returns });
@@ -297,7 +383,8 @@ export const syncAll = async () => {
     
     // Cache nach erfolgreichem Sync aktualisieren
     const totalSuccess = results.scans.success + results.boxes.success + 
-                         results.positions.success + results.returns.success;
+                         results.positions.success + results.returns.success +
+                         results.queue.success;
     
     if (totalSuccess > 0) {
       console.log('🔄 Cache wird aktualisiert...');
@@ -306,18 +393,21 @@ export const syncAll = async () => {
     
     // Sync-Log speichern
     const hasErrors = results.scans.failed + results.boxes.failed + 
-                     results.positions.failed + results.returns.failed > 0;
+                     results.positions.failed + results.returns.failed +
+                     results.queue.failed > 0;
     
     await addSyncLog(!hasErrors, {
       scans: results.scans,
       boxes: results.boxes,
       positions: results.positions,
-      returns: results.returns
+      returns: results.returns,
+      queue: results.queue
     });
     
     lastSyncTime = new Date();
     
     console.log('✅ Synchronisation abgeschlossen:', {
+      queue: `${results.queue.success}/${results.queue.success + results.queue.failed}`,
       scans: `${results.scans.success}/${results.scans.success + results.scans.failed}`,
       boxes: `${results.boxes.success}/${results.boxes.success + results.boxes.failed}`,
       positions: `${results.positions.success}/${results.positions.success + results.positions.failed}`,

@@ -1,21 +1,24 @@
 /* ============================================================
-   TRAPMAP - QR SCANNER V15
+   TRAPMAP - QR SCANNER V17
    
    KORREKTER QR-FLOW:
-   1. Code nicht in DB → /qr/assign-code (neuen Code zuweisen)
-   2. Box im Pool (kein Objekt) → /qr/assign-object (Objekt zuweisen)
-   3. Box mit Objekt aber NICHT platziert → Platzierungsauswahl (GPS oder Karte)
+   1. Code nicht in DB → "Ungültiger QR-Code"
+   2. Box im Pool (kein Objekt) → Objektauswahl (online/offline aus Cache)
+   3. Box mit Objekt aber NICHT platziert → Platzierungsauswahl (GPS oder Lageplan)
    4. Box platziert aber KEINE ERSTEINRICHTUNG → Ersteinrichtungsdialog
    5. GPS-Box + Mobile + Ersteinrichtung fertig → Distanzprüfung → Kontrollformular
    6. Lageplan-Box + Ersteinrichtung fertig → Kontrollformular
    
-   ERSTEINRICHTUNG ERKENNUNG (V15 - verbessert für Offline):
+   OFFLINE-VERHALTEN (V17 - KOMPLETT OFFLINE-FÄHIG):
+   - Pool-Box (object_id=NULL) → ✅ Objektauswahl aus Cache
+   - Nicht platziert → ✅ GPS-Platzierung offline möglich
+   - Platziert, nicht eingerichtet → ✅ Ersteinrichtung (offline speichern)
+   - Komplett eingerichtet → ✅ Kontrollformular (offline speichern)
+   - Nicht im Cache → Fehler: "Bitte erst synchronisieren"
+   
+   ERSTEINRICHTUNG ERKENNUNG:
    - Box ist EINGERICHTET wenn: box_type_id UND object_id vorhanden
    - Box braucht Setup wenn: kein box_type_id ODER needs_setup Flag
-   - NICHT mehr: last_scan prüfen (kann im Offline-Cache fehlen!)
-   
-   + OFFLINE SUPPORT: Scannt auch ohne Internet aus Cache
-   + DEBUG LOGGING: Zeigt Cache-Daten und Setup-Entscheidung
    ============================================================ */
 
 import React, { useEffect, useRef, useState } from "react";
@@ -26,7 +29,7 @@ import axios from "axios";
 import { 
   Camera, X, RotateCcw, Flashlight, SwitchCamera,
   Package, Navigation, Layers, AlertTriangle,
-  MapPin, CheckCircle, WifiOff
+  MapPin, CheckCircle, WifiOff, Building2, Search, ChevronRight
 } from "lucide-react";
 
 import BoxScanDialog from "../../components/BoxScanDialog";
@@ -95,6 +98,7 @@ export default function Scanner() {
   const [showPlacementChoice, setShowPlacementChoice] = useState(false);
   const [showGPSWarning, setShowGPSWarning] = useState(false);
   const [showFirstSetup, setShowFirstSetup] = useState(false);
+  const [showObjectSelect, setShowObjectSelect] = useState(false);
   
   // GPS State
   const [currentGPS, setCurrentGPS] = useState(null);
@@ -105,6 +109,12 @@ export default function Scanner() {
   const [pendingPlacement, setPendingPlacement] = useState(null);
   const [objectFloorplans, setObjectFloorplans] = useState([]);
   const [boxTypes, setBoxTypes] = useState([]);
+  
+  // Offline Object Selection State
+  const [availableObjects, setAvailableObjects] = useState([]);
+  const [objectSearchQuery, setObjectSearchQuery] = useState("");
+  const [assigningObject, setAssigningObject] = useState(false);
+  const [pendingPoolBox, setPendingPoolBox] = useState(null);
 
   // Success Toast
   const [showSuccess, setShowSuccess] = useState(false);
@@ -117,7 +127,7 @@ export default function Scanner() {
   const [currentlyOffline, setCurrentlyOffline] = useState(!isOnline());
 
   // Helper
-  const hasActiveDialog = showScanDialog || showGPSWarning || showPlacementChoice || showFirstSetup;
+  const hasActiveDialog = showScanDialog || showGPSWarning || showPlacementChoice || showFirstSetup || showObjectSelect;
   
   // dialogOpenRef mit State synchronisieren
   useEffect(() => {
@@ -404,17 +414,63 @@ export default function Scanner() {
         boxData = await findBoxInCache(code);
         fromCache = true;
         
+        // Debug-Logging
+        console.log('🔍 OFFLINE SCAN:', code);
+        console.log('📦 Cache-Ergebnis:', boxData ? {
+          id: boxData.id,
+          object_id: boxData.object_id,
+          box_type_id: boxData.box_type_id,
+          lat: boxData.lat,
+          floor_plan_id: boxData.floor_plan_id
+        } : 'NICHT GEFUNDEN');
+        
         if (!boxData) {
           setBoxLoading(false);
-          setError("📴 Offline - Box nicht im Cache. Bitte online scannen.");
+          setError("📴 Offline - Box nicht synchronisiert. Bitte erst online Daten synchronisieren.");
           setTimeout(() => {
             lastScannedCodeRef.current = null;
             processingRef.current = false;
             isPausedRef.current = false;
             setError("");
-          }, 3000);
+          }, 4000);
           return;
         }
+        
+        // ============================================
+        // OFFLINE FALL 1: Box im Pool (kein Objekt zugewiesen)
+        // → Objektauswahl aus Cache anzeigen
+        // ============================================
+        if (!boxData.object_id) {
+          console.log('📴 Pool-Box offline: Objektauswahl aus Cache');
+          
+          // Objekte aus Cache laden
+          const { getCachedObjects } = await import("../../utils/offlineDB");
+          const cachedObjects = await getCachedObjects();
+          
+          if (!cachedObjects || cachedObjects.length === 0) {
+            setBoxLoading(false);
+            setError("📴 Offline - Keine Objekte im Cache. Bitte erst online synchronisieren.");
+            setTimeout(() => {
+              lastScannedCodeRef.current = null;
+              processingRef.current = false;
+              isPausedRef.current = false;
+              setError("");
+            }, 4000);
+            return;
+          }
+          
+          // Objektauswahl-Dialog öffnen
+          setBoxLoading(false);
+          setAvailableObjects(cachedObjects);
+          setPendingPoolBox({
+            ...boxData,
+            qr_code: code,
+            fromCache: true
+          });
+          setShowObjectSelect(true);
+          return;
+        }
+        
       } else {
         // ONLINE: Von API laden
         try {
@@ -425,10 +481,18 @@ export default function Scanner() {
           console.log("📦 API Response:", res.data);
 
           // ============================================
-          // FALL 1: Code NICHT in DB → assign-code
+          // FALL 1: Code NICHT in DB → Ungültiger Code
+          // (QR-Codes werden beim Bestellen generiert, jeder gültige Code existiert)
           // ============================================
           if (!res.data || !res.data.box_id) {
-            navigate(`/qr/assign-code?code=${code}`);
+            setBoxLoading(false);
+            setError("❌ Ungültiger QR-Code. Dieser Code ist nicht registriert.");
+            setTimeout(() => {
+              lastScannedCodeRef.current = null;
+              processingRef.current = false;
+              isPausedRef.current = false;
+              setError("");
+            }, 4000);
             return;
           }
 
@@ -520,30 +584,39 @@ export default function Scanner() {
 
       // ============================================
       // FALL 3: NICHT PLATZIERT → Platzierungsauswahl
+      // (Funktioniert auch Offline mit GPS-Platzierung)
       // ============================================
       if (!isPlaced) {
+        // Lagepläne laden (online) oder aus Cache (offline)
+        let floorplans = [];
         if (offline) {
-          // Offline: Direkt Ersteinrichtung zeigen
-          setBoxLoading(false);
-          setShowFirstSetup(true);
-          return;
-        }
-
-        // Online: Lagepläne laden für Auswahl
-        try {
-          const fpRes = await axios.get(`${API}/floorplans/object/${boxData.object_id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          setObjectFloorplans(fpRes.data || []);
-        } catch (err) {
-          console.log("Keine Lagepläne:", err.message);
-          setObjectFloorplans([]);
+          // Offline: Lagepläne aus Cache holen
+          try {
+            const { getCachedLayoutsByObject } = await import("../../utils/offlineDB");
+            floorplans = await getCachedLayoutsByObject(boxData.object_id) || [];
+            console.log('📴 Offline: Lagepläne aus Cache:', floorplans.length);
+          } catch (err) {
+            console.log('Keine gecachten Lagepläne:', err);
+          }
+        } else {
+          // Online: Lagepläne von API laden
+          try {
+            const fpRes = await axios.get(`${API}/floorplans/object/${boxData.object_id}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            floorplans = fpRes.data || [];
+          } catch (err) {
+            console.log("Keine Lagepläne:", err.message);
+          }
         }
         
+        setObjectFloorplans(floorplans);
         setPendingPlacement({
           code: boxData.qr_code || code,
           boxId: boxData.id,
-          objectId: boxData.object_id
+          objectId: boxData.object_id,
+          offline: offline,
+          fromCache: fromCache
         });
         setBoxLoading(false);
         setShowPlacementChoice(true);
@@ -684,9 +757,19 @@ export default function Scanner() {
     }
   };
 
-  const saveBoxToCache = (boxData) => {
+  const saveBoxToCache = async (boxData) => {
     try {
+      // 1. localStorage für schnellen Zugriff
       localStorage.setItem(`trapmap_box_${boxData.qr_code || boxData.code}`, JSON.stringify(boxData));
+      
+      // 2. IndexedDB für vollständigen Offline-Support
+      try {
+        const { cacheBox } = await import("../../utils/offlineDB");
+        await cacheBox(boxData);
+        console.log('✅ Box in IndexedDB gecached:', boxData.qr_code || boxData.code);
+      } catch (e) {
+        console.log("IndexedDB caching nicht verfügbar:", e.message);
+      }
     } catch (e) {
       console.log("Cache save error:", e.message);
     }
@@ -703,7 +786,12 @@ export default function Scanner() {
     setShowGPSWarning(false);
     setShowPlacementChoice(false);
     setShowFirstSetup(false);
+    setShowObjectSelect(false);
     setPendingPlacement(null);
+    setPendingPoolBox(null);
+    setAvailableObjects([]);
+    setObjectSearchQuery("");
+    setAssigningObject(false);
     setGpsDistance(0);
     setCurrentGPS(null);
     setError("");
@@ -720,6 +808,98 @@ export default function Scanner() {
       console.log("✅ Scanner bereit");
     }, 800);
   };
+
+  // ============================================
+  // HANDLER: OFFLINE OBJEKTAUSWAHL
+  // ============================================
+  const handleSelectObject = async (object) => {
+    if (!pendingPoolBox || assigningObject) return;
+    
+    setAssigningObject(true);
+    
+    try {
+      // Box-Zuweisung speichern (online oder offline)
+      if (isOnline()) {
+        // Online: Direkt zur API
+        await axios.post(
+          `${API}/qr/assign-object`,
+          {
+            box_id: parseInt(pendingPoolBox.id),
+            object_id: parseInt(object.id),
+          },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        
+        // Lagepläne des Objekts laden
+        let floorplans = [];
+        try {
+          const floorplanRes = await axios.get(`${API}/floorplans/object/${object.id}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          floorplans = floorplanRes.data || [];
+        } catch (err) {
+          console.error("Floorplan load error:", err);
+        }
+        
+        setObjectFloorplans(floorplans);
+      } else {
+        // Offline: In Pending-Queue speichern
+        const { addToSyncQueue, updateCachedBox } = await import("../../utils/offlineDB");
+        
+        await addToSyncQueue({
+          operation: 'assign_object',
+          box_id: pendingPoolBox.id,
+          object_id: object.id,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Lokalen Cache aktualisieren
+        await updateCachedBox(pendingPoolBox.id, {
+          object_id: object.id,
+          object_name: object.name
+        });
+        
+        // Lagepläne aus Cache laden
+        const { getCachedLayoutsByObject } = await import("../../utils/offlineDB");
+        const floorplans = await getCachedLayoutsByObject(object.id) || [];
+        setObjectFloorplans(floorplans);
+      }
+      
+      // Objektauswahl schließen, Platzierungsauswahl öffnen
+      setShowObjectSelect(false);
+      setPendingPlacement({
+        code: pendingPoolBox.qr_code,
+        boxId: pendingPoolBox.id,
+        objectId: object.id,
+        offline: !isOnline(),
+        fromCache: pendingPoolBox.fromCache
+      });
+      setAssigningObject(false);
+      setShowPlacementChoice(true);
+      
+    } catch (err) {
+      console.error("Objektzuweisungsfehler:", err);
+      setError(err.response?.data?.error || "Zuweisung fehlgeschlagen");
+      setAssigningObject(false);
+      setTimeout(() => setError(""), 3000);
+    }
+  };
+
+  const handleCloseObjectSelect = () => {
+    setShowObjectSelect(false);
+    setPendingPoolBox(null);
+    setAvailableObjects([]);
+    setObjectSearchQuery("");
+    resetScanner();
+  };
+
+  // Objekte filtern
+  const filteredObjects = availableObjects.filter(obj =>
+    obj.name?.toLowerCase().includes(objectSearchQuery.toLowerCase()) ||
+    obj.address?.toLowerCase().includes(objectSearchQuery.toLowerCase())
+  );
 
   // ============================================
   // HANDLER: SCAN DIALOG
@@ -773,11 +953,20 @@ export default function Scanner() {
   const handleChooseGPS = async () => {
     if (!pendingPlacement) return;
     
+    const isOffline = pendingPlacement.offline || !isOnline();
+    
     if (!isMobile) {
+      // Desktop: Zur Karte navigieren (nur wenn online)
+      if (isOffline) {
+        setError("📴 Offline - Karte ist nicht verfügbar. GPS-Platzierung funktioniert nur auf Mobilgeräten.");
+        setTimeout(() => setError(""), 3000);
+        return;
+      }
       navigate(`/maps?object_id=${pendingPlacement.objectId}&openBox=${pendingPlacement.boxId}&firstSetup=true`);
       return;
     }
 
+    // Mobile: GPS-Position holen und speichern
     setGpsLoading(true);
     try {
       const position = await new Promise((resolve, reject) => {
@@ -789,6 +978,7 @@ export default function Scanner() {
       });
       
       if (isOnline()) {
+        // Online: Direkt zur API speichern
         await axios.put(`${API}/boxes/${pendingPlacement.boxId}/position`, {
           lat: position.lat,
           lng: position.lng,
@@ -796,9 +986,46 @@ export default function Scanner() {
         }, {
           headers: { Authorization: `Bearer ${token}` }
         });
+      } else {
+        // Offline: In Pending-Queue und Cache speichern
+        const { addToSyncQueue, updateCachedBox } = await import("../../utils/offlineDB");
+        
+        await addToSyncQueue({
+          operation: 'update_position',
+          box_id: pendingPlacement.boxId,
+          lat: position.lat,
+          lng: position.lng,
+          position_type: 'gps',
+          timestamp: new Date().toISOString()
+        });
+        
+        // Lokalen Cache aktualisieren
+        await updateCachedBox(pendingPlacement.boxId, {
+          lat: position.lat,
+          lng: position.lng,
+          position_type: 'gps'
+        });
+        
+        console.log('📴 GPS-Position offline gespeichert:', position);
       }
 
-      setCurrentBox(prev => ({ ...prev, lat: position.lat, lng: position.lng, position_type: 'gps' }));
+      // CurrentBox für Ersteinrichtung vorbereiten
+      // Wichtig: Wenn prev null ist (Pool-Box), neues Objekt erstellen
+      setCurrentBox(prev => {
+        const baseBox = prev || pendingPoolBox || {
+          id: pendingPlacement.boxId,
+          qr_code: pendingPlacement.code,
+          object_id: pendingPlacement.objectId
+        };
+        return {
+          ...baseBox,
+          lat: position.lat, 
+          lng: position.lng, 
+          position_type: 'gps',
+          object_id: pendingPlacement.objectId,
+          id: pendingPlacement.boxId
+        };
+      });
       setGpsLoading(false);
       setShowPlacementChoice(false);
       setShowFirstSetup(true);
@@ -806,12 +1033,28 @@ export default function Scanner() {
     } catch (err) {
       console.error("GPS error:", err);
       setGpsLoading(false);
-      setError("GPS nicht verfügbar");
+      if (err.code === 1) {
+        setError("❌ GPS-Zugriff verweigert. Bitte erlauben Sie den Standortzugriff.");
+      } else if (err.code === 2) {
+        setError("❌ GPS-Position nicht verfügbar.");
+      } else {
+        setError("❌ GPS-Fehler: " + (err.message || "Zeitüberschreitung"));
+      }
+      setTimeout(() => setError(""), 4000);
     }
   };
 
   const handleChooseFloorplan = () => {
     if (!pendingPlacement) return;
+    
+    const isOffline = pendingPlacement.offline || !isOnline();
+    
+    // Offline + Lageplan: Hinweis zeigen wenn keine Lagepläne gecached
+    if (isOffline && objectFloorplans.length === 0) {
+      setError("📴 Offline - Keine Lagepläne im Cache. Verwenden Sie GPS-Platzierung.");
+      setTimeout(() => setError(""), 3000);
+      return;
+    }
     
     // DIREKT zum Lageplan-Editor navigieren
     if (objectFloorplans.length === 1) {
@@ -1010,7 +1253,113 @@ export default function Scanner() {
                 </button>
               )}
             </div>
+            
+            {/* Offline-Hinweis */}
+            {(pendingPlacement.offline || currentlyOffline) && (
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 text-center">
+                <p className="text-yellow-300 text-sm">
+                  📴 Offline - Platzierung wird beim nächsten Online-Status synchronisiert
+                </p>
+              </div>
+            )}
+            
             <button onClick={resetScanner} className="w-full py-3 text-gray-400 hover:text-white text-sm">
+              ← Abbrechen
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========== OBJEKTAUSWAHL (POOL-BOX) ========== */}
+      {showObjectSelect && pendingPoolBox && (
+        <div className="fixed inset-0 z-[100] bg-black dark:bg-gray-950 overflow-auto">
+          <div className="flex items-center justify-between p-4 bg-[#111] border-b border-white/10">
+            <button onClick={handleCloseObjectSelect} className="p-2 text-gray-400 hover:text-white">
+              <X size={24} />
+            </button>
+            <h1 className="text-lg font-semibold flex items-center gap-2">
+              Objekt auswählen
+              {currentlyOffline && <WifiOff size={14} className="text-yellow-400" />}
+            </h1>
+            <div className="w-10" />
+          </div>
+          
+          <div className="p-4 space-y-4">
+            {/* Box-Info */}
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+              <div className="flex items-center gap-3">
+                <Package size={24} className="text-amber-400" />
+                <div>
+                  <p className="font-semibold font-mono">{pendingPoolBox.qr_code}</p>
+                  <p className="text-amber-300 text-sm">Pool-Box - Bitte einem Objekt zuweisen</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Suche */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <input
+                type="text"
+                placeholder="Objekt suchen..."
+                value={objectSearchQuery}
+                onChange={(e) => setObjectSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-white/10 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Objektliste */}
+            <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+              {filteredObjects.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  {objectSearchQuery 
+                    ? "Keine passenden Objekte gefunden" 
+                    : "Keine Objekte im Cache verfügbar"
+                  }
+                </div>
+              ) : (
+                filteredObjects.map((obj) => (
+                  <button
+                    key={obj.id}
+                    onClick={() => handleSelectObject(obj)}
+                    disabled={assigningObject}
+                    className="w-full bg-gray-900 hover:bg-gray-800 border border-white/10 hover:border-indigo-500/50 rounded-xl p-4 text-left transition-all disabled:opacity-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-indigo-500/20 rounded-lg flex items-center justify-center">
+                        <Building2 size={20} className="text-indigo-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold truncate">{obj.name}</p>
+                        {obj.address && (
+                          <p className="text-sm text-gray-400 truncate">{obj.address}</p>
+                        )}
+                      </div>
+                      <ChevronRight size={20} className="text-gray-500 flex-shrink-0" />
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+
+            {/* Offline-Hinweis */}
+            {currentlyOffline && (
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 text-center">
+                <p className="text-yellow-300 text-sm">
+                  📴 Offline - Zuweisung wird beim nächsten Online-Status synchronisiert
+                </p>
+              </div>
+            )}
+
+            {/* Loading-Indicator */}
+            {assigningObject && (
+              <div className="flex items-center justify-center gap-3 py-4">
+                <div className="w-5 h-5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                <span className="text-gray-400">Wird zugewiesen...</span>
+              </div>
+            )}
+
+            <button onClick={handleCloseObjectSelect} className="w-full py-3 text-gray-400 hover:text-white text-sm">
               ← Abbrechen
             </button>
           </div>

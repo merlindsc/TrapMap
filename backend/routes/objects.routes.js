@@ -13,8 +13,11 @@ const { asyncHandler } = require("../middleware/errorHandler");
 // GET ROUTES
 // ============================================
 
-// GET all objects
+// GET all objects (nur aktive, optional mit include_archived=true)
 router.get("/", authenticate, asyncHandler(objectsController.getAll));
+
+// GET nur archivierte Objekte
+router.get("/archived", authenticate, asyncHandler(objectsController.getArchived));
 
 // GET one object
 router.get("/:id", authenticate, asyncHandler(objectsController.getOne));
@@ -38,6 +41,16 @@ router.patch("/:id/location", authenticate, requireEditor, asyncHandler(objectsC
 
 // TOGGLE GPS edit mode
 router.patch("/:id/gps-edit", authenticate, requireEditor, asyncHandler(objectsController.toggleGPSEdit));
+
+// ============================================
+// ARCHIVE & RESTORE
+// ============================================
+
+// ARCHIVE object (Boxen zurück ins Lager)
+router.post("/:id/archive", authenticate, requireEditor, asyncHandler(objectsController.archive));
+
+// RESTORE archived object
+router.post("/:id/restore", authenticate, requireEditor, asyncHandler(objectsController.restore));
 
 // ============================================
 // DELETE

@@ -733,9 +733,95 @@ export const cacheLayouts = async (layouts) => {
 
 export const getCachedLayouts = () => getAllFromStore(STORES.CACHED_LAYOUTS);
 export const getCachedLayout = (id) => getFromStore(STORES.CACHED_LAYOUTS, id);
-export const getCachedLayoutsByObject = (objectId) => 
-  getByIndex(STORES.CACHED_LAYOUTS, 'object_id', objectId);
+
+/**
+ * Lagepläne für ein Objekt aus dem Cache abrufen
+ * Unterstützt sowohl Integer als auch String IDs
+ */
+export const getCachedLayoutsByObject = async (objectId) => {
+  // Versuche als Integer
+  let results = await getByIndex(STORES.CACHED_LAYOUTS, 'object_id', parseInt(objectId));
+  
+  // Fallback: Als String versuchen
+  if (!results || results.length === 0) {
+    results = await getByIndex(STORES.CACHED_LAYOUTS, 'object_id', String(objectId));
+  }
+  
+  // Letzter Fallback: Alle laden und filtern
+  if (!results || results.length === 0) {
+    const all = await getAllFromStore(STORES.CACHED_LAYOUTS);
+    const objIdInt = parseInt(objectId);
+    results = all.filter(l => 
+      l.object_id === objIdInt || 
+      l.object_id === String(objectId) ||
+      parseInt(l.object_id) === objIdInt
+    );
+  }
+  
+  return results;
+};
+
 export const clearCachedLayouts = () => clearStore(STORES.CACHED_LAYOUTS);
+
+// ============================================
+// SYNC QUEUE (Allgemeine Offline-Operationen)
+// ============================================
+
+/**
+ * Fügt eine Operation zur Sync-Queue hinzu
+ * @param {Object} operation - Die auszuführende Operation
+ * @param {string} operation.operation - Operationstyp (z.B. 'assign_object', 'place_box')
+ */
+export const addToSyncQueue = async (operation) => {
+  const database = await ensureDB();
+  const transaction = database.transaction(STORES.SYNC_QUEUE, 'readwrite');
+  const store = transaction.objectStore(STORES.SYNC_QUEUE);
+  
+  const queueItem = {
+    ...operation,
+    created_at: operation.timestamp || new Date().toISOString(),
+    status: 'pending',
+    priority: operation.priority || 1
+  };
+  
+  store.add(queueItem);
+  console.log('📋 Zur Sync-Queue hinzugefügt:', operation.operation);
+  return queueItem;
+};
+
+/**
+ * Holt alle ausstehenden Sync-Operationen
+ */
+export const getSyncQueue = async () => {
+  const items = await getAllFromStore(STORES.SYNC_QUEUE);
+  return items.filter(item => item.status === 'pending');
+};
+
+/**
+ * Aktualisiert Status einer Sync-Operation
+ */
+export const updateSyncQueueItem = async (id, updates) => {
+  const database = await ensureDB();
+  const transaction = database.transaction(STORES.SYNC_QUEUE, 'readwrite');
+  const store = transaction.objectStore(STORES.SYNC_QUEUE);
+  
+  const existing = await getFromStore(STORES.SYNC_QUEUE, id);
+  if (existing) {
+    store.put({ ...existing, ...updates });
+  }
+};
+
+/**
+ * Entfernt eine erledigte Sync-Operation
+ */
+export const removeSyncQueueItem = async (id) => {
+  const database = await ensureDB();
+  const transaction = database.transaction(STORES.SYNC_QUEUE, 'readwrite');
+  const store = transaction.objectStore(STORES.SYNC_QUEUE);
+  store.delete(id);
+};
+
+export const clearSyncQueue = () => clearStore(STORES.SYNC_QUEUE);
 
 // ============================================
 // CACHED HISTORY (Scan-Historie)

@@ -18,14 +18,21 @@ const getStatusColor = (avgScore) => {
 
 // ============================================
 // GET ALL OBJECTS MIT BEFALLS-SCORE
+// Nur aktive Objekte (archived_at IS NULL), optional alle
 // ============================================
-exports.getAll = async (organisationId) => {
+exports.getAll = async (organisationId, includeArchived = false) => {
   // 1. Alle Objekte holen
-  const { data: objects, error } = await supabase
+  let query = supabase
     .from("objects")
     .select("*")
-    .eq("organisation_id", organisationId)
-    .order("name");
+    .eq("organisation_id", organisationId);
+  
+  // Nur aktive Objekte wenn nicht explizit alle angefragt
+  if (!includeArchived) {
+    query = query.is("archived_at", null);
+  }
+  
+  const { data: objects, error } = await query.order("name");
 
   if (error) return { success: false, message: error.message };
 
@@ -233,4 +240,137 @@ exports.updateLocation = async (id, organisationId, lat, lng) => {
   if (error) return { success: false, message: error.message };
 
   return { success: true, data };
+};
+
+// ============================================
+// GET ARCHIVED OBJECTS
+// ============================================
+exports.getArchived = async (organisationId) => {
+  const { data, error } = await supabase
+    .from("objects")
+    .select("*")
+    .eq("organisation_id", organisationId)
+    .not("archived_at", "is", null)
+    .order("archived_at", { ascending: false });
+
+  if (error) return { success: false, message: error.message };
+
+  return { success: true, data: data || [] };
+};
+
+// ============================================
+// ARCHIVE OBJECT
+// Boxen zurück ins Lager (Pool), Objekt als archiviert markieren
+// ============================================
+exports.archive = async (id, organisationId, userId, reason = null) => {
+  try {
+    console.log(`📦 Archiving object ${id}...`);
+
+    // 1. Objekt archivieren
+    const { error: archiveError } = await supabase
+      .from("objects")
+      .update({
+        archived_at: new Date().toISOString(),
+        archived_by: userId,
+        archive_reason: reason || null
+      })
+      .eq("id", id)
+      .eq("organisation_id", organisationId);
+
+    if (archiveError) {
+      console.error("Archive error:", archiveError);
+      return { success: false, message: archiveError.message };
+    }
+
+    // 2. Alle Boxen des Objekts zurück in Pool (Position reset)
+    const { data: boxes, error: boxError } = await supabase
+      .from("boxes")
+      .update({
+        object_id: null,
+        lat: null,
+        lng: null,
+        floor_plan_id: null,
+        pos_x: null,
+        pos_y: null,
+        grid_position: null,
+        position_type: null,
+        layout_id: null
+      })
+      .eq("object_id", id)
+      .select("id");
+
+    const boxesReturned = boxes?.length || 0;
+
+    if (boxError) {
+      console.warn("⚠️ Box reset error:", boxError);
+      // Weiter machen, Archivierung war erfolgreich
+    } else {
+      console.log(`✅ ${boxesReturned} Boxen zurück ins Lager`);
+    }
+
+    // 3. Audit-Log (falls Tabelle existiert)
+    try {
+      await supabase.from("audit_log").insert({
+        action: "object_archived",
+        table_name: "objects",
+        record_id: id,
+        user_id: userId,
+        changes: { reason, boxes_returned: boxesReturned },
+        created_at: new Date().toISOString()
+      });
+    } catch (e) {
+      // Audit-Log optional, ignorieren wenn nicht vorhanden
+    }
+
+    console.log(`✅ Object ${id} archived successfully`);
+    return { success: true, boxesReturned };
+
+  } catch (err) {
+    console.error("Error archiving object:", err);
+    return { success: false, message: err.message };
+  }
+};
+
+// ============================================
+// RESTORE ARCHIVED OBJECT
+// ============================================
+exports.restore = async (id, organisationId, userId) => {
+  try {
+    console.log(`🔄 Restoring object ${id}...`);
+
+    const { error } = await supabase
+      .from("objects")
+      .update({
+        archived_at: null,
+        archived_by: null,
+        archive_reason: null
+      })
+      .eq("id", id)
+      .eq("organisation_id", organisationId);
+
+    if (error) {
+      console.error("Restore error:", error);
+      return { success: false, message: error.message };
+    }
+
+    // Audit-Log (falls Tabelle existiert)
+    try {
+      await supabase.from("audit_log").insert({
+        action: "object_restored",
+        table_name: "objects",
+        record_id: id,
+        user_id: userId,
+        created_at: new Date().toISOString()
+      });
+    } catch (e) {
+      // Audit-Log optional
+    }
+
+    console.log(`✅ Object ${id} restored successfully`);
+    return { success: true };
+
+  } catch (err) {
+    console.error("Error restoring object:", err);
+    return { success: false, message: err.message };
+  }
 };

@@ -364,6 +364,7 @@ export const createSetupScan = async (boxId, boxData, objectId) => {
 
 /**
  * Sucht eine Box per QR-Code - Online, Cache und Pending
+ * WICHTIG: Nutzt /qr/check/:code Endpoint
  */
 export const findBoxByQR = async (qrCode) => {
   // Zuerst in Offline-Pending-Boxen suchen
@@ -384,19 +385,51 @@ export const findBoxByQR = async (qrCode) => {
   // Wenn online, Server abfragen
   if (isOnline()) {
     try {
-      const response = await authFetch(`${API}/qr/${qrCode}`);
+      // KORRIGIERT: /qr/check/:code statt /qr/:code
+      const response = await authFetch(`${API}/qr/check/${qrCode}`);
 
       if (response.ok) {
         const result = await response.json();
         
-        // Cache aktualisieren
-        await cacheBox(result);
+        // Nur cachen wenn Box existiert (box_id vorhanden)
+        if (result && result.box_id) {
+          // Daten normalisieren für Cache
+          const boxToCache = {
+            id: result.box_id,
+            qr_code: qrCode,
+            object_id: result.object_id,
+            object_name: result.object_name,
+            box_type_id: result.box_type_id,
+            box_type_name: result.box_type_name,
+            box_type_category: result.box_type_category,
+            short_code: result.short_code,
+            lat: result.lat,
+            lng: result.lng,
+            floor_plan_id: result.floor_plan_id,
+            pos_x: result.pos_x,
+            pos_y: result.pos_y,
+            grid_position: result.grid_position,
+            position_type: result.position_type,
+            number: result.number,
+            display_number: result.display_number,
+            box_name: result.name,
+            current_status: result.current_status,
+            last_scan: result.last_scan,
+            needs_setup: result.needs_setup,
+            bait: result.bait,
+            notes: result.notes
+          };
+          
+          await cacheBox(boxToCache);
+          return { success: true, online: true, data: boxToCache };
+        }
         
-        return { success: true, online: true, data: result };
+        // Kein box_id = Code nicht in DB
+        return { success: false, notFound: true, message: 'Ungültiger QR-Code' };
       }
       
       if (response.status === 404) {
-        return { success: false, notFound: true };
+        return { success: false, notFound: true, message: 'Ungültiger QR-Code' };
       }
     } catch (error) {
       console.warn('⚠️ Netzwerk-Fehler, verwende Cache:', error.message);
@@ -418,7 +451,7 @@ export const findBoxByQR = async (qrCode) => {
     success: false, 
     offline: !isOnline(),
     notFound: true,
-    message: isOnline() ? 'Box nicht gefunden' : 'Offline - Box nicht im Cache'
+    message: isOnline() ? 'Ungültiger QR-Code' : 'Offline - Bitte erst synchronisieren'
   };
 };
 

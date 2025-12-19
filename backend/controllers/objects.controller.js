@@ -4,11 +4,22 @@
 
 const objectsService = require("../services/objects.service");
 
-// GET all objects
+// GET all objects (nur aktive, optional mit include_archived=true)
 exports.getAll = async (req, res) => {
   const organisationId = req.user.organisation_id;
+  const includeArchived = req.query.include_archived === 'true';
 
-  const result = await objectsService.getAll(organisationId);
+  const result = await objectsService.getAll(organisationId, includeArchived);
+  if (!result.success) return res.status(500).json({ error: result.message });
+
+  return res.json(result.data);
+};
+
+// GET nur archivierte Objekte
+exports.getArchived = async (req, res) => {
+  const organisationId = req.user.organisation_id;
+
+  const result = await objectsService.getArchived(organisationId);
   if (!result.success) return res.status(500).json({ error: result.message });
 
   return res.json(result.data);
@@ -56,6 +67,35 @@ exports.remove = async (req, res) => {
   if (!result.success) return res.status(500).json({ error: result.message });
 
   return res.json({ success: true });
+};
+
+// ============================================
+// ARCHIVE OBJECT
+// ============================================
+exports.archive = async (req, res) => {
+  const { id } = req.params;
+  const organisationId = req.user.organisation_id;
+  const userId = req.user.id;
+  const { reason } = req.body;
+
+  const result = await objectsService.archive(id, organisationId, userId, reason);
+  if (!result.success) return res.status(500).json({ error: result.message });
+
+  return res.json({ success: true, message: 'Objekt archiviert', boxesReturned: result.boxesReturned });
+};
+
+// ============================================
+// RESTORE ARCHIVED OBJECT
+// ============================================
+exports.restore = async (req, res) => {
+  const { id } = req.params;
+  const organisationId = req.user.organisation_id;
+  const userId = req.user.id;
+
+  const result = await objectsService.restore(id, organisationId, userId);
+  if (!result.success) return res.status(500).json({ error: result.message });
+
+  return res.json({ success: true, message: 'Objekt wiederhergestellt' });
 };
 
 // ============================================

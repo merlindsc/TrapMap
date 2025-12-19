@@ -46,6 +46,7 @@ import Settings from "./pages/settings/Settings";
 import Reports from "./pages/reports/Reports";
 import Admin from "./pages/admin/Admin";
 import BoxPool from "./pages/boxes/BoxPool";
+import ArchivePage from "./pages/Archive";
 
 // Super-Admin E-Mails
 const SUPER_ADMINS = ["admin@demo.trapmap.de", "merlin@trapmap.de", "hilfe@die-schaedlingsexperten.de"];
@@ -249,6 +250,7 @@ function MainApp() {
           <Route path="/layouts/new" element={<DashboardLayout><LayoutCreate /><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
           <Route path="/layouts/:id" element={<DashboardLayout><LayoutEditor /><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
           <Route path="/maps" element={<DashboardLayout><Maps /><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
+          <Route path="/archive" element={<DashboardLayout><ArchivePage /><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
           <Route path="/technicians" element={<DashboardLayout><div className="p-8 text-white">Techniker-Verwaltung (coming soon)</div><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
         </>
       )}

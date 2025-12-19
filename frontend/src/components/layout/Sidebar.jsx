@@ -22,7 +22,8 @@ import {
   ShieldCheckIcon,
   XMarkIcon,
   SunIcon,
-  MoonIcon
+  MoonIcon,
+  InboxArrowDownIcon
 } from '@heroicons/react/24/outline';
 
 const SUPER_ADMINS = [
@@ -53,6 +54,7 @@ export default function Sidebar({ isMobile, onClose }) {
         { name: 'Maps', path: '/maps', icon: MapIcon },
         { name: 'Techniker', path: '/technicians', icon: UsersIcon },
         { name: 'Reports', path: '/reports', icon: DocumentTextIcon },
+        { name: 'Archiv', path: '/archive', icon: InboxArrowDownIcon },
         { name: 'QR-Scanner', path: '/qr/scanner', icon: QrCodeIcon },
         { name: 'Einstellungen', path: '/settings', icon: CogIcon }
       ];
@@ -70,6 +72,7 @@ export default function Sidebar({ isMobile, onClose }) {
         { name: 'Maps', path: '/maps', icon: MapIcon },
         { name: 'QR-Scanner', path: '/qr/scanner', icon: QrCodeIcon },
         { name: 'Reports', path: '/reports', icon: DocumentTextIcon },
+        { name: 'Archiv', path: '/archive', icon: InboxArrowDownIcon },
         { name: 'Einstellungen', path: '/settings', icon: CogIcon }
       ];
     }
