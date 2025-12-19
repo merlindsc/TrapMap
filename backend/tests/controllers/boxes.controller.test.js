@@ -6,21 +6,25 @@ const request = require('supertest');
 const express = require('express');
 const boxesRoutes = require('../../routes/boxes.routes');
 const boxesService = require('../../services/boxes.service');
-const { createMockUser } = require('../setup');
 
-// Create test app
-const app = express();
-app.use(express.json());
-
-// Mock authentication middleware
+// Mock authentication middleware before requiring routes
 jest.mock('../../middleware/auth', () => ({
   authenticate: (req, res, next) => {
-    req.user = createMockUser();
+    req.user = {
+      id: 'test-user-id',
+      email: 'test@example.com',
+      role: 'technician',
+      organisation_id: 'test-org-id'
+    };
     next();
   },
   requireEditor: (req, res, next) => next(),
   requireAdmin: (req, res, next) => next()
 }));
+
+// Create test app
+const app = express();
+app.use(express.json());
 
 app.use('/api/boxes', boxesRoutes);
 

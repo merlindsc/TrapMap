@@ -3,8 +3,12 @@
 // Supabase Mocks & Helper Functions
 // ============================================
 
-// Set JWT secret for tests
+// Set environment variables for tests
 process.env.JWT_SECRET = 'test-secret-key-for-testing';
+process.env.SUPABASE_URL = 'https://test.supabase.co';
+process.env.SUPABASE_SERVICE_KEY = 'test-service-key';
+process.env.SUPABASE_ANON_KEY = 'test-anon-key';
+process.env.NODE_ENV = 'test';
 
 // Mock Supabase Client
 jest.mock('@supabase/supabase-js', () => {

@@ -4,16 +4,30 @@
 
 const request = require('supertest');
 const express = require('express');
-const authRoutes = require('../../routes/auth.routes');
 const authService = require('../../services/auth.service');
+
+// Mock auth service
+jest.mock('../../services/auth.service');
+
+// Mock authentication middleware
+jest.mock('../../middleware/auth', () => ({
+  authenticate: (req, res, next) => {
+    req.user = {
+      id: 'test-user-id',
+      email: 'test@example.com',
+      role: 'technician',
+      organisation_id: 'test-org-id'
+    };
+    next();
+  }
+}));
+
+const authRoutes = require('../../routes/auth.routes');
 
 // Create test app
 const app = express();
 app.use(express.json());
 app.use('/api/auth', authRoutes);
-
-// Mock auth service
-jest.mock('../../services/auth.service');
 
 describe('Auth Controller', () => {
   beforeEach(() => {

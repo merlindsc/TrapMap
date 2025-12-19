@@ -6,19 +6,23 @@ const request = require('supertest');
 const express = require('express');
 const scansRoutes = require('../../routes/scans.routes');
 const scansService = require('../../services/scans.service');
-const { createMockUser } = require('../setup');
+
+// Mock authentication middleware before requiring routes
+jest.mock('../../middleware/auth', () => ({
+  authenticate: (req, res, next) => {
+    req.user = {
+      id: 'test-user-id',
+      email: 'test@example.com',
+      role: 'technician',
+      organisation_id: 'test-org-id'
+    };
+    next();
+  }
+}));
 
 // Create test app
 const app = express();
 app.use(express.json());
-
-// Mock authentication middleware
-jest.mock('../../middleware/auth', () => ({
-  authenticate: (req, res, next) => {
-    req.user = createMockUser();
-    next();
-  }
-}));
 
 app.use('/api/scans', scansRoutes);
 
@@ -65,7 +69,7 @@ describe('Scans Controller', () => {
           finding_type: 'keine_auffaelligkeiten'
         });
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(201);
       expect(response.body.finding_type).toBe('keine_auffaelligkeiten');
     });
   });
@@ -103,7 +107,7 @@ describe('Scans Controller', () => {
             finding_type: findingType
           });
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(201);
         expect(response.body.finding_type).toBe(findingType);
       });
     });
@@ -164,7 +168,7 @@ describe('Scans Controller', () => {
           finding_type: 'keine_auffaelligkeiten'
         });
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(201);
       expect(response.body.scanned_at).toBeDefined();
       
       // Verify timestamp is within last 5 seconds
