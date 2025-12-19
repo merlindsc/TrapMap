@@ -356,23 +356,49 @@ exports.bulkAssignToObject = async (boxIds, objectId, organisationId, userId) =>
       return { success: false, message: "Maximal 100 Boxen auf einmal" };
     }
 
+    // ✅ Logging zur Debugging
+    console.log(`📦 Bulk Assign: ${boxIds.length} Boxen zu Objekt ${objectId}`);
+    console.log(`📦 Box IDs:`, boxIds);
+
     // Prüfen ob Boxen existieren und im Pool sind
     const { data: boxes, error: fetchError } = await supabase
       .from("boxes")
-      .select("id, qr_code")
+      .select("id, qr_code, object_id")
       .in("id", boxIds)
-      .eq("organisation_id", organisationId)
-      .is("object_id", null);
+      .eq("organisation_id", organisationId);
 
-    if (fetchError) throw fetchError;
-
-    if (!boxes || boxes.length === 0) {
-      return { success: false, message: "Keine gültigen Boxen im Pool gefunden" };
+    if (fetchError) {
+      console.error("❌ Fetch error:", fetchError);
+      throw fetchError;
     }
 
-    const validIds = boxes.map(b => b.id);
+    if (!boxes || boxes.length === 0) {
+      console.error("❌ Keine Boxen gefunden für IDs:", boxIds);
+      return { success: false, message: "Keine gültigen Boxen gefunden" };
+    }
 
-    // Alle Boxen dem Objekt zuweisen
+    // ✅ Prüfe welche Boxen bereits zugewiesen sind
+    const availableBoxes = boxes.filter(b => b.object_id === null);
+    const alreadyAssigned = boxes.filter(b => b.object_id !== null);
+
+    if (alreadyAssigned.length > 0) {
+      console.warn(`⚠️ ${alreadyAssigned.length} Boxen bereits zugewiesen:`, 
+        alreadyAssigned.map(b => ({ id: b.id, qr: b.qr_code, object: b.object_id }))
+      );
+    }
+
+    if (availableBoxes.length === 0) {
+      return { 
+        success: false, 
+        message: "Alle angegebenen Boxen sind bereits zugewiesen" 
+      };
+    }
+
+    const validIds = availableBoxes.map(b => b.id);
+
+    console.log(`✅ ${validIds.length} Boxen verfügbar für Zuweisung`);
+
+    // Alle verfügbaren Boxen dem Objekt zuweisen
     const { data, error } = await supabase
       .from("boxes")
       .update({
@@ -387,22 +413,23 @@ exports.bulkAssignToObject = async (boxIds, objectId, organisationId, userId) =>
     if (error) throw error;
 
     // Audit Log
-    for (const box of boxes) {
+    for (const box of availableBoxes) {
       await logBoxEvent(box.id, userId, "assigned_to_object", { 
         object_id: objectId,
         bulk_operation: true
       });
     }
 
-    console.log(`✅ ${data.length} Boxen Objekt ${objectId} zugewiesen`);
+    console.log(`✅ ${data.length} Boxen erfolgreich Objekt ${objectId} zugewiesen`);
 
     return { 
       success: true, 
       data,
-      count: data.length
+      count: data.length,
+      skipped: alreadyAssigned.length
     };
   } catch (err) {
-    console.error("bulkAssignToObject error:", err);
+    console.error("❌ bulkAssignToObject error:", err);
     return { success: false, message: err.message };
   }
 };

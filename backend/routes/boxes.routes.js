@@ -59,6 +59,9 @@ router.delete("/:id", authenticate, requireEditor, asyncHandler(boxesController.
 // Box einem Objekt zuweisen (aus Pool)
 router.post("/:id/assign", authenticate, requireEditor, asyncHandler(boxesController.assignToObject));
 
+// Bulk-Assign: Mehrere Boxen auf einmal zuweisen
+router.post("/bulk-assign", authenticate, requireEditor, asyncHandler(boxesController.bulkAssignToObject));
+
 // Box zurück in Pool
 router.post("/:id/return-to-pool", authenticate, requireEditor, asyncHandler(boxesController.returnToPool));
 
