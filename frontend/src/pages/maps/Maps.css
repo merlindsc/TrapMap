@@ -539,7 +539,8 @@
     animation: slideUp .28s ease-out;
   }
 
-  /* Compact padding for mobile ObjectSidebar */
+  /* Compact padding for mobile ObjectSidebar 
+     Note: Using !important to override inline styles from ObjectSidebar component */
   .object-sidebar-v6 .sidebar-header-v6,
   .object-sidebar .sidebar-header-v6 {
     padding: 10px 12px !important;

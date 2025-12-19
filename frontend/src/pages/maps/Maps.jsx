@@ -693,6 +693,9 @@ export default function Maps() {
     const boxesToAssign = poolBoxes.slice(0, count);
     
     // Extract and validate box IDs before proceeding
+    // Multiple fallbacks needed because data structure differs between:
+    // - Online API: box.id (from getPoolBoxes transformation in offlineAPI.js)
+    // - Cached data: box.boxes?.id or box.box_id (raw QR code structure)
     const boxIds = boxesToAssign
       .map(box => box.id || box.boxes?.id || box.box_id)
       .filter(id => id != null);
