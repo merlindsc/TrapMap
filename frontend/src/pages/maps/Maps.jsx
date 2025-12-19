@@ -379,6 +379,7 @@ export default function Maps() {
   const [addressQuery, setAddressQuery] = useState("");
   const [addressResults, setAddressResults] = useState([]);
   const [addressSearching, setAddressSearching] = useState(false);
+  const [mobileSearchExpanded, setMobileSearchExpanded] = useState(false);
   const addressTimeoutRef = useRef(null);
 
   // Drag & Drop
@@ -1329,6 +1330,41 @@ export default function Maps() {
             <button onClick={() => mapRef.current?.zoomIn()}>+</button>
             <button onClick={() => mapRef.current?.zoomOut()}>−</button>
           </div>
+
+          {/* Mobile Floating Layer Switch */}
+          {isMobile && (
+            <div className="mobile-layer-switch">
+              <button 
+                className="layer-toggle-btn"
+                onClick={() => setStyleOpen(!styleOpen)}
+                aria-label="Karten-Stil wechseln"
+              >
+                <Layers3 size={20} />
+              </button>
+              {styleOpen && (
+                <div className="layer-dropdown">
+                  <button 
+                    className={mapStyle === "streets" ? "active" : ""} 
+                    onClick={() => { setMapStyle("streets"); setStyleOpen(false); }}
+                  >
+                    🗺️ Straßen
+                  </button>
+                  <button 
+                    className={mapStyle === "satellite" ? "active" : ""} 
+                    onClick={() => { setMapStyle("satellite"); setStyleOpen(false); }}
+                  >
+                    🛰️ Satellit
+                  </button>
+                  <button 
+                    className={mapStyle === "hybrid" ? "active" : ""} 
+                    onClick={() => { setMapStyle("hybrid"); setStyleOpen(false); }}
+                  >
+                    🌍 Hybrid
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Mobile FAB */}
@@ -1350,13 +1386,92 @@ export default function Maps() {
           className={getSidebarClasses()}
         >
           {isMobile && (
-            <div 
-              className="sheet-drag-handle"
-              onTouchStart={handleSheetDragStart}
-              onTouchMove={handleSheetDrag}
-              onTouchEnd={handleSheetDragEnd}
-              onClick={handleSheetToggle}
-            />
+            <>
+              <div 
+                className="sheet-drag-handle"
+                onTouchStart={handleSheetDragStart}
+                onTouchMove={handleSheetDrag}
+                onTouchEnd={handleSheetDragEnd}
+                onClick={handleSheetToggle}
+              />
+              
+              {/* 📱 Mobile Controls: Address Search & Create Object */}
+              <div className="mobile-sheet-controls">
+                {/* Address Search */}
+                <div className={`mobile-search-wrapper ${mobileSearchExpanded ? 'expanded' : ''}`}>
+                  {!mobileSearchExpanded ? (
+                    <button 
+                      className="mobile-search-toggle"
+                      onClick={() => setMobileSearchExpanded(true)}
+                      aria-label="Adresssuche öffnen"
+                    >
+                      <Search size={18} />
+                      <span>Adresse suchen</span>
+                    </button>
+                  ) : (
+                    <div className="mobile-search-input">
+                      <Search size={18} />
+                      <input
+                        type="text"
+                        placeholder="Adresse suchen..."
+                        value={addressQuery}
+                        onChange={(e) => {
+                          setAddressQuery(e.target.value);
+                          handleAddressSearch(e.target.value);
+                        }}
+                        autoFocus
+                      />
+                      {addressSearching && <div className="search-spinner" />}
+                      <button 
+                        onClick={() => { 
+                          setAddressQuery(""); 
+                          setAddressResults([]); 
+                          setMobileSearchExpanded(false);
+                        }} 
+                        className="search-close"
+                        aria-label="Suche schließen"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                  )}
+                  {mobileSearchExpanded && addressResults.length > 0 && (
+                    <div className="mobile-search-results">
+                      {addressResults.map((result, idx) => (
+                        <div
+                          key={idx}
+                          className="result-item"
+                          onClick={() => {
+                            handleAddressSelect(result);
+                            setMobileSearchExpanded(false);
+                          }}
+                        >
+                          <MapPin size={14} />
+                          <span>{result.place_name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Create Object Button */}
+                {canEdit && (
+                  <button
+                    className={`mobile-create-object-btn ${objectPlacingMode ? 'active' : ''}`}
+                    onClick={() => {
+                      setObjectPlacingMode(!objectPlacingMode);
+                      if (!objectPlacingMode) {
+                        setSheetState('peek');
+                      }
+                    }}
+                    aria-label="Neues Objekt erstellen"
+                  >
+                    <Plus size={20} />
+                    <span>Objekt erstellen</span>
+                  </button>
+                )}
+              </div>
+            </>
           )}
 
           {!selectedObject ? (
