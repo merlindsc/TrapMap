@@ -202,4 +202,108 @@ describe('Boxes Controller', () => {
       expect(response.body.object_id).toBe('object-id');
     });
   });
+
+  describe('POST /api/boxes/bulk-assign - Bulk assign boxes to object', () => {
+    it('should assign multiple boxes to an object', async () => {
+      const mockResponse = {
+        success: true,
+        count: 3,
+        skipped: 0,
+        data: [
+          { id: 'box-1', object_id: 'object-id' },
+          { id: 'box-2', object_id: 'object-id' },
+          { id: 'box-3', object_id: 'object-id' }
+        ]
+      };
+
+      boxesService.bulkAssignToObject.mockResolvedValue(mockResponse);
+
+      const response = await request(app)
+        .post('/api/boxes/bulk-assign')
+        .set('Authorization', 'Bearer test-token')
+        .send({ 
+          box_ids: ['box-1', 'box-2', 'box-3'],
+          object_id: 'object-id' 
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.count).toBe(3);
+      expect(response.body.skipped).toBe(0);
+    });
+
+    it('should return error if box_ids is not provided', async () => {
+      const response = await request(app)
+        .post('/api/boxes/bulk-assign')
+        .set('Authorization', 'Bearer test-token')
+        .send({ object_id: 'object-id' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('box_ids');
+    });
+
+    it('should return error if object_id is not provided', async () => {
+      const response = await request(app)
+        .post('/api/boxes/bulk-assign')
+        .set('Authorization', 'Bearer test-token')
+        .send({ box_ids: ['box-1', 'box-2'] });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('object_id');
+    });
+
+    it('should return error if box_ids array is empty', async () => {
+      const response = await request(app)
+        .post('/api/boxes/bulk-assign')
+        .set('Authorization', 'Bearer test-token')
+        .send({ 
+          box_ids: [],
+          object_id: 'object-id' 
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('box_ids');
+    });
+
+    it('should return error if trying to assign more than 100 boxes', async () => {
+      const boxIds = Array.from({ length: 101 }, (_, i) => `box-${i}`);
+      
+      const response = await request(app)
+        .post('/api/boxes/bulk-assign')
+        .set('Authorization', 'Bearer test-token')
+        .send({ 
+          box_ids: boxIds,
+          object_id: 'object-id' 
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toContain('100');
+    });
+
+    it('should handle partial success when some boxes are already assigned', async () => {
+      const mockResponse = {
+        success: true,
+        count: 2,
+        skipped: 1,
+        data: [
+          { id: 'box-1', object_id: 'object-id' },
+          { id: 'box-2', object_id: 'object-id' }
+        ]
+      };
+
+      boxesService.bulkAssignToObject.mockResolvedValue(mockResponse);
+
+      const response = await request(app)
+        .post('/api/boxes/bulk-assign')
+        .set('Authorization', 'Bearer test-token')
+        .send({ 
+          box_ids: ['box-1', 'box-2', 'box-3'],
+          object_id: 'object-id' 
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.count).toBe(2);
+      expect(response.body.skipped).toBe(1);
+    });
+  });
 });
