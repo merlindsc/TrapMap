@@ -927,6 +927,7 @@ export const getOfflineStats = async () => {
   const pendingBoxes = await getUnsyncedBoxes();
   const pendingPositions = await getUnsyncedPositionUpdates();
   const pendingReturns = await getUnsyncedReturnToPool();
+  const pendingQueue = await getSyncQueue(); // 🆕 Sync-Queue
   
   const cachedBoxes = await getCachedBoxes();
   const cachedObjects = await getCachedObjects();
@@ -942,7 +943,8 @@ export const getOfflineStats = async () => {
       boxes: pendingBoxes.length,
       positions: pendingPositions.length,
       returns: pendingReturns.length,
-      total: pendingScans.length + pendingBoxes.length + pendingPositions.length + pendingReturns.length
+      queue: pendingQueue.length, // 🆕 Sync-Queue Items
+      total: pendingScans.length + pendingBoxes.length + pendingPositions.length + pendingReturns.length + pendingQueue.length
     },
     cached: {
       boxes: cachedBoxes.length,
@@ -964,6 +966,7 @@ export const clearAllPendingData = async () => {
   await clearStore(STORES.PENDING_BOXES);
   await clearStore(STORES.PENDING_POSITION_UPDATES);
   await clearStore(STORES.PENDING_RETURN_TO_POOL);
+  await clearStore(STORES.SYNC_QUEUE); // 🆕 Sync-Queue
   console.log('🗑️ Alle ausstehenden Daten gelöscht');
 };
 

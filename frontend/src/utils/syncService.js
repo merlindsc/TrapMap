@@ -257,9 +257,16 @@ const syncReturnToPool = async () => {
  */
 const syncQueueOperations = async () => {
   const API = import.meta.env.VITE_API_URL;
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('trapmap_token');
+  
+  if (!token) {
+    console.warn('⚠️ Kein Token - Sync-Queue übersprungen');
+    return { success: 0, failed: 0, skipped: 0 };
+  }
   
   const queueItems = await getSyncQueue();
+  console.log('📋 Sync-Queue Items:', queueItems.length);
+  
   const results = { success: 0, failed: 0, skipped: 0 };
   
   for (const item of queueItems) {
