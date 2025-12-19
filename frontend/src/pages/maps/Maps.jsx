@@ -1961,6 +1961,7 @@ export default function Maps() {
       {objectEditDialogOpen && selectedObject && (
         <ObjectEditDialog
           object={selectedObject}
+          boxCount={boxes.length}
           onClose={() => setObjectEditDialogOpen(false)}
           onSave={(updated) => {
             setObjects((prev) => prev.map((o) => (o.id === updated.id ? updated : o)).sort((a, b) => (a.name || "").localeCompare(b.name || "", "de")));
