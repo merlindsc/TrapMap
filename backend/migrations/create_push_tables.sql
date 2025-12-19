@@ -55,14 +55,16 @@ $$ LANGUAGE plpgsql;
 ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE push_reminder_log ENABLE ROW LEVEL SECURITY;
 
--- Policy: User kann nur eigene Subscriptions sehen
-CREATE POLICY push_subs_user_policy ON push_subscriptions
-  FOR ALL
-  USING (user_id = auth.uid());
-
--- Policy: Service Role hat vollen Zugriff
+-- Policy: Service Role hat vollen Zugriff (Backend nutzt service_role key)
 CREATE POLICY push_subs_service_policy ON push_subscriptions
   FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+
+CREATE POLICY push_log_service_policy ON push_reminder_log
+  FOR ALL
+  TO service_role
   USING (true)
   WITH CHECK (true);
 
