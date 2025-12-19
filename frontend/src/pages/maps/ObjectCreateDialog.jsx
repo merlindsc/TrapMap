@@ -62,6 +62,16 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
       });
       if (res.ok) {
         const data = await res.json();
+        console.log("📦 Pool Boxen geladen:", data?.length || 0, "Boxen");
+        // Debug: Erste Box-Struktur anzeigen
+        if (data && data.length > 0) {
+          console.log("📦 Erste Box-Struktur:", {
+            id: data[0].id,
+            qr_code: data[0].qr_code,
+            number: data[0].number,
+            hasNestedBoxes: !!data[0].boxes
+          });
+        }
         // Sortieren nach QR-Nummer (klein → groß)
         const sorted = (Array.isArray(data) ? data : []).sort((a, b) => 
           extractQrNumber(a.qr_code) - extractQrNumber(b.qr_code)
@@ -179,6 +189,15 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
 
       // 2. Boxen zuweisen (falls ausgewählt)
       if (selectedBoxIds.size > 0) {
+        // Validate box IDs before sending
+        const boxIdsArray = Array.from(selectedBoxIds);
+        console.log("📦 Ausgewählte Box-IDs:", boxIdsArray);
+        
+        if (boxIdsArray.some(id => !id || id === 'undefined' || typeof id !== 'string')) {
+          console.error("❌ Ungültige Box-IDs gefunden:", boxIdsArray);
+          throw new Error("Ungültige Box-IDs - bitte Seite neu laden");
+        }
+
         const boxRes = await fetch(`${API}/boxes/bulk-assign`, {
           method: "POST",
           headers: {
@@ -186,16 +205,21 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            box_ids: Array.from(selectedBoxIds),
+            box_ids: boxIdsArray,
             object_id: newObject.id
           }),
         });
 
         if (boxRes.ok) {
           const boxData = await boxRes.json();
-          console.log(`✅ ${boxData.count} Boxen zugewiesen`);
+          console.log(`✅ ${boxData.count} Boxen zugewiesen, ${boxData.skipped || 0} übersprungen`);
+          if (boxData.skipped > 0) {
+            console.warn("⚠️ Einige Boxen wurden übersprungen (bereits zugewiesen?)");
+          }
         } else {
-          console.error("⚠️ Boxen konnten nicht zugewiesen werden");
+          const errorData = await boxRes.json();
+          console.error("❌ Boxen-Zuweisung fehlgeschlagen:", errorData);
+          throw new Error(`Boxen-Zuweisung fehlgeschlagen: ${errorData.error || 'Unbekannter Fehler'}`);
         }
       }
 
