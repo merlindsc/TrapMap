@@ -1,3 +1,9 @@
+# ============================================
+# HINWEIS: Production Secrets liegen auf Render
+# Diese Dummy-Werte funktionieren für Tests,
+# da der Supabase Client gemockt wird.
+# ============================================
+
 name: CI/CD Pipeline
 
 on:
@@ -23,7 +29,7 @@ jobs:
     defaults:
       run:
         working-directory: ./backend
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -45,9 +51,10 @@ jobs:
       - name: Run tests
         run: npm test
         env:
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          NODE_ENV: test
+          JWT_SECRET: test-jwt-secret-for-ci-only
+          SUPABASE_URL: https://test.supabase.co
+          SUPABASE_KEY: test-key-for-ci
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4
@@ -65,7 +72,7 @@ jobs:
     defaults:
       run:
         working-directory: ./frontend
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -88,8 +95,8 @@ jobs:
         run: npm run build
         env:
           VITE_API_URL: https://api.example.com
-          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          VITE_SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          VITE_SUPABASE_URL: https://test.supabase.co
+          VITE_SUPABASE_KEY: test-key-for-ci
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -102,7 +109,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
