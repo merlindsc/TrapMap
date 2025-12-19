@@ -6,7 +6,7 @@
 -- Push Subscriptions Tabelle
 CREATE TABLE IF NOT EXISTS push_subscriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   partner_id UUID REFERENCES partners(id) ON DELETE CASCADE,
   
   -- Web Push Subscription Data
@@ -32,7 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_push_subs_reminder ON push_subscriptions(reminder
 -- Reminder Log (verhindert mehrfaches Senden pro Tag)
 CREATE TABLE IF NOT EXISTS push_reminder_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   partner_id UUID REFERENCES partners(id) ON DELETE CASCADE,
   boxes_count INTEGER DEFAULT 0,
   sent_at TIMESTAMPTZ DEFAULT NOW()
