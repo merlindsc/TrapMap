@@ -925,6 +925,7 @@ export default function Scanner() {
     setGpsLoading(true);
     try {
       if (isOnline()) {
+        // Online: Direkt zur API
         await axios.put(`${API}/boxes/${currentBox.id}/position`, {
           lat: currentGPS.lat,
           lng: currentGPS.lng,
@@ -932,9 +933,44 @@ export default function Scanner() {
         }, {
           headers: { Authorization: `Bearer ${token}` }
         });
+        
+        // 🆕 Auch bei Online: Cache aktualisieren!
+        try {
+          const { updateCachedBox } = await import("../../utils/offlineDB");
+          await updateCachedBox(currentBox.id, {
+            lat: currentGPS.lat,
+            lng: currentGPS.lng,
+            position_type: 'gps'
+          });
+          console.log('✅ GPS-Position aktualisiert und gecached:', currentGPS);
+        } catch (cacheErr) {
+          console.warn('Cache-Update fehlgeschlagen:', cacheErr);
+        }
+      } else {
+        // Offline: In Pending-Queue und Cache speichern
+        const { addToSyncQueue, updateCachedBox } = await import("../../utils/offlineDB");
+        
+        await addToSyncQueue({
+          operation: 'update_position',
+          box_id: currentBox.id,
+          lat: currentGPS.lat,
+          lng: currentGPS.lng,
+          position_type: 'gps',
+          timestamp: new Date().toISOString()
+        });
+        
+        // Lokalen Cache aktualisieren
+        await updateCachedBox(currentBox.id, {
+          lat: currentGPS.lat,
+          lng: currentGPS.lng,
+          position_type: 'gps'
+        });
+        
+        console.log('📴 GPS-Position offline aktualisiert:', currentGPS);
       }
 
       setCurrentBox(prev => ({ ...prev, lat: currentGPS.lat, lng: currentGPS.lng }));
+      setGpsDistance(0); // Distanz auf 0 setzen nach Update
       setGpsLoading(false);
       setShowGPSWarning(false);
       setShowScanDialog(true);
@@ -942,8 +978,12 @@ export default function Scanner() {
     } catch (err) {
       console.error("GPS update error:", err);
       setGpsLoading(false);
-      setShowGPSWarning(false);
-      setShowScanDialog(true);
+      setError("❌ GPS-Update fehlgeschlagen: " + (err.message || "Unbekannter Fehler"));
+      setTimeout(() => {
+        setError("");
+        setShowGPSWarning(false);
+        setShowScanDialog(true);
+      }, 2000);
     }
   };
 
@@ -986,6 +1026,19 @@ export default function Scanner() {
         }, {
           headers: { Authorization: `Bearer ${token}` }
         });
+        
+        // 🆕 Auch bei Online: Cache aktualisieren!
+        try {
+          const { updateCachedBox } = await import("../../utils/offlineDB");
+          await updateCachedBox(pendingPlacement.boxId, {
+            lat: position.lat,
+            lng: position.lng,
+            position_type: 'gps'
+          });
+          console.log('✅ GPS-Position gespeichert und gecached:', position);
+        } catch (cacheErr) {
+          console.warn('Cache-Update fehlgeschlagen:', cacheErr);
+        }
       } else {
         // Offline: In Pending-Queue und Cache speichern
         const { addToSyncQueue, updateCachedBox } = await import("../../utils/offlineDB");
