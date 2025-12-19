@@ -83,7 +83,15 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
 
   // Schnellauswahl: Erste N Boxen auswählen
   const selectFirstNBoxes = (n) => {
-    const ids = sortedPoolBoxes.slice(0, n).map(b => b.id);
+    // ✅ Handle both structures: direct boxes OR QR-Code objects with nested boxes
+    const ids = sortedPoolBoxes.slice(0, n).map(item => {
+      // If it's a QR-Code object with nested boxes, extract box ID
+      if (item.boxes && item.boxes.id) {
+        return item.boxes.id;
+      }
+      // If it's a direct box object, use its ID
+      return item.id;
+    }).filter(Boolean);
     setSelectedBoxIds(new Set(ids));
     setBoxCount(n);
   };
@@ -102,7 +110,14 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
 
   // Alle/Keine auswählen
   const selectAll = () => {
-    setSelectedBoxIds(new Set(poolBoxes.map(b => b.id)));
+    // ✅ Handle both structures: direct boxes OR QR-Code objects with nested boxes
+    const ids = poolBoxes.map(item => {
+      if (item.boxes && item.boxes.id) {
+        return item.boxes.id;
+      }
+      return item.id;
+    }).filter(Boolean);
+    setSelectedBoxIds(new Set(ids));
     setBoxCount(poolBoxes.length);
   };
 
@@ -643,58 +658,68 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
                   </div>
                 ) : (
                   <div style={{ maxHeight: 200, overflowY: "auto" }}>
-                    {sortedPoolBoxes.map((box, index) => (
-                      <div
-                        key={box.id}
-                        onClick={(e) => { e.stopPropagation(); toggleBoxSelection(box.id); }}
-                        style={{
-                          padding: "8px 12px", marginBottom: 4,
-                          background: selectedBoxIds.has(box.id) ? "#10b98115" : "#161b22",
-                          border: selectedBoxIds.has(box.id) ? "1px solid #10b981" : "1px solid #21262d",
-                          borderRadius: 8, cursor: "pointer",
-                          display: "flex", alignItems: "center", gap: 10,
-                          transition: "all 0.15s"
-                        }}
-                      >
-                        {/* Checkbox */}
-                        <div style={{
-                          width: 20, height: 20, borderRadius: 4,
-                          border: selectedBoxIds.has(box.id) ? "none" : "1px solid #374151",
-                          background: selectedBoxIds.has(box.id) ? "#10b981" : "transparent",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          flexShrink: 0
-                        }}>
-                          {selectedBoxIds.has(box.id) && <Check size={12} color="#fff" />}
-                        </div>
-                        
-                        {/* Box Info */}
-                        <div style={{ flex: 1 }}>
-                          <div style={{ 
-                            color: "#e5e7eb", fontSize: 14, fontWeight: 600,
-                            display: "flex", alignItems: "center", gap: 8
+                    {sortedPoolBoxes.map((box, index) => {
+                      // ✅ Extract box ID correctly (handle both structures)
+                      const boxId = box.boxes?.id || box.id;
+                      const qrCode = box.boxes?.qr_code || box.qr_code;
+                      const number = box.boxes?.number || box.number;
+                      
+                      return (
+                        <div
+                          key={boxId}
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            toggleBoxSelection(boxId); 
+                          }}
+                          style={{
+                            padding: "8px 12px", marginBottom: 4,
+                            background: selectedBoxIds.has(boxId) ? "#10b98115" : "#161b22",
+                            border: selectedBoxIds.has(boxId) ? "1px solid #10b981" : "1px solid #21262d",
+                            borderRadius: 8, cursor: "pointer",
+                            display: "flex", alignItems: "center", gap: 10,
+                            transition: "all 0.15s"
+                          }}
+                        >
+                          {/* Checkbox */}
+                          <div style={{
+                            width: 20, height: 20, borderRadius: 4,
+                            border: selectedBoxIds.has(boxId) ? "none" : "1px solid #374151",
+                            background: selectedBoxIds.has(boxId) ? "#10b981" : "transparent",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            flexShrink: 0
                           }}>
-                            {formatQrNumber(box.qr_code) || box.number || `#${box.id}`}
-                            <span style={{ 
-                              color: "#6b7280", fontSize: 11, fontWeight: 400,
-                              fontFamily: "monospace"
-                            }}>
-                              {box.qr_code}
-                            </span>
+                            {selectedBoxIds.has(boxId) && <Check size={12} color="#fff" />}
                           </div>
+                          
+                          {/* Box Info */}
+                          <div style={{ flex: 1 }}>
+                            <div style={{ 
+                              color: "#e5e7eb", fontSize: 14, fontWeight: 600,
+                              display: "flex", alignItems: "center", gap: 8
+                            }}>
+                              {formatQrNumber(qrCode) || number || `#${boxId}`}
+                              <span style={{ 
+                                color: "#6b7280", fontSize: 11, fontWeight: 400,
+                                fontFamily: "monospace"
+                              }}>
+                                {qrCode}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {/* Index Badge */}
+                          {selectedBoxIds.has(boxId) && (
+                            <span style={{
+                              padding: "2px 6px", borderRadius: 4,
+                              background: "#10b98130", color: "#10b981",
+                              fontSize: 10, fontWeight: 600
+                            }}>
+                              #{Array.from(selectedBoxIds).indexOf(boxId) + 1}
+                            </span>
+                          )}
                         </div>
-                        
-                        {/* Index Badge */}
-                        {selectedBoxIds.has(box.id) && (
-                          <span style={{
-                            padding: "2px 6px", borderRadius: 4,
-                            background: "#10b98130", color: "#10b981",
-                            fontSize: 10, fontWeight: 600
-                          }}>
-                            #{Array.from(selectedBoxIds).indexOf(box.id) + 1}
-                          </span>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 

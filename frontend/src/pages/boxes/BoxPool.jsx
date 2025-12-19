@@ -173,57 +173,59 @@ export default function BoxPool() {
     }
 
     const boxesToAssign = poolBoxes.slice(0, count);
+    // ✅ Extrahiere Box-IDs korrekt aus QR-Code Objekten
+    const boxIds = boxesToAssign
+      .map(qr => qr.boxes?.id || qr.box_id)
+      .filter(Boolean);
     
+    if (boxIds.length === 0) {
+      setAssignMessage({ type: "error", text: "Keine gültigen Boxen gefunden" });
+      return;
+    }
+
     setAssigning(true);
-    setAssignMessage({ type: "info", text: `Weise ${count} Boxen zu...` });
+    setAssignMessage({ type: "info", text: `Weise ${boxIds.length} Boxen zu...` });
 
-    let successCount = 0;
-    let errorCount = 0;
+    try {
+      // ✅ Verwende Bulk-Assign statt Loop
+      const res = await fetch(`${API}/boxes/bulk-assign`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          box_ids: boxIds,
+          object_id: quickObjectId 
+        })
+      });
 
-    for (const qr of boxesToAssign) {
-      const boxId = qr.boxes?.id || qr.box_id;
-      if (!boxId) {
-        errorCount++;
-        continue;
-      }
-
-      try {
-        const res = await fetch(`${API}/boxes/${boxId}/assign`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify({ object_id: quickObjectId })
+      if (res.ok) {
+        const data = await res.json();
+        const objName = objects.find(o => o.id == quickObjectId)?.name || "Objekt";
+        
+        setAssignMessage({ 
+          type: "success", 
+          text: `✓ ${data.count || boxIds.length} Boxen zu "${objName}" zugewiesen` 
         });
-
-        if (res.ok) {
-          successCount++;
-        } else {
-          errorCount++;
-        }
-      } catch (err) {
-        errorCount++;
+      } else {
+        const err = await res.json();
+        setAssignMessage({ 
+          type: "error", 
+          text: err.error || "Zuweisung fehlgeschlagen" 
+        });
       }
-    }
-
-    const objName = objects.find(o => o.id == quickObjectId)?.name || "Objekt";
-    
-    if (errorCount === 0) {
+    } catch (err) {
+      console.error("Bulk assign error:", err);
       setAssignMessage({ 
-        type: "success", 
-        text: `✓ ${successCount} Boxen erfolgreich "${objName}" zugewiesen` 
+        type: "error", 
+        text: "Netzwerkfehler beim Zuweisen" 
       });
-    } else {
-      setAssignMessage({ 
-        type: "warning", 
-        text: `${successCount} Boxen zugewiesen, ${errorCount} fehlgeschlagen` 
-      });
+    } finally {
+      setQuickCount("");
+      loadData();
+      setAssigning(false);
     }
-
-    setQuickCount("");
-    loadData();
-    setAssigning(false);
   };
 
   // Einzelne Box zuweisen

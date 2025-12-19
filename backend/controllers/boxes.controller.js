@@ -236,6 +236,49 @@ exports.assignToObject = async (req, res) => {
 };
 
 // ============================================
+// BULK ASSIGN TO OBJECT - MEHRERE BOXEN
+// ============================================
+exports.bulkAssignToObject = async (req, res) => {
+  try {
+    const { box_ids, object_id } = req.body;
+    
+    if (!box_ids || !Array.isArray(box_ids) || box_ids.length === 0) {
+      return res.status(400).json({ error: "box_ids Array erforderlich" });
+    }
+
+    if (!object_id) {
+      return res.status(400).json({ error: "object_id erforderlich" });
+    }
+
+    if (box_ids.length > 100) {
+      return res.status(400).json({ error: "Maximal 100 Boxen auf einmal" });
+    }
+
+    const result = await boxesService.bulkAssignToObject(
+      box_ids,
+      object_id,
+      req.user.organisation_id,
+      req.user.id
+    );
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.message });
+    }
+
+    console.log(`✅ ${result.count} Boxen zu Objekt ${object_id} zugewiesen von User ${req.user.id}`);
+    return res.json({ 
+      success: true, 
+      count: result.count,
+      skipped: result.skipped || 0,
+      data: result.data
+    });
+  } catch (err) {
+    console.error("bulkAssignToObject error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// ============================================
 // RETURN TO POOL - EINZELNE BOX
 // ============================================
 exports.returnToPool = async (req, res) => {
