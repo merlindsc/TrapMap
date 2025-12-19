@@ -1,11 +1,10 @@
 import { useState, useEffect } from "react";
 import { Clock, User, Bug } from "lucide-react";
+import { getBoxScans } from "../../api/scans";
 
 export default function ScanHistory({ boxId }) {
   const [scans, setScans] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  const API = import.meta.env.VITE_API_URL;
 
   useEffect(() => {
     if (boxId) loadScans();
@@ -13,16 +12,11 @@ export default function ScanHistory({ boxId }) {
 
   const loadScans = async () => {
     try {
-      const token = localStorage.getItem("trapmap_token");
-
-      const res = await fetch(`${API}/scans/${boxId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const json = await res.json();
-      setScans(Array.isArray(json) ? json : []);
+      const response = await getBoxScans(boxId);
+      setScans(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       console.error("Failed to load scans:", err);
+      setScans([]);
     } finally {
       setLoading(false);
     }

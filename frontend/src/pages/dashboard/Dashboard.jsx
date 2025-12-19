@@ -24,6 +24,7 @@ import {
   isOnline 
 } from "../../utils/offlineAPI";
 import { useOffline } from "../../context/OfflineContext";
+import { getRecentScans as fetchRecentScans } from "../../api/dashboard";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -52,7 +53,7 @@ export default function Dashboard() {
   async function loadDashboard() {
     try {
       // 🆕 Offline-fähiges Laden
-      const [boxesResult, objectsResult] = await Promise.all([
+      const [boxesResult, objectsResult, scansData] = await Promise.all([
         getBoxes().catch(err => {
           console.error("Boxes load error:", err);
           return { success: false, data: [] };
@@ -60,7 +61,12 @@ export default function Dashboard() {
         getObjects().catch(err => {
           console.error("Objects load error:", err);
           return { success: false, data: [] };
-        })
+        }),
+        // Echte Scans vom Dashboard-Endpoint laden
+        isOnline() ? fetchRecentScans().catch(err => {
+          console.error("Scans load error:", err);
+          return [];
+        }) : Promise.resolve([])
       ]);
 
       const boxes = boxesResult.success ? boxesResult.data : [];
@@ -68,11 +74,15 @@ export default function Dashboard() {
 
       // Dashboard-Stats aus geladenen Daten berechnen
       const stats = calculateStats(boxes);
-      const recentScans = extractRecentScans(boxes);
+      // Echte Scans verwenden wenn vorhanden, sonst aus Boxen extrahieren
+      const recentScans = (Array.isArray(scansData) && scansData.length > 0) 
+        ? scansData 
+        : extractRecentScans(boxes);
 
       console.log("📊 Dashboard geladen:", { 
         boxes: boxes.length, 
         objects: objects.length,
+        scans: recentScans.length,
         offline: boxesResult.offline || objectsResult.offline 
       });
 

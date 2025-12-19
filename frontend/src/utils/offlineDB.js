@@ -515,23 +515,133 @@ export const markReturnToPoolAsSynced = async (localId) => {
 // CACHED BOXES
 // ============================================
 
+/**
+ * Cached Boxen mit allen relevanten Feldern für Offline-Scan
+ * WICHTIG: Alle Felder müssen explizit gespeichert werden für:
+ * - Ersteinrichtungs-Erkennung (box_type_id, object_id)
+ * - Kontrollformular (box_type_name, current_status, last_scan)
+ * - Platzierung (lat, lng, floor_plan_id, pos_x, pos_y)
+ */
 export const cacheBoxes = async (boxes) => {
   const database = await ensureDB();
   const transaction = database.transaction(STORES.CACHED_BOXES, 'readwrite');
   const store = transaction.objectStore(STORES.CACHED_BOXES);
   
   for (const box of boxes) {
-    store.put({ ...box, cached_at: new Date().toISOString() });
+    // Vollständige Box-Daten speichern mit expliziten Feldern
+    const boxToCache = {
+      // Basis-IDs
+      id: box.id,
+      qr_code: box.qr_code,
+      object_id: box.object_id,
+      organisation_id: box.organisation_id,
+      
+      // Box-Typ (WICHTIG für Ersteinrichtungs-Erkennung!)
+      box_type_id: box.box_type_id,
+      box_type_name: box.box_type_name || box.box_types?.name,
+      box_type_category: box.box_type_category || box.box_types?.category,
+      short_code: box.short_code || box.box_types?.short_code,
+      
+      // Position GPS
+      lat: box.lat,
+      lng: box.lng,
+      position_type: box.position_type,
+      
+      // Position Lageplan
+      floor_plan_id: box.floor_plan_id,
+      pos_x: box.pos_x,
+      pos_y: box.pos_y,
+      grid_position: box.grid_position,
+      layout_id: box.layout_id,
+      
+      // Nummern
+      number: box.number,
+      display_number: box.display_number,
+      box_name: box.box_name,
+      name: box.name,
+      
+      // Status (WICHTIG für Kontrollformular!)
+      current_status: box.current_status,
+      status: box.status,
+      
+      // Letzter Scan (für Ersteinrichtungs-Erkennung!)
+      last_scan: box.last_scan || box.last_scan_at,
+      last_scan_at: box.last_scan_at || box.last_scan,
+      
+      // Zusätzliche Daten
+      bait: box.bait,
+      notes: box.notes,
+      insect_type: box.insect_type,
+      
+      // Objekt-Info (falls vorhanden)
+      object_name: box.object_name || box.objects?.name,
+      floor_plan_name: box.floor_plan_name || box.floor_plans?.name,
+      
+      // Timestamp für Cache-Invalidierung
+      cached_at: new Date().toISOString()
+    };
+    
+    store.put(boxToCache);
   }
   
-  console.log(`📦 ${boxes.length} Boxen gecached`);
+  console.log(`📦 ${boxes.length} Boxen gecached (mit vollständigen Feldern)`);
 };
 
 export const cacheBox = async (box) => {
-  await putToStore(STORES.CACHED_BOXES, { 
-    ...box, 
-    cached_at: new Date().toISOString() 
-  });
+  // Einzelne Box mit vollständigen Feldern cachen
+  const boxToCache = {
+    // Basis-IDs
+    id: box.id,
+    qr_code: box.qr_code,
+    object_id: box.object_id,
+    organisation_id: box.organisation_id,
+    
+    // Box-Typ (WICHTIG für Ersteinrichtungs-Erkennung!)
+    box_type_id: box.box_type_id,
+    box_type_name: box.box_type_name || box.box_types?.name,
+    box_type_category: box.box_type_category || box.box_types?.category,
+    short_code: box.short_code || box.box_types?.short_code,
+    
+    // Position GPS
+    lat: box.lat,
+    lng: box.lng,
+    position_type: box.position_type,
+    
+    // Position Lageplan
+    floor_plan_id: box.floor_plan_id,
+    pos_x: box.pos_x,
+    pos_y: box.pos_y,
+    grid_position: box.grid_position,
+    layout_id: box.layout_id,
+    
+    // Nummern
+    number: box.number,
+    display_number: box.display_number,
+    box_name: box.box_name,
+    name: box.name,
+    
+    // Status (WICHTIG für Kontrollformular!)
+    current_status: box.current_status,
+    status: box.status,
+    
+    // Letzter Scan (für Ersteinrichtungs-Erkennung!)
+    last_scan: box.last_scan || box.last_scan_at,
+    last_scan_at: box.last_scan_at || box.last_scan,
+    
+    // Zusätzliche Daten
+    bait: box.bait,
+    notes: box.notes,
+    insect_type: box.insect_type,
+    
+    // Objekt-Info
+    object_name: box.object_name || box.objects?.name,
+    floor_plan_name: box.floor_plan_name || box.floor_plans?.name,
+    
+    // Timestamp
+    cached_at: new Date().toISOString()
+  };
+  
+  await putToStore(STORES.CACHED_BOXES, boxToCache);
 };
 
 export const getCachedBoxes = () => getAllFromStore(STORES.CACHED_BOXES);

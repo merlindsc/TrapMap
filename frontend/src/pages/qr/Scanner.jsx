@@ -1,5 +1,5 @@
 /* ============================================================
-   TRAPMAP - QR SCANNER V14
+   TRAPMAP - QR SCANNER V15
    
    KORREKTER QR-FLOW:
    1. Code nicht in DB → /qr/assign-code (neuen Code zuweisen)
@@ -9,11 +9,13 @@
    5. GPS-Box + Mobile + Ersteinrichtung fertig → Distanzprüfung → Kontrollformular
    6. Lageplan-Box + Ersteinrichtung fertig → Kontrollformular
    
-   ERSTEINRICHTUNG ERKENNUNG:
-   - Kein box_type_id = braucht Setup
-   - Kein last_scan = noch nie gescannt = braucht Setup
+   ERSTEINRICHTUNG ERKENNUNG (V15 - verbessert für Offline):
+   - Box ist EINGERICHTET wenn: box_type_id UND object_id vorhanden
+   - Box braucht Setup wenn: kein box_type_id ODER needs_setup Flag
+   - NICHT mehr: last_scan prüfen (kann im Offline-Cache fehlen!)
    
    + OFFLINE SUPPORT: Scannt auch ohne Internet aus Cache
+   + DEBUG LOGGING: Zeigt Cache-Daten und Setup-Entscheidung
    ============================================================ */
 
 import React, { useEffect, useRef, useState } from "react";
@@ -497,9 +499,22 @@ export default function Scanner() {
                        (hasGPS && !hasFloorplan);
       
       // WICHTIG: Ersteinrichtung nötig wenn:
-      // - kein box_type_id ODER
-      // - kein last_scan (noch nie gescannt)
-      const needsSetup = !boxData.box_type_id || !boxData.last_scan || boxData.needs_setup;
+      // - kein box_type_id (Box-Typ noch nicht festgelegt)
+      // - needs_setup Flag explizit gesetzt
+      // NICHT mehr: last_scan prüfen - das kann im Cache fehlen!
+      // Für Offline: Wenn box_type_id vorhanden UND object_id vorhanden → Box ist eingerichtet
+      const isSetupComplete = boxData.box_type_id != null && boxData.object_id != null;
+      const needsSetup = !isSetupComplete || boxData.needs_setup === true;
+      
+      console.log('📋 Setup-Prüfung:', {
+        box_type_id: boxData.box_type_id,
+        object_id: boxData.object_id,
+        last_scan: boxData.last_scan,
+        needs_setup_flag: boxData.needs_setup,
+        isSetupComplete,
+        needsSetup,
+        fromCache
+      });
 
       console.log("📍 Box Status:", { hasGPS, hasFloorplan, isPlaced, isGPSBox, needsSetup, offline });
 
@@ -611,7 +626,7 @@ export default function Scanner() {
         const { findBoxByQR } = await import("../../utils/offlineAPI");
         const result = await findBoxByQR(code);
         if (result.success && result.data) {
-          return {
+          const boxData = {
             id: result.data.id || result.data.box_id,
             qr_code: code,
             code: code,
@@ -627,9 +642,30 @@ export default function Scanner() {
             number: result.data.number || result.data.display_number,
             display_number: result.data.display_number || result.data.number,
             name: result.data.name,
+            box_name: result.data.box_name,
             box_type_id: result.data.box_type_id,
             box_type_name: result.data.box_type_name || result.data.box_types?.name,
+            box_type_category: result.data.box_type_category || result.data.box_types?.category,
+            short_code: result.data.short_code || result.data.box_types?.short_code,
+            // WICHTIG: Diese Felder für Ersteinrichtungs-Erkennung!
+            last_scan: result.data.last_scan || result.data.last_scan_at,
+            current_status: result.data.current_status,
+            needs_setup: result.data.needs_setup,
+            bait: result.data.bait,
+            notes: result.data.notes,
           };
+          
+          // Debug-Logging für Offline-Scan
+          console.log('📴 Offline Box-Daten aus Cache:', {
+            code,
+            boxData,
+            hasBoxTypeId: boxData.box_type_id != null,
+            hasObjectId: boxData.object_id != null,
+            hasLastScan: boxData.last_scan != null,
+            isSetupComplete: boxData.box_type_id != null && boxData.object_id != null
+          });
+          
+          return boxData;
         }
       } catch (e) {
         console.log("offlineAPI nicht verfügbar:", e.message);
