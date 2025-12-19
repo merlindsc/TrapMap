@@ -5,7 +5,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { authMiddleware } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const pushService = require('../services/push.service');
 
 /**
@@ -26,7 +26,7 @@ router.get('/vapid-key', (req, res) => {
  * POST /api/push/subscribe
  * Push-Subscription registrieren
  */
-router.post('/subscribe', authMiddleware, async (req, res) => {
+router.post('/subscribe', authenticate, async (req, res) => {
   try {
     const { subscription, settings } = req.body;
     
@@ -52,7 +52,7 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
  * POST /api/push/unsubscribe
  * Push-Subscription entfernen
  */
-router.post('/unsubscribe', authMiddleware, async (req, res) => {
+router.post('/unsubscribe', authenticate, async (req, res) => {
   try {
     const { endpoint } = req.body;
     
@@ -72,7 +72,7 @@ router.post('/unsubscribe', authMiddleware, async (req, res) => {
  * PUT /api/push/settings
  * Push-Einstellungen aktualisieren
  */
-router.put('/settings', authMiddleware, async (req, res) => {
+router.put('/settings', authenticate, async (req, res) => {
   try {
     const { reminderEnabled, reminderDaysBefore, reminderTime } = req.body;
 
@@ -93,7 +93,7 @@ router.put('/settings', authMiddleware, async (req, res) => {
  * GET /api/push/settings
  * Aktuelle Push-Einstellungen abrufen
  */
-router.get('/settings', authMiddleware, async (req, res) => {
+router.get('/settings', authenticate, async (req, res) => {
   try {
     const subscriptions = await pushService.getSubscription(req.user.id);
     
@@ -128,7 +128,7 @@ router.get('/settings', authMiddleware, async (req, res) => {
  * POST /api/push/test
  * Test-Benachrichtigung senden
  */
-router.post('/test', authMiddleware, async (req, res) => {
+router.post('/test', authenticate, async (req, res) => {
   try {
     const result = await pushService.sendPushToUser(req.user.id, {
       title: '🔔 TrapMap Test',
