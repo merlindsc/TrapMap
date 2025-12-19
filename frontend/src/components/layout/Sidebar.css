@@ -18,11 +18,6 @@
   flex-shrink: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  
-  /* Touch-Optimierungen */
-  touch-action: pan-y; /* Erlaubt nur vertikales Scrollen */
-  overscroll-behavior: contain; /* Verhindert Chain-Scrolling */
-  -webkit-overflow-scrolling: touch; /* Smooth Scrolling auf iOS */
 }
 
 /* ============================================================
@@ -170,22 +165,11 @@
   white-space: nowrap;
   min-height: 94px;
   border-left: 3px solid transparent;
-  
-  /* Touch-Target mindestens 44x44px für Mobile */
-  cursor: pointer;
-  
-  /* Touch-Feedback */
-  -webkit-tap-highlight-color: rgba(99, 102, 241, 0.1);
 }
 
 .sidebar-nav-item:hover {
   background: var(--sidebar-item-hover, rgba(255, 255, 255, 0.05));
   color: var(--sidebar-text-hover, #ffffff);
-}
-
-.sidebar-nav-item:active {
-  transform: scale(0.98);
-  background: var(--sidebar-item-hover, rgba(255, 255, 255, 0.08));
 }
 
 .sidebar-nav-item.active {

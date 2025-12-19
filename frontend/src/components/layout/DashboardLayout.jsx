@@ -115,20 +115,6 @@ export default function DashboardLayout({ children }) {
     if (isMobile) setSidebarOpen(false);
   }, [pathname, isMobile]);
 
-  // Body-Class Management für Mobile Sidebar
-  useEffect(() => {
-    if (isMobile && sidebarOpen) {
-      document.body.classList.add('sidebar-open');
-    } else {
-      document.body.classList.remove('sidebar-open');
-    }
-    
-    // Cleanup beim Unmount
-    return () => {
-      document.body.classList.remove('sidebar-open');
-    };
-  }, [isMobile, sidebarOpen]);
-
   const handleLogoutClick = () => {
     setShowLogoutConfirm(true);
   };
