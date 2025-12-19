@@ -39,10 +39,18 @@
   z-index: 10050; /* HÖHER als alles in Maps (maps header ~1000 / object-sidebar ~9999) */
   transform: translateX(-100%);
   transition: transform 0.3s ease-in-out;
+  
+  /* Touch-Optimierungen */
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .sidebar-container.mobile.open {
   transform: translateX(0);
+  
+  /* Sicherstellen dass Sidebar über allem ist */
+  pointer-events: auto;
 }
 
 /* Sidebar Overlay */
@@ -57,6 +65,11 @@
   z-index: 10025; /* Zwischen Sidebar (10050) und Maps Content */
   cursor: pointer;
   animation: fadeIn 0.2s ease;
+  
+  /* Touch-Events komplett blockieren */
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* When the mobile sidebar is open, ensure map-specific headers/sidebars sit underneath
@@ -75,6 +88,11 @@ body.sidebar-open .object-sidebar-v6 {
    Toggle `body.sidebar-open` via JS when opening/closing the mobile sidebar. */
 body.sidebar-open {
   overflow: hidden;
+  
+  /* iOS Fix - verhindert Rubber-Band-Scrolling */
+  position: fixed;
+  width: 100%;
+  height: 100%;
 }
 
 @keyframes fadeIn {
