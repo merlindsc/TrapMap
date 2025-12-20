@@ -577,7 +577,7 @@ export default function Maps() {
         setSelectedObject(targetObject);
         
         if (isMobile) {
-          setSheetState('half');
+          setSheetState('peek');
         }
         
         const loadAndOpenBox = async () => {
@@ -828,7 +828,7 @@ export default function Maps() {
     setRequestCount("");
     
     if (isMobile) {
-      setSheetState('half');
+      setSheetState('peek');
     }
     
     if (obj.lat && obj.lng && mapRef.current) {
