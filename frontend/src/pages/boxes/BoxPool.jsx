@@ -21,7 +21,6 @@ import {
   RocketLaunchIcon,
   CubeIcon
 } from "@heroicons/react/24/outline";
-import { extractQrCodesFromPoolBoxes } from "../../utils/boxUtils";
 import "./BoxPool.css";
 
 const API = import.meta.env.VITE_API_URL;
@@ -201,54 +200,58 @@ export default function BoxPool() {
       return;
     }
 
-    // ✅ Try to extract QR codes first (preferred method)
-    const qrCodes = extractQrCodesFromPoolBoxes(poolBoxes, count);
+    // ========================================
+    // NEUER CODE: Robustere Extraktion
+    // ========================================
     
-    console.log("📦 Quick assign:", { 
-      count, 
-      available: poolBoxes.length, 
-      extracted_qr_codes: qrCodes.length,
-      first_boxes: poolBoxes.slice(0, 3).map(b => ({ id: b.id, qr_code: b.qr_code }))
+    // Hole die ersten 'count' Boxen, sortiert nach Nummer
+    const selectedBoxes = poolBoxes.slice(0, count);
+    
+    console.log("📦 Selected boxes for assignment:", selectedBoxes.map(b => ({
+      id: b.id,
+      qr_code: b.qr_code,
+      number: b.number
+    })));
+    
+    // Extrahiere QR-Codes (bevorzugt) oder Box-IDs (Fallback)
+    const qrCodes = selectedBoxes
+      .map(box => box.qr_code)
+      .filter(qr => qr && typeof qr === 'string' && qr.trim().length > 0);
+    
+    const boxIds = selectedBoxes
+      .map(box => box.id)
+      .filter(id => id !== null && id !== undefined);
+    
+    console.log("📦 Extracted identifiers:", {
+      qr_codes: qrCodes,
+      box_ids: boxIds,
+      object_id: quickObjectId
     });
     
-    // Prepare payload - prefer QR codes, fallback to box IDs
+    // Baue Payload - bevorzuge QR-Codes, Fallback auf Box-IDs
     let payload;
-    if (qrCodes.length === count) {
-      // Perfect: All QR codes extracted successfully
+    if (qrCodes.length > 0) {
       payload = { 
         qr_codes: qrCodes,
-        object_id: quickObjectId 
+        object_id: parseInt(quickObjectId) // Konvertiere zu Integer!
       };
-      console.log("✅ Using QR codes for assignment:", qrCodes.length);
-    } else if (qrCodes.length > 0 && qrCodes.length < count) {
-      // Partial extraction: Use the QR codes we got
-      console.warn(`⚠️ Only extracted ${qrCodes.length} of ${count} QR codes, using what we have`);
-      payload = { 
-        qr_codes: qrCodes,
-        object_id: quickObjectId 
-      };
-    } else {
-      // No QR codes extracted: Fallback to box IDs
-      const boxIds = poolBoxes.slice(0, count).map(box => box.id).filter(Boolean);
-      if (boxIds.length === 0) {
-        console.error("❌ No valid QR codes or box IDs found");
-        setAssignMessage({ type: "error", text: "Keine gültigen Boxen gefunden" });
-        return;
-      }
+      console.log("✅ Using QR codes for assignment");
+    } else if (boxIds.length > 0) {
       payload = { 
         box_ids: boxIds,
-        object_id: quickObjectId 
+        object_id: parseInt(quickObjectId) // Konvertiere zu Integer!
       };
-      console.warn("⚠️ Fallback: Using box IDs for assignment:", boxIds.length);
+      console.log("✅ Using Box IDs for assignment");
+    } else {
+      console.error("❌ Keine gültigen Identifikatoren gefunden!");
+      setAssignMessage({ type: "error", text: "Keine gültigen Boxen gefunden" });
+      return;
     }
-
-    const identifiersCount = (payload.qr_codes || payload.box_ids || []).length;
-    if (identifiersCount < count) {
-      console.warn(`⚠️ Only ${identifiersCount} of ${count} boxes have valid identifiers`);
-    }
+    
+    console.log("📦 Final payload:", JSON.stringify(payload));
 
     setAssigning(true);
-    setAssignMessage({ type: "info", text: `Weise ${identifiersCount} Boxen zu...` });
+    setAssignMessage({ type: "info", text: `Weise ${payload.qr_codes?.length || payload.box_ids?.length} Boxen zu...` });
 
     try {
       const res = await fetch(`${API}/boxes/bulk-assign`, {
@@ -260,21 +263,22 @@ export default function BoxPool() {
         body: JSON.stringify(payload)
       });
 
+      const responseData = await res.json();
+      console.log("📦 API Response:", responseData);
+
       if (res.ok) {
-        const data = await res.json();
         const objName = objects.find(o => o.id == quickObjectId)?.name || "Objekt";
-        const assignedCount = data.count || (payload.qr_codes || payload.box_ids || []).length;
+        const assignedCount = responseData.count || (payload.qr_codes || payload.box_ids || []).length;
         
         setAssignMessage({ 
           type: "success", 
           text: `✓ ${assignedCount} Boxen zu "${objName}" zugewiesen` 
         });
       } else {
-        const err = await res.json();
-        console.error("❌ Bulk assign failed:", err);
+        console.error("❌ Bulk assign failed:", responseData);
         setAssignMessage({ 
           type: "error", 
-          text: err.error || "Zuweisung fehlgeschlagen" 
+          text: responseData.error || "Zuweisung fehlgeschlagen" 
         });
       }
     } catch (err) {
