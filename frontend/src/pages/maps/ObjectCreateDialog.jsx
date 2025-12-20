@@ -91,22 +91,42 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
     );
   }, [poolBoxes]);
 
+  // ✅ Hilfsfunktion für sichere QR-Code Extraktion
+  const getQrCode = (item) => {
+    // Direkte Struktur
+    if (item.qr_code && typeof item.qr_code === 'string' && item.qr_code.trim()) {
+      return item.qr_code.trim();
+    }
+    // Verschachtelte Struktur
+    if (item.boxes && item.boxes.qr_code && typeof item.boxes.qr_code === 'string' && item.boxes.qr_code.trim()) {
+      return item.boxes.qr_code.trim();
+    }
+    return null;
+  };
+
   // Schnellauswahl: Erste N Boxen auswählen
   const selectFirstNBoxes = (n) => {
-    // ✅ Use QR codes instead of box IDs
-    const qrCodes = sortedPoolBoxes.slice(0, n).map(item => {
-      // Extract QR code from the structure
-      if (item.boxes && item.boxes.qr_code) {
-        return item.boxes.qr_code;
-      }
-      return item.qr_code;
-    }).filter(Boolean);
+    const qrCodes = sortedPoolBoxes
+      .slice(0, n)
+      .map(getQrCode)
+      .filter(qr => qr !== null && qr.length > 0);
+    
+    if (qrCodes.length !== n) {
+      console.warn(`⚠️ Nur ${qrCodes.length} von ${n} Boxen haben gültige QR-Codes`);
+    }
+    
     setSelectedQrCodes(new Set(qrCodes));
-    setBoxCount(n);
+    setBoxCount(qrCodes.length);
   };
 
   // Box-Auswahl toggeln
-  const toggleBoxSelection = (qrCode) => {
+  const toggleBoxSelection = (item) => {
+    const qrCode = getQrCode(item);
+    if (!qrCode) {
+      console.error("❌ Box hat keinen gültigen QR-Code:", item);
+      return;
+    }
+    
     const newSet = new Set(selectedQrCodes);
     if (newSet.has(qrCode)) {
       newSet.delete(qrCode);
@@ -119,15 +139,12 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
 
   // Alle/Keine auswählen
   const selectAll = () => {
-    // ✅ Use QR codes instead of box IDs
-    const qrCodes = poolBoxes.map(item => {
-      if (item.boxes && item.boxes.qr_code) {
-        return item.boxes.qr_code;
-      }
-      return item.qr_code;
-    }).filter(Boolean);
+    const qrCodes = poolBoxes
+      .map(getQrCode)
+      .filter(qr => qr !== null && qr.length > 0);
+    
     setSelectedQrCodes(new Set(qrCodes));
-    setBoxCount(poolBoxes.length);
+    setBoxCount(qrCodes.length);
   };
 
   const selectNone = () => {
@@ -188,37 +205,37 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
 
       // 2. Boxen zuweisen (falls ausgewählt)
       if (selectedQrCodes.size > 0) {
-        // Use QR codes instead of box IDs
-        const qrCodesArray = Array.from(selectedQrCodes);
-        console.log("📦 Ausgewählte QR-Codes:", qrCodesArray);
+        const qrCodesArray = Array.from(selectedQrCodes).filter(qr => qr && typeof qr === 'string' && qr.length > 0);
         
-        if (qrCodesArray.some(qr => !qr || typeof qr !== 'string')) {
-          console.error("❌ Ungültige QR-Codes gefunden:", qrCodesArray);
-          throw new Error("Ungültige QR-Codes - bitte Seite neu laden");
-        }
-
-        const boxRes = await fetch(`${API}/boxes/bulk-assign`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            qr_codes: qrCodesArray,
-            object_id: newObject.id
-          }),
-        });
-
-        if (boxRes.ok) {
-          const boxData = await boxRes.json();
-          console.log(`✅ ${boxData.count} Boxen zugewiesen, ${boxData.skipped || 0} übersprungen`);
-          if (boxData.skipped > 0) {
-            console.warn("⚠️ Einige Boxen wurden übersprungen (bereits zugewiesen?)");
-          }
+        if (qrCodesArray.length === 0) {
+          console.error("❌ Keine gültigen QR-Codes zum Zuweisen");
+          // Objekt wurde erstellt, aber keine Boxen - kein Fehler werfen
         } else {
-          const errorData = await boxRes.json();
-          console.error("❌ Boxen-Zuweisung fehlgeschlagen:", errorData);
-          throw new Error(`Boxen-Zuweisung fehlgeschlagen: ${errorData.error || 'Unbekannter Fehler'}`);
+          console.log("📦 Zuweisen von QR-Codes:", qrCodesArray);
+          
+          const boxRes = await fetch(`${API}/boxes/bulk-assign`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              qr_codes: qrCodesArray,
+              object_id: newObject.id
+            }),
+          });
+
+          if (boxRes.ok) {
+            const boxData = await boxRes.json();
+            console.log(`✅ ${boxData.count} Boxen zugewiesen, ${boxData.skipped || 0} übersprungen`);
+            if (boxData.skipped > 0) {
+              console.warn("⚠️ Einige Boxen wurden übersprungen (bereits zugewiesen?)");
+            }
+          } else {
+            const errorData = await boxRes.json();
+            console.error("❌ Boxen-Zuweisung fehlgeschlagen:", errorData);
+            throw new Error(`Boxen-Zuweisung fehlgeschlagen: ${errorData.error || 'Unbekannter Fehler'}`);
+          }
         }
       }
 
@@ -682,22 +699,26 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
                 ) : (
                   <div style={{ maxHeight: 200, overflowY: "auto" }}>
                     {sortedPoolBoxes.map((box, index) => {
-                      // ✅ Use QR code as the key identifier
-                      const qrCode = box.boxes?.qr_code || box.qr_code;
-                      const number = box.boxes?.number || box.number;
+                      const qrCode = getQrCode(box);
+                      const isValid = qrCode !== null;
+                      const number = box.number;
                       
                       return (
                         <div
-                          key={qrCode}
+                          key={box.id}
                           onClick={(e) => { 
                             e.stopPropagation(); 
-                            toggleBoxSelection(qrCode); 
+                            if (isValid) {
+                              toggleBoxSelection(box); 
+                            }
                           }}
                           style={{
                             padding: "8px 12px", marginBottom: 4,
-                            background: selectedQrCodes.has(qrCode) ? "#10b98115" : "#161b22",
-                            border: selectedQrCodes.has(qrCode) ? "1px solid #10b981" : "1px solid #21262d",
-                            borderRadius: 8, cursor: "pointer",
+                            background: isValid && selectedQrCodes.has(qrCode) ? "#10b98115" : "#161b22",
+                            border: isValid && selectedQrCodes.has(qrCode) ? "1px solid #10b981" : "1px solid #21262d",
+                            borderRadius: 8, 
+                            cursor: isValid ? "pointer" : "not-allowed",
+                            opacity: isValid ? 1 : 0.4,
                             display: "flex", alignItems: "center", gap: 10,
                             transition: "all 0.15s"
                           }}
@@ -705,12 +726,12 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
                           {/* Checkbox */}
                           <div style={{
                             width: 20, height: 20, borderRadius: 4,
-                            border: selectedQrCodes.has(qrCode) ? "none" : "1px solid #374151",
-                            background: selectedQrCodes.has(qrCode) ? "#10b981" : "transparent",
+                            border: isValid && selectedQrCodes.has(qrCode) ? "none" : "1px solid #374151",
+                            background: isValid && selectedQrCodes.has(qrCode) ? "#10b981" : "transparent",
                             display: "flex", alignItems: "center", justifyContent: "center",
                             flexShrink: 0
                           }}>
-                            {selectedQrCodes.has(qrCode) && <Check size={12} color="#fff" />}
+                            {isValid && selectedQrCodes.has(qrCode) && <Check size={12} color="#fff" />}
                           </div>
                           
                           {/* Box Info */}
@@ -719,13 +740,22 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
                               color: "#e5e7eb", fontSize: 14, fontWeight: 600,
                               display: "flex", alignItems: "center", gap: 8
                             }}>
-                              {formatQrNumber(qrCode) || number || `QR: ${qrCode}`}
-                              <span style={{ 
-                                color: "#6b7280", fontSize: 11, fontWeight: 400,
-                                fontFamily: "monospace"
-                              }}>
-                                {qrCode}
-                              </span>
+                              {isValid ? (
+                                <>
+                                  {formatQrNumber(qrCode) || number || `QR: ${qrCode}`}
+                                  <span style={{ 
+                                    color: "#6b7280", fontSize: 11, fontWeight: 400,
+                                    fontFamily: "monospace"
+                                  }}>
+                                    {qrCode}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <span>Box #{number || box.id}</span>
+                                  <span style={{ color: "#ef4444", fontSize: 11 }}>Kein QR-Code</span>
+                                </>
+                              )}
                             </div>
                           </div>
                           
