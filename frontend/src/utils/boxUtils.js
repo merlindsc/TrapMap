@@ -96,15 +96,18 @@ export function isValidQrCode(str) {
 export function extractQrCodeFromPoolBox(qrObj) {
   if (!qrObj) return null;
   
-  // Try different property paths based on API structure
+  // ✅ FIX: Bei /qr/codes Response ist "id" der QR-Code!
+  // Prüfe das ZUERST, da es das häufigste Format ist
+  // QR-Codes haben typischerweise Format wie "DSE-0096" oder "TM-00001234"
+  // Verwendet weniger strenge Validierung als isValidQrCode() um false negatives zu vermeiden
+  if (typeof qrObj.id === 'string' && qrObj.id.includes('-') && qrObj.id.length >= 5) {
+    return qrObj.id;
+  }
+  
+  // Andere Datenstrukturen (z.B. von /boxes/pool)
   if (qrObj.qr_code) return qrObj.qr_code;
   if (qrObj.boxes?.qr_code) return qrObj.boxes.qr_code;
   if (qrObj.code) return qrObj.code;
-  
-  // Fallback: Use ID if it looks like a QR code
-  if (qrObj.id && isValidQrCode(qrObj.id)) {
-    return qrObj.id;
-  }
   
   return null;
 }
