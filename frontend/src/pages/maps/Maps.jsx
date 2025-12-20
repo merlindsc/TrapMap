@@ -380,7 +380,7 @@ export default function Maps() {
   const [addressResults, setAddressResults] = useState([]);
   const [addressSearching, setAddressSearching] = useState(false);
   const [mobileSearchExpanded, setMobileSearchExpanded] = useState(false);
-  const [combinedSearchQuery, setCombinedSearchQuery] = useState(""); // New: Unified search
+  const [combinedSearchQuery, setCombinedSearchQuery] = useState("");
   const [combinedSearchResults, setCombinedSearchResults] = useState({ objects: [], addresses: [] });
   const [combinedSearching, setCombinedSearching] = useState(false);
   const addressTimeoutRef = useRef(null);
