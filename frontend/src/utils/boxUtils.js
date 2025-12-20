@@ -82,9 +82,9 @@ export function getBoxLabelWithType(box) {
  */
 export function isValidQrCode(str) {
   if (!str || typeof str !== 'string') return false;
-  // QR codes should have at least 3 characters and contain letters/numbers
-  // Most have a dash but not strictly required
-  return str.length >= 3 && /[A-Za-z]/.test(str) && /\d/.test(str);
+  // QR codes should have at least 3 characters and contain both letters and numbers
+  // Allows alphanumeric characters and dashes
+  return /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9-]{3,}$/.test(str);
 }
 
 /**
