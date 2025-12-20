@@ -193,8 +193,10 @@ export default function BoxPool() {
     // ✅ Verwende QR-Codes statt Box-IDs - QR-Codes sind immer unique!
     const qrCodes = extractQrCodesFromPoolBoxes(poolBoxes, count);
     
-    console.log("📦 Quick assign:", { count, available: poolBoxes.length, extracted: qrCodes.length });
-    console.log("📦 First 5 pool boxes:", poolBoxes.slice(0, 5).map(b => ({ id: b.id, qr_code: b.qr_code, number: b.number })));
+    if (import.meta.env.DEV) {
+      console.log("📦 Quick assign:", { count, available: poolBoxes.length, extracted: qrCodes.length });
+      console.log("📦 First 5 pool boxes:", poolBoxes.slice(0, 5).map(b => ({ id: b.id, qr_code: b.qr_code, number: b.number })));
+    }
     
     // Fallback auf box_ids wenn qr_codes leer ist
     let requestPayload;
@@ -203,11 +205,15 @@ export default function BoxPool() {
         qr_codes: qrCodes,
         object_id: quickObjectId 
       };
-      console.log("✅ Using qr_codes for bulk assign");
+      if (import.meta.env.DEV) {
+        console.log("✅ Using qr_codes for bulk assign");
+      }
     } else {
       // Fallback: verwende box_ids
       const boxIds = poolBoxes.slice(0, count).map(b => b.id).filter(id => id);
-      console.log("⚠️ No valid QR codes, falling back to box_ids:", boxIds.length);
+      if (import.meta.env.DEV) {
+        console.log("⚠️ No valid QR codes, falling back to box_ids:", boxIds.length);
+      }
       
       if (boxIds.length === 0) {
         console.error("❌ Keine gültigen Box-IDs oder QR-Codes gefunden");
@@ -250,7 +256,9 @@ export default function BoxPool() {
         });
       } else {
         const err = await res.json();
-        console.error("❌ Bulk assign error response:", err);
+        if (import.meta.env.DEV) {
+          console.error("❌ Bulk assign error response:", err);
+        }
         setAssignMessage({ 
           type: "error", 
           text: err.error || "Zuweisung fehlgeschlagen" 
