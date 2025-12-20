@@ -94,12 +94,12 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
   // ✅ Hilfsfunktion für sichere QR-Code Extraktion
   const getQrCode = (item) => {
     // Direkte Struktur
-    if (item.qr_code && typeof item.qr_code === 'string') {
-      return item.qr_code;
+    if (item.qr_code && typeof item.qr_code === 'string' && item.qr_code.trim()) {
+      return item.qr_code.trim();
     }
     // Verschachtelte Struktur
-    if (item.boxes && item.boxes.qr_code && typeof item.boxes.qr_code === 'string') {
-      return item.boxes.qr_code;
+    if (item.boxes && item.boxes.qr_code && typeof item.boxes.qr_code === 'string' && item.boxes.qr_code.trim()) {
+      return item.boxes.qr_code.trim();
     }
     return null;
   };
