@@ -194,20 +194,48 @@ exports.assignCode = async (code, box_id) => {
 
 // ============================================
 // ASSIGN BOX TO OBJECT
+// Unterstützt sowohl QR-Code als auch Box-ID
 // ============================================
-exports.assignToObject = async (box_id, object_id, organisation_id) => {
-  const { error } = await supabase
-    .from("boxes")
-    .update({
-      object_id: parseInt(object_id),
-      status: "assigned",
-      updated_at: new Date().toISOString()
-    })
-    .eq("id", parseInt(box_id))
-    .eq("organisation_id", parseInt(organisation_id));
+exports.assignToObject = async (qrCode, boxId, object_id, organisation_id) => {
+  try {
+    let actualBoxId = boxId;
+    
+    // Wenn QR-Code übergeben wurde, finde die Box-ID
+    if (qrCode && !boxId) {
+      const { data: box, error } = await supabase
+        .from("boxes")
+        .select("id")
+        .eq("qr_code", qrCode)
+        .eq("organisation_id", parseInt(organisation_id))
+        .single();
+      
+      if (error || !box) {
+        throw new Error("Box mit diesem QR-Code nicht gefunden");
+      }
+      
+      actualBoxId = box.id;
+      console.log(`📦 QR-Code ${qrCode} → Box-ID ${actualBoxId}`);
+    }
+    
+    if (!actualBoxId) {
+      throw new Error("Box-ID konnte nicht ermittelt werden");
+    }
 
-  if (error) throw new Error(error.message);
-  return { success: true };
+    const { error } = await supabase
+      .from("boxes")
+      .update({
+        object_id: parseInt(object_id),
+        status: "assigned",
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", parseInt(actualBoxId))
+      .eq("organisation_id", parseInt(organisation_id));
+
+    if (error) throw new Error(error.message);
+    return { success: true };
+  } catch (err) {
+    throw new Error(err.message);
+  }
 };
 
 // ============================================

@@ -7,6 +7,7 @@ import React, { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
 import { ThemeProvider } from "./components/layout/DashboardLayout";
+import { MapControlsProvider } from "./context/MapControlsContext";
 
 // Public Pages
 import LandingPage from "./pages/public/LandingPage";
@@ -151,8 +152,10 @@ export default function App() {
   // Normale App mit useAuth
   return (
     <ThemeProvider>
-      <MainApp />
-      <CookieConsent />
+      <MapControlsProvider>
+        <MainApp />
+        <CookieConsent />
+      </MapControlsProvider>
     </ThemeProvider>
   );
 }

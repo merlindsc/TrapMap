@@ -29,6 +29,7 @@ import {
   isOnline 
 } from "../../utils/offlineAPI";
 import { useOffline } from "../../context/OfflineContext";
+import { useMapControls } from "../../context/MapControlsContext";
 
 // 🆕 Haptic Feedback Import
 import { 
@@ -326,6 +327,15 @@ export default function Maps() {
   
   // 🆕 Offline-Context nutzen
   const { isOffline } = useOffline();
+  
+  // 🆕 Map Controls Context - Share state with DashboardLayout
+  const { mapStyle, setMapStyle, objectPlacingMode, setObjectPlacingMode, setIsMapView } = useMapControls();
+  
+  // Notify DashboardLayout that we're on the Maps page
+  useEffect(() => {
+    setIsMapView(true);
+    return () => setIsMapView(false);
+  }, [setIsMapView]);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const urlObjectId = searchParams.get("object_id");
@@ -374,12 +384,10 @@ export default function Maps() {
   // Click-to-Place Modus
   const [boxToPlace, setBoxToPlace] = useState(null);
 
-  // Map
-  const [mapStyle, setMapStyle] = useState("streets");
+  // Style dropdown state (still local to Maps)
   const [styleOpen, setStyleOpen] = useState(false);
 
-  // Placing
-  const [objectPlacingMode, setObjectPlacingMode] = useState(false);
+  // Placing (objectPlacingMode now comes from context)
   const [tempObjectLatLng, setTempObjectLatLng] = useState(null);
   const [repositionBox, setRepositionBox] = useState(null);
 
@@ -1282,41 +1290,6 @@ export default function Maps() {
               <span>Offline</span>
             </div>
           )}
-          
-          {canEdit && (
-            <button
-              className={`header-btn ${objectPlacingMode ? 'active' : ''}`}
-              onClick={() => setObjectPlacingMode(!objectPlacingMode)}
-            >
-              <Plus size={18} />
-              <span>Objekt</span>
-            </button>
-          )}
-
-          {/* 📱 Layer-Switch auch auf Mobile verfügbar */}
-          <div className="map-style-toggle">
-            <button 
-              className="layer-switch-btn"
-              onClick={() => setStyleOpen(!styleOpen)}
-              title="Karten-Stil wechseln"
-            >
-              <Layers3 size={isMobile ? 20 : 18} />
-              {!isMobile && <span>Layer</span>}
-            </button>
-            {styleOpen && (
-              <div className="style-dropdown">
-                <button className={mapStyle === "streets" ? "active" : ""} onClick={() => { setMapStyle("streets"); setStyleOpen(false); }}>
-                  🗺️ Straßen
-                </button>
-                <button className={mapStyle === "satellite" ? "active" : ""} onClick={() => { setMapStyle("satellite"); setStyleOpen(false); }}>
-                  🛰️ Satellit
-                </button>
-                <button className={mapStyle === "hybrid" ? "active" : ""} onClick={() => { setMapStyle("hybrid"); setStyleOpen(false); }}>
-                  🌍 Hybrid
-                </button>
-              </div>
-            )}
-          </div>
 
           {!isMobile && (
             <button 
@@ -1450,56 +1423,6 @@ export default function Maps() {
             <button onClick={() => mapRef.current?.zoomIn()}>+</button>
             <button onClick={() => mapRef.current?.zoomOut()}>−</button>
           </div>
-
-          {/* Mobile Floating Layer Switch */}
-          {isMobile && (
-            <div className="mobile-layer-switch">
-              <button 
-                className="layer-toggle-btn"
-                onClick={() => {
-                  hapticMedium(); // Haptic feedback on layer toggle
-                  setStyleOpen(!styleOpen);
-                }}
-                aria-label="Karten-Stil wechseln"
-              >
-                <Layers3 size={20} />
-              </button>
-              {styleOpen && (
-                <div className="layer-dropdown">
-                  <button 
-                    className={mapStyle === "streets" ? "active" : ""} 
-                    onClick={() => { 
-                      hapticSelection(); // Haptic feedback on selection
-                      setMapStyle("streets"); 
-                      setStyleOpen(false); 
-                    }}
-                  >
-                    🗺️ Straßen
-                  </button>
-                  <button 
-                    className={mapStyle === "satellite" ? "active" : ""} 
-                    onClick={() => { 
-                      hapticSelection(); // Haptic feedback on selection
-                      setMapStyle("satellite"); 
-                      setStyleOpen(false); 
-                    }}
-                  >
-                    🛰️ Satellit
-                  </button>
-                  <button 
-                    className={mapStyle === "hybrid" ? "active" : ""} 
-                    onClick={() => { 
-                      hapticSelection(); // Haptic feedback on selection
-                      setMapStyle("hybrid"); 
-                      setStyleOpen(false); 
-                    }}
-                  >
-                    🌍 Hybrid
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Mobile FAB */}
@@ -1621,22 +1544,6 @@ export default function Maps() {
                   )}
                 </div>
 
-                {/* Create Object Button */}
-                {canEdit && (
-                  <button
-                    className={`mobile-create-object-btn ${objectPlacingMode ? 'active' : ''}`}
-                    onClick={() => {
-                      setObjectPlacingMode(!objectPlacingMode);
-                      if (!objectPlacingMode) {
-                        setSheetState('peek');
-                      }
-                    }}
-                    aria-label="Neues Objekt erstellen"
-                  >
-                    <Plus size={20} />
-                    <span>Objekt erstellen</span>
-                  </button>
-                )}
               </div>
             </>
           )}
