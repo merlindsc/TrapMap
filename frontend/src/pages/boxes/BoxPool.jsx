@@ -213,14 +213,22 @@ export default function BoxPool() {
     
     // Prepare payload - prefer QR codes, fallback to box IDs
     let payload;
-    if (qrCodes.length > 0) {
+    if (qrCodes.length === count) {
+      // Perfect: All QR codes extracted successfully
       payload = { 
         qr_codes: qrCodes,
         object_id: quickObjectId 
       };
       console.log("✅ Using QR codes for assignment:", qrCodes.length);
+    } else if (qrCodes.length > 0 && qrCodes.length < count) {
+      // Partial extraction: Use the QR codes we got
+      console.warn(`⚠️ Only extracted ${qrCodes.length} of ${count} QR codes, using what we have`);
+      payload = { 
+        qr_codes: qrCodes,
+        object_id: quickObjectId 
+      };
     } else {
-      // Fallback: Use box IDs if QR codes extraction failed
+      // No QR codes extracted: Fallback to box IDs
       const boxIds = poolBoxes.slice(0, count).map(box => box.id).filter(Boolean);
       if (boxIds.length === 0) {
         console.error("❌ No valid QR codes or box IDs found");
@@ -234,12 +242,13 @@ export default function BoxPool() {
       console.warn("⚠️ Fallback: Using box IDs for assignment:", boxIds.length);
     }
 
-    if ((payload.qr_codes?.length || payload.box_ids?.length || 0) < count) {
-      console.warn(`⚠️ Only ${payload.qr_codes?.length || payload.box_ids?.length} of ${count} boxes have valid identifiers`);
+    const identifiersCount = (payload.qr_codes || payload.box_ids).length;
+    if (identifiersCount < count) {
+      console.warn(`⚠️ Only ${identifiersCount} of ${count} boxes have valid identifiers`);
     }
 
     setAssigning(true);
-    setAssignMessage({ type: "info", text: `Weise ${payload.qr_codes?.length || payload.box_ids?.length} Boxen zu...` });
+    setAssignMessage({ type: "info", text: `Weise ${identifiersCount} Boxen zu...` });
 
     try {
       const res = await fetch(`${API}/boxes/bulk-assign`, {
@@ -254,10 +263,11 @@ export default function BoxPool() {
       if (res.ok) {
         const data = await res.json();
         const objName = objects.find(o => o.id == quickObjectId)?.name || "Objekt";
+        const assignedCount = data.count || (payload.qr_codes || payload.box_ids).length;
         
         setAssignMessage({ 
           type: "success", 
-          text: `✓ ${data.count || payload.qr_codes?.length || payload.box_ids?.length} Boxen zu "${objName}" zugewiesen` 
+          text: `✓ ${assignedCount} Boxen zu "${objName}" zugewiesen` 
         });
       } else {
         const err = await res.json();
