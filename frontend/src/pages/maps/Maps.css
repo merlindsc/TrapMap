@@ -1,7 +1,29 @@
 /* ============================================================
    TRAPMAP - MAPS.CSS
    Mobile-First: Bottom Sheet ÜBER der Karte (z-index: 200)
+   
+   Performance Optimizations:
+   - 60fps animations with GPU acceleration
+   - will-change for transform properties
+   - Hardware-accelerated transitions
    ============================================================ */
+
+/* ============================================================
+   PERFORMANCE: GPU Acceleration for all interactive elements
+   ============================================================ */
+button,
+.box-item,
+.box-item-detailed,
+.object-item,
+.maps-sidebar {
+  /* Force GPU acceleration for smooth 60fps */
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-perspective: 1000;
+  perspective: 1000;
+}
 
 /* ============================================================
    BASE LAYOUT
@@ -1598,6 +1620,11 @@
      MOBILE SIDEBAR = BOTTOM SHEET
      z-index: 30 = UNTER DashboardLayout Nav (50)
      aber ÜBER der Karte (1)
+     
+     Performance optimizations:
+     - will-change for GPU acceleration
+     - transform3d for 3D rendering pipeline
+     - Hardware acceleration
      ======================================== */
   .maps-sidebar {
     position: absolute; /* NICHT fixed! Innerhalb maps-content */
@@ -1613,6 +1640,12 @@
     box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.6);
     transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     background: linear-gradient(to bottom, var(--bg-card) 0%, var(--bg-secondary) 100%);
+    
+    /* 🚀 Performance optimizations */
+    will-change: transform;
+    transform: translate3d(0, 0, 0); /* Force GPU acceleration */
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
   }
 
   /* Desktop closed state - nicht für mobile */
@@ -1623,23 +1656,24 @@
 
   /* ========================================
      SHEET STATES - 4 Zustände mit smooth transitions
+     All use transform3d for 60fps animations
      ======================================== */
   .maps-sidebar.sheet-closed {
-    transform: translateY(100%);
+    transform: translate3d(0, 100%, 0);
   }
 
   .maps-sidebar.sheet-peek {
-    transform: translateY(calc(100% - 45vh));
+    transform: translate3d(0, calc(100% - 45vh), 0);
     height: 45vh;
     max-height: 45vh;
   }
 
   .maps-sidebar.sheet-half {
-    transform: translateY(45%);
+    transform: translate3d(0, 45%, 0);
   }
 
   .maps-sidebar.sheet-full {
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
     max-height: 50vh;
   }
 
@@ -1767,17 +1801,23 @@
     z-index: 35; /* Über Sheet (30), unter Nav (50) */
   }
 
-  /* Box items kompakter but touch-friendly */
+  /* Box items kompakter but touch-friendly - 60fps optimized */
   .box-item-detailed {
     padding: 12px;
     margin-bottom: 8px;
     border-radius: 12px;
     min-height: 60px;
-    transition: all 0.2s;
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                background 0.2s ease;
+    
+    /* 🚀 60fps optimization */
+    will-change: transform;
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
   }
 
   .box-item-detailed:active {
-    transform: scale(0.98);
+    transform: translate3d(0, 0, 0) scale(0.98);
     background: var(--bg-hover);
   }
 

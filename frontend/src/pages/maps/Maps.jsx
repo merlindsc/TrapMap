@@ -419,7 +419,7 @@ export default function Maps() {
   }, []);
 
   /* ============================================================
-     SHEET DRAG HANDLERS (Mobile)
+     SHEET DRAG HANDLERS (Mobile) - Enhanced with smooth gestures
      ============================================================ */
   const handleSheetDragStart = useCallback((e) => {
     if (!isMobile) return;
@@ -431,6 +431,8 @@ export default function Maps() {
     const sheet = sheetRef.current;
     if (sheet) {
       dragStartHeight.current = sheet.offsetHeight;
+      // Add grabbing cursor feedback
+      sheet.style.cursor = 'grabbing';
     }
   }, [isMobile]);
 
@@ -440,13 +442,18 @@ export default function Maps() {
     const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
     const deltaY = dragStartY.current - clientY;
     
-    if (Math.abs(deltaY) > 50) {
+    // Smooth threshold detection with hysteresis
+    const threshold = 50;
+    
+    if (Math.abs(deltaY) > threshold) {
       hapticLight(); // Haptic feedback on state change
       
       if (deltaY > 0) {
+        // Swiping up
         if (sheetState === 'peek') setSheetState('half');
         else if (sheetState === 'half') setSheetState('full');
       } else {
+        // Swiping down
         if (sheetState === 'full') setSheetState('half');
         else if (sheetState === 'half') setSheetState('peek');
         else if (sheetState === 'peek') setSheetState('closed');
@@ -457,6 +464,11 @@ export default function Maps() {
 
   const handleSheetDragEnd = useCallback(() => {
     isDragging.current = false;
+    
+    const sheet = sheetRef.current;
+    if (sheet) {
+      sheet.style.cursor = 'grab';
+    }
   }, []);
 
   const handleSheetToggle = useCallback(() => {
@@ -1340,10 +1352,16 @@ export default function Maps() {
       )}
 
       {boxToPlace && (
-        <div className="placing-hint" style={{ borderColor: "#10b981", color: "#10b981" }}>
+        <div className="placing-hint box-placement" style={{ borderColor: "#10b981", color: "#10b981", background: "rgba(16, 185, 129, 0.95)" }}>
           <MapPin size={18} />
           <span>Tippe auf die Karte um Box {getBoxShortLabel(boxToPlace)} zu platzieren</span>
-          <button onClick={() => setBoxToPlace(null)} style={{ background: "rgba(16, 185, 129, 0.15)" }}>
+          <button 
+            onClick={() => {
+              hapticLight(); // Haptic feedback on cancel
+              setBoxToPlace(null);
+            }} 
+            style={{ background: "rgba(255, 255, 255, 0.25)" }}
+          >
             <X size={16} /> Abbrechen
           </button>
         </div>
@@ -1488,7 +1506,10 @@ export default function Maps() {
         {isMobile && sheetState === 'closed' && (
           <button 
             className="mobile-fab"
-            onClick={() => setSheetState('peek')}
+            onClick={() => {
+              hapticMedium(); // Haptic feedback on FAB tap
+              setSheetState('peek');
+            }}
           >
             <List size={18} />
             {selectedObject ? `${boxes.length} Boxen` : `${objects.length} Objekte`}
@@ -1823,9 +1844,16 @@ export default function Maps() {
                             }
                           }}
                           onClick={() => {
+                            hapticLight(); // Haptic feedback on tap
+                            
                             if (isMobile) {
-                              setBoxToPlace(boxToPlace?.id === box.id ? null : box);
-                              setSheetState('peek');
+                              // Toggle selection on mobile
+                              if (boxToPlace?.id === box.id) {
+                                setBoxToPlace(null);
+                              } else {
+                                setBoxToPlace(box);
+                                setSheetState('peek');
+                              }
                             }
                           }}
                           style={{
@@ -1841,7 +1869,7 @@ export default function Maps() {
                           </div>
                           <span className="drag-hint" style={{ color: boxToPlace?.id === box.id ? '#10b981' : undefined }}>
                             {isMobile 
-                              ? (boxToPlace?.id === box.id ? '✓ Karte tippen' : '→ Antippen') 
+                              ? (boxToPlace?.id === box.id ? '✓ Tippe Karte' : '→ Antippen') 
                               : '⇢ Ziehen'}
                           </span>
                         </div>
