@@ -36,7 +36,8 @@ export default function BoxPool() {
     console.error("localStorage nicht verfügbar:", error);
   }
 
-  const [boxes, setBoxes] = useState([]);
+  const [allBoxes, setAllBoxes] = useState([]); // ALL boxes for stats calculation
+  const [poolBoxes, setPoolBoxes] = useState([]); // Only pool boxes for quick assignment
   const [objects, setObjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
@@ -52,24 +53,32 @@ export default function BoxPool() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [boxRes, objRes] = await Promise.all([
-        fetch(`${API}/boxes/pool`, { headers: { Authorization: `Bearer ${token}` } }),
+      // Fetch ALL boxes for stats + Pool boxes for assignment + Objects
+      const [allBoxesRes, poolBoxesRes, objRes] = await Promise.all([
+        fetch(`${API}/boxes`, { headers: { Authorization: `Bearer ${token}` } }), // ALL boxes for stats
+        fetch(`${API}/boxes/pool`, { headers: { Authorization: `Bearer ${token}` } }), // Pool boxes for assignment
         fetch(`${API}/objects`, { headers: { Authorization: `Bearer ${token}` } })
       ]);
 
-      if (boxRes.ok) {
-        const data = await boxRes.json();
+      if (allBoxesRes.ok) {
+        const data = await allBoxesRes.json();
+        console.log("📦 All boxes loaded:", data?.length || 0, "boxes");
+        setAllBoxes(data || []);
+      }
+
+      if (poolBoxesRes.ok) {
+        const data = await poolBoxesRes.json();
         console.log("📦 Pool boxes loaded:", data?.length || 0, "boxes");
         // Debug: Show first box structure
         if (data && data.length > 0) {
-          console.log("📦 First box structure:", {
+          console.log("📦 First pool box structure:", {
             id: data[0].id,
             qr_code: data[0].qr_code,
             number: data[0].number,
             object_id: data[0].object_id
           });
         }
-        setBoxes(data || []);
+        setPoolBoxes(data || []);
       }
       
       if (objRes.ok) {
@@ -110,19 +119,27 @@ export default function BoxPool() {
     return 999999;
   };
 
-  // Stats berechnen - Jetzt mit flacher Struktur
+  // Stats berechnen - Now using allBoxes to get correct counts
   const stats = useMemo(() => ({
-    pool: boxes.filter((box) => !box.object_id).length,
-    assigned: boxes.filter((box) => box.object_id && (!box.position_type || box.position_type === "none")).length,
-    placed: boxes.filter((box) => box.position_type && box.position_type !== "none").length,
-    total: boxes.length
-  }), [boxes]);
+    pool: allBoxes.filter((box) => !box.object_id).length,
+    assigned: allBoxes.filter((box) => box.object_id && (!box.position_type || box.position_type === "none")).length,
+    placed: allBoxes.filter((box) => box.position_type && box.position_type !== "none").length,
+    total: allBoxes.length
+  }), [allBoxes]);
 
-  // Gefilterte & sortierte Boxen - Flache Struktur
+  // Gefilterte & sortierte Boxen - Use appropriate data source based on filter
   const filteredBoxes = useMemo(() => {
-    return boxes
+    let sourceBoxes = allBoxes;
+    
+    // For pool filter, use poolBoxes directly (already filtered by backend)
+    if (filter === "pool") {
+      sourceBoxes = poolBoxes;
+    }
+    
+    return sourceBoxes
       .filter((box) => {
-        if (filter === "pool" && box.object_id) return false;
+        // Apply filter logic (pool boxes don't need additional filtering)
+        if (filter === "pool") return true; // Already filtered by backend
         if (filter === "assigned") {
           const hasObject = !!box.object_id;
           const isPlaced = box.position_type && box.position_type !== "none";
@@ -130,6 +147,7 @@ export default function BoxPool() {
         }
         if (filter === "placed" && (!box.position_type || box.position_type === "none")) return false;
 
+        // Apply search filter
         if (search) {
           const term = search.toLowerCase();
           const matchCode = box.qr_code?.toLowerCase().includes(term);
@@ -140,14 +158,7 @@ export default function BoxPool() {
         return true;
       })
       .sort((a, b) => extractNumber(a) - extractNumber(b));
-  }, [boxes, filter, search]);
-
-  // Nur Pool-Boxen (verfügbar für Zuweisung) - Flache Struktur
-  const poolBoxes = useMemo(() => {
-    return boxes
-      .filter(box => !box.object_id)
-      .sort((a, b) => extractNumber(a) - extractNumber(b));
-  }, [boxes]);
+  }, [allBoxes, poolBoxes, filter, search]);
 
   // Status-Badge - Direkter Zugriff auf Box-Properties
   const getStatusBadge = (box) => {
@@ -190,48 +201,77 @@ export default function BoxPool() {
       return;
     }
 
-    // ✅ Verwende QR-Codes statt Box-IDs - QR-Codes sind immer unique!
+    // ✅ Try to extract QR codes first (preferred method)
     const qrCodes = extractQrCodesFromPoolBoxes(poolBoxes, count);
     
-    console.log("📦 Quick assign:", { count, available: poolBoxes.length, extracted: qrCodes.length });
+    console.log("📦 Quick assign:", { 
+      count, 
+      available: poolBoxes.length, 
+      extracted_qr_codes: qrCodes.length,
+      first_boxes: poolBoxes.slice(0, 3).map(b => ({ id: b.id, qr_code: b.qr_code }))
+    });
     
-    if (qrCodes.length === 0) {
-      console.error("❌ Keine gültigen QR-Codes extrahiert");
-      setAssignMessage({ type: "error", text: "Keine gültigen Boxen gefunden" });
-      return;
+    // Prepare payload - prefer QR codes, fallback to box IDs
+    let payload;
+    if (qrCodes.length === count) {
+      // Perfect: All QR codes extracted successfully
+      payload = { 
+        qr_codes: qrCodes,
+        object_id: quickObjectId 
+      };
+      console.log("✅ Using QR codes for assignment:", qrCodes.length);
+    } else if (qrCodes.length > 0 && qrCodes.length < count) {
+      // Partial extraction: Use the QR codes we got
+      console.warn(`⚠️ Only extracted ${qrCodes.length} of ${count} QR codes, using what we have`);
+      payload = { 
+        qr_codes: qrCodes,
+        object_id: quickObjectId 
+      };
+    } else {
+      // No QR codes extracted: Fallback to box IDs
+      const boxIds = poolBoxes.slice(0, count).map(box => box.id).filter(Boolean);
+      if (boxIds.length === 0) {
+        console.error("❌ No valid QR codes or box IDs found");
+        setAssignMessage({ type: "error", text: "Keine gültigen Boxen gefunden" });
+        return;
+      }
+      payload = { 
+        box_ids: boxIds,
+        object_id: quickObjectId 
+      };
+      console.warn("⚠️ Fallback: Using box IDs for assignment:", boxIds.length);
     }
 
-    if (qrCodes.length < count) {
-      console.warn(`⚠️ Nur ${qrCodes.length} von ${count} Boxen haben gültige QR-Codes`);
+    const identifiersCount = (payload.qr_codes || payload.box_ids || []).length;
+    if (identifiersCount < count) {
+      console.warn(`⚠️ Only ${identifiersCount} of ${count} boxes have valid identifiers`);
     }
 
     setAssigning(true);
-    setAssignMessage({ type: "info", text: `Weise ${qrCodes.length} Boxen zu...` });
+    setAssignMessage({ type: "info", text: `Weise ${identifiersCount} Boxen zu...` });
 
     try {
-      // ✅ Verwende qr_codes statt box_ids
       const res = await fetch(`${API}/boxes/bulk-assign`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ 
-          qr_codes: qrCodes,
-          object_id: quickObjectId 
-        })
+        body: JSON.stringify(payload)
       });
 
       if (res.ok) {
         const data = await res.json();
         const objName = objects.find(o => o.id == quickObjectId)?.name || "Objekt";
+        const assignedCount = data.count || (payload.qr_codes || payload.box_ids || []).length;
         
         setAssignMessage({ 
           type: "success", 
-          text: `✓ ${data.count || qrCodes.length} Boxen zu "${objName}" zugewiesen` 
+          text: `✓ ${assignedCount} Boxen zu "${objName}" zugewiesen` 
         });
       } else {
         const err = await res.json();
+        console.error("❌ Bulk assign failed:", err);
         setAssignMessage({ 
           type: "error", 
           text: err.error || "Zuweisung fehlgeschlagen" 
@@ -451,7 +491,7 @@ export default function BoxPool() {
         </div>
       ) : first10Boxes.length === 0 ? (
         <div className="empty-state">
-          {boxes.length === 0 ? "Noch keine Boxen vorhanden." : "Keine Boxen gefunden"}
+          {allBoxes.length === 0 ? "Noch keine Boxen vorhanden." : "Keine Boxen gefunden"}
         </div>
       ) : (
         <>
