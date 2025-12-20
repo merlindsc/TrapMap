@@ -1634,7 +1634,6 @@
   /* Content scrollbar - improved */
   .maps-sidebar .sidebar-content {
     padding: 14px;
-    max-height: calc(45vh - 140px); /* Account for header, drag handle, and controls */
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y; /* Allow vertical scrolling, prevent sheet drag */
@@ -1642,8 +1641,16 @@
 
   /* Peek state specific content scrolling */
   .maps-sidebar.sheet-peek .sidebar-content {
-    max-height: calc(45vh - 140px);
-    overflow-y: auto;
+    max-height: calc(45vh - 140px); /* Account for header, drag handle, and controls */
+  }
+
+  /* Half and Full states allow more content */
+  .maps-sidebar.sheet-half .sidebar-content {
+    max-height: calc(55vh - 140px);
+  }
+
+  .maps-sidebar.sheet-full .sidebar-content {
+    max-height: calc(90vh - 140px);
   }
 
   /* Better scrollbar styling for mobile */
