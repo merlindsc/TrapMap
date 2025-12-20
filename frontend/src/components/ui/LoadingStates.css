@@ -1,0 +1,211 @@
+/**
+ * Loading States and Skeleton Screens CSS
+ */
+
+/* ============================================================
+   SKELETON ANIMATIONS
+   ============================================================ */
+@keyframes shimmer {
+  0% {
+    background-position: -468px 0;
+  }
+  100% {
+    background-position: 468px 0;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================
+   BASE SKELETON STYLES
+   ============================================================ */
+.skeleton-box-item,
+.skeleton-object-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  margin-bottom: 8px;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.skeleton-badge,
+.skeleton-icon-circle,
+.skeleton-icon,
+.skeleton-chevron {
+  background: linear-gradient(
+    to right,
+    var(--bg-secondary) 0%,
+    var(--bg-hover) 50%,
+    var(--bg-secondary) 100%
+  );
+  background-size: 936px 104px;
+  animation: shimmer 2s linear infinite;
+  border-radius: 8px;
+}
+
+.skeleton-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.skeleton-icon-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.skeleton-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.skeleton-text {
+  height: 14px;
+  border-radius: 4px;
+  background: linear-gradient(
+    to right,
+    var(--bg-secondary) 0%,
+    var(--bg-hover) 50%,
+    var(--bg-secondary) 100%
+  );
+  background-size: 936px 104px;
+  animation: shimmer 2s linear infinite;
+}
+
+.skeleton-text-large {
+  width: 60%;
+  height: 16px;
+}
+
+.skeleton-text-small {
+  width: 40%;
+  height: 12px;
+}
+
+.skeleton-icon,
+.skeleton-chevron {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   LOADING SPINNER
+   ============================================================ */
+.loading-spinner {
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* ============================================================
+   FULL PAGE LOADING
+   ============================================================ */
+.full-page-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.full-page-loading p {
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0;
+}
+
+/* ============================================================
+   LIST LOADING SKELETON
+   ============================================================ */
+.list-loading-skeleton {
+  padding: 0;
+}
+
+/* ============================================================
+   INLINE LOADING
+   ============================================================ */
+.inline-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* ============================================================
+   PULSATING DOT
+   ============================================================ */
+.pulsating-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--accent-blue);
+  border-radius: 50%;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ============================================================
+   MOBILE OPTIMIZATIONS
+   ============================================================ */
+@media (max-width: 768px) {
+  .skeleton-box-item,
+  .skeleton-object-item {
+    min-height: 60px;
+    padding: 12px;
+  }
+
+  .skeleton-badge,
+  .skeleton-icon-circle {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* ============================================================
+   DARK MODE ADJUSTMENTS
+   ============================================================ */
+@media (prefers-color-scheme: dark) {
+  .skeleton-badge,
+  .skeleton-icon-circle,
+  .skeleton-icon,
+  .skeleton-chevron,
+  .skeleton-text {
+    background: linear-gradient(
+      to right,
+      rgba(255, 255, 255, 0.05) 0%,
+      rgba(255, 255, 255, 0.1) 50%,
+      rgba(255, 255, 255, 0.05) 100%
+    );
+  }
+}

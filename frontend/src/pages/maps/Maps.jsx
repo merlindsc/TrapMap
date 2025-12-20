@@ -30,6 +30,15 @@ import {
 } from "../../utils/offlineAPI";
 import { useOffline } from "../../context/OfflineContext";
 
+// 🆕 Haptic Feedback Import
+import { 
+  hapticLight, 
+  hapticMedium, 
+  hapticSelection, 
+  hapticSuccess, 
+  hapticError 
+} from "../../utils/haptics";
+
 import { 
   Plus, Layers3, X, Search, MapPin, Building2, 
   ChevronLeft, ChevronRight, Map, LayoutGrid, Navigation,
@@ -410,7 +419,7 @@ export default function Maps() {
   }, []);
 
   /* ============================================================
-     SHEET DRAG HANDLERS (Mobile)
+     SHEET DRAG HANDLERS (Mobile) - Enhanced with smooth gestures
      ============================================================ */
   const handleSheetDragStart = useCallback((e) => {
     if (!isMobile) return;
@@ -422,6 +431,8 @@ export default function Maps() {
     const sheet = sheetRef.current;
     if (sheet) {
       dragStartHeight.current = sheet.offsetHeight;
+      // Add grabbing cursor feedback
+      sheet.style.cursor = 'grabbing';
     }
   }, [isMobile]);
 
@@ -431,11 +442,18 @@ export default function Maps() {
     const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
     const deltaY = dragStartY.current - clientY;
     
-    if (Math.abs(deltaY) > 50) {
+    // Smooth threshold detection with hysteresis
+    const threshold = 50;
+    
+    if (Math.abs(deltaY) > threshold) {
+      hapticLight(); // Haptic feedback on state change
+      
       if (deltaY > 0) {
+        // Swiping up
         if (sheetState === 'peek') setSheetState('half');
         else if (sheetState === 'half') setSheetState('full');
       } else {
+        // Swiping down
         if (sheetState === 'full') setSheetState('half');
         else if (sheetState === 'half') setSheetState('peek');
         else if (sheetState === 'peek') setSheetState('closed');
@@ -446,10 +464,17 @@ export default function Maps() {
 
   const handleSheetDragEnd = useCallback(() => {
     isDragging.current = false;
+    
+    const sheet = sheetRef.current;
+    if (sheet) {
+      sheet.style.cursor = 'grab';
+    }
   }, []);
 
   const handleSheetToggle = useCallback(() => {
     if (!isMobile) return;
+    
+    hapticLight(); // Haptic feedback on sheet toggle
     
     if (sheetState === 'peek') setSheetState('half');
     else if (sheetState === 'half') setSheetState('full');
@@ -672,21 +697,25 @@ export default function Maps() {
     const count = parseInt(requestCount, 10);
     
     if (isNaN(count) || count < 1) {
+      hapticError(); // Haptic feedback on error
       setRequestMessage({ type: "error", text: "Bitte gültige Anzahl eingeben" });
       return;
     }
     
     if (count > 100) {
+      hapticError(); // Haptic feedback on error
       setRequestMessage({ type: "error", text: "Maximal 100 Boxen auf einmal" });
       return;
     }
     
     if (!selectedObject) {
+      hapticError(); // Haptic feedback on error
       setRequestMessage({ type: "error", text: "Kein Objekt ausgewählt" });
       return;
     }
 
     if (poolBoxes.length < count) {
+      hapticError(); // Haptic feedback on error
       setRequestMessage({ 
         type: "error", 
         text: `Nicht genug Boxen! Verfügbar: ${poolBoxes.length}` 
@@ -727,8 +756,10 @@ export default function Maps() {
     }
     
     if (errorCount === 0) {
+      hapticSuccess(); // Haptic feedback on success
       setRequestMessage({ type: "success", text: `✓ ${successCount} Boxen zugewiesen` });
     } else {
+      hapticError(); // Haptic feedback on partial error
       setRequestMessage({ type: "warning", text: `${successCount} OK, ${errorCount} Fehler` });
     }
 
@@ -898,6 +929,8 @@ export default function Maps() {
      HANDLERS
      ============================================================ */
   const handleObjectClick = (obj) => {
+    hapticSelection(); // Haptic feedback on object selection
+    
     setSelectedObject(obj);
     setRequestMessage(null);
     setRequestCount("");
@@ -912,6 +945,8 @@ export default function Maps() {
   };
 
   const handleBoxClick = (box) => {
+    hapticSelection(); // Haptic feedback on box selection
+    
     if (isMobile) {
       setSheetState('peek');
     }
@@ -980,6 +1015,8 @@ export default function Maps() {
       });
 
       if (response.ok) {
+        hapticSuccess(); // Haptic feedback on success
+        
         // Success - reload boxes
         if (selectedObject) {
           await loadBoxes(selectedObject.id);
@@ -993,10 +1030,12 @@ export default function Maps() {
         setRequestMessage({ type: "success", text: `Box ${getBoxShortLabel(boxToReturn)} zurück ins Lager` });
         setTimeout(() => setRequestMessage(null), 3000);
       } else {
+        hapticError(); // Haptic feedback on error
         const error = await response.json();
         throw new Error(error.error || 'Fehler beim Zurückgeben');
       }
     } catch (err) {
+      hapticError(); // Haptic feedback on error
       console.error('Return to storage error:', err);
       setRequestMessage({ type: "error", text: err.message || 'Fehler beim Zurückgeben' });
       setTimeout(() => setRequestMessage(null), 3000);
@@ -1313,10 +1352,16 @@ export default function Maps() {
       )}
 
       {boxToPlace && (
-        <div className="placing-hint" style={{ borderColor: "#10b981", color: "#10b981" }}>
+        <div className="placing-hint box-placement" style={{ borderColor: "#10b981", color: "#10b981", background: "rgba(16, 185, 129, 0.95)" }}>
           <MapPin size={18} />
           <span>Tippe auf die Karte um Box {getBoxShortLabel(boxToPlace)} zu platzieren</span>
-          <button onClick={() => setBoxToPlace(null)} style={{ background: "rgba(16, 185, 129, 0.15)" }}>
+          <button 
+            onClick={() => {
+              hapticLight(); // Haptic feedback on cancel
+              setBoxToPlace(null);
+            }} 
+            style={{ background: "rgba(255, 255, 255, 0.25)" }}
+          >
             <X size={16} /> Abbrechen
           </button>
         </div>
@@ -1411,7 +1456,10 @@ export default function Maps() {
             <div className="mobile-layer-switch">
               <button 
                 className="layer-toggle-btn"
-                onClick={() => setStyleOpen(!styleOpen)}
+                onClick={() => {
+                  hapticMedium(); // Haptic feedback on layer toggle
+                  setStyleOpen(!styleOpen);
+                }}
                 aria-label="Karten-Stil wechseln"
               >
                 <Layers3 size={20} />
@@ -1420,19 +1468,31 @@ export default function Maps() {
                 <div className="layer-dropdown">
                   <button 
                     className={mapStyle === "streets" ? "active" : ""} 
-                    onClick={() => { setMapStyle("streets"); setStyleOpen(false); }}
+                    onClick={() => { 
+                      hapticSelection(); // Haptic feedback on selection
+                      setMapStyle("streets"); 
+                      setStyleOpen(false); 
+                    }}
                   >
                     🗺️ Straßen
                   </button>
                   <button 
                     className={mapStyle === "satellite" ? "active" : ""} 
-                    onClick={() => { setMapStyle("satellite"); setStyleOpen(false); }}
+                    onClick={() => { 
+                      hapticSelection(); // Haptic feedback on selection
+                      setMapStyle("satellite"); 
+                      setStyleOpen(false); 
+                    }}
                   >
                     🛰️ Satellit
                   </button>
                   <button 
                     className={mapStyle === "hybrid" ? "active" : ""} 
-                    onClick={() => { setMapStyle("hybrid"); setStyleOpen(false); }}
+                    onClick={() => { 
+                      hapticSelection(); // Haptic feedback on selection
+                      setMapStyle("hybrid"); 
+                      setStyleOpen(false); 
+                    }}
                   >
                     🌍 Hybrid
                   </button>
@@ -1446,7 +1506,10 @@ export default function Maps() {
         {isMobile && sheetState === 'closed' && (
           <button 
             className="mobile-fab"
-            onClick={() => setSheetState('peek')}
+            onClick={() => {
+              hapticMedium(); // Haptic feedback on FAB tap
+              setSheetState('peek');
+            }}
           >
             <List size={18} />
             {selectedObject ? `${boxes.length} Boxen` : `${objects.length} Objekte`}
@@ -1589,9 +1652,9 @@ export default function Maps() {
                 </div>
               </div>
 
-              {(sheetState !== 'peek' || !isMobile) && (
-                <>
-                  <div className="sidebar-search">
+              {/* Always show content on mobile */}
+              <>
+                <div className="sidebar-search">
                     <Search size={16} />
                     <input
                       type="text"
@@ -1634,7 +1697,6 @@ export default function Maps() {
                     )}
                   </div>
                 </>
-              )}
             </>
           ) : (
             /* BOX-LISTE für ausgewähltes Objekt */
@@ -1652,8 +1714,8 @@ export default function Maps() {
                 </button>
               </div>
 
-              {(sheetState !== 'peek' || !isMobile) && (
-                <div className="sidebar-content">
+              {/* Always show content on mobile, but make it scrollable based on sheet state */}
+              <div className="sidebar-content">
                   {/* Boxen aus Lager anfordern */}
                   <div style={{
                     background: "linear-gradient(135deg, #1e3a5f 0%, #1e293b 100%)",
@@ -1782,9 +1844,16 @@ export default function Maps() {
                             }
                           }}
                           onClick={() => {
+                            hapticLight(); // Haptic feedback on tap
+                            
                             if (isMobile) {
-                              setBoxToPlace(boxToPlace?.id === box.id ? null : box);
-                              setSheetState('peek');
+                              // Toggle selection on mobile
+                              if (boxToPlace?.id === box.id) {
+                                setBoxToPlace(null);
+                              } else {
+                                setBoxToPlace(box);
+                                setSheetState('peek');
+                              }
                             }
                           }}
                           style={{
@@ -1864,7 +1933,6 @@ export default function Maps() {
                     </div>
                   )}
                 </div>
-              )}
             </>
           )}
         </aside>
