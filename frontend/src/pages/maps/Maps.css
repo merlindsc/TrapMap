@@ -529,7 +529,7 @@
     width: 100% !important;
     max-width: 100% !important;
     height: auto !important;
-    max-height: 90vh !important;
+    max-height: 50vh !important;
     border-radius: 12px 12px 0 0 !important;
     box-shadow: 0 -8px 30px rgba(0,0,0,0.6) !important;
     overflow-y: auto !important;
@@ -690,6 +690,36 @@
     }
   }
 
+  /* Grouped Search Results */
+  .mobile-search-results.combined {
+    max-height: 400px;
+  }
+
+  .mobile-search-results .result-group {
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .mobile-search-results .result-group:last-child {
+    border-bottom: none;
+  }
+
+  .mobile-search-results .result-group-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .mobile-search-results .result-group-header svg {
+    color: var(--text-muted);
+  }
+
   .mobile-search-results .result-item {
     display: flex;
     align-items: center;
@@ -718,6 +748,24 @@
     color: var(--text-primary);
     font-size: 13px;
     line-height: 1.4;
+  }
+
+  .mobile-search-results .result-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+  }
+
+  .mobile-search-results .result-item-name {
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .mobile-search-results .result-item-meta {
+    color: var(--text-muted);
+    font-size: 11px;
   }
 
   /* Mobile Create Object Button */
@@ -1592,7 +1640,7 @@
 
   .maps-sidebar.sheet-full {
     transform: translateY(0);
-    max-height: 90vh;
+    max-height: 50vh;
   }
 
   /* ========================================
@@ -1646,11 +1694,11 @@
 
   /* Half and Full states allow more content */
   .maps-sidebar.sheet-half .sidebar-content {
-    max-height: calc(55vh - 140px);
+    max-height: calc(50vh - 140px);
   }
 
   .maps-sidebar.sheet-full .sidebar-content {
-    max-height: calc(90vh - 140px);
+    max-height: calc(50vh - 140px);
   }
 
   /* Better scrollbar styling for mobile */

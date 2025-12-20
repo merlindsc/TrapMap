@@ -13,7 +13,7 @@
    ============================================================ */
 
 import { useState, useEffect } from "react";
-import { X, Save, CheckCircle, MapPin, Navigation, Clock, Bug, Hash, Tag, Maximize2, WifiOff, Cloud } from "lucide-react";
+import { X, Save, CheckCircle, MapPin, Navigation, Clock, Bug, Hash, Tag, Maximize2, WifiOff, Cloud, ArrowRight, Building2 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -136,6 +136,12 @@ export default function BoxEditDialog({
   const [gpsSaved, setGpsSaved] = useState(false);
   const [gpsError, setGpsError] = useState(null);
   const [gpsRequested, setGpsRequested] = useState(false);
+  
+  // State für Box-Transfer
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [transferLoading, setTransferLoading] = useState(false);
+  const [transferObjects, setTransferObjects] = useState([]);
+  const [selectedTargetObject, setSelectedTargetObject] = useState(null);
   
   // Mobile Detection
   const isMobile = /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
@@ -328,6 +334,69 @@ export default function BoxEditDialog({
     return finalNotes;
   };
 
+  // 🆕 Box Transfer Handlers
+  const handleOpenTransferDialog = async () => {
+    try {
+      const token = localStorage.getItem("trapmap_token");
+      const API = import.meta.env.VITE_API_URL;
+      
+      const response = await fetch(`${API}/objects`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Filter out current object and Pool
+        const availableObjects = data.filter(obj => 
+          obj.id !== box.object_id && obj.id !== null
+        );
+        setTransferObjects(availableObjects);
+        setShowTransferDialog(true);
+      } else {
+        setError("Objekte konnten nicht geladen werden");
+      }
+    } catch (e) {
+      console.error("Error loading objects:", e);
+      setError("Fehler beim Laden der Objekte");
+    }
+  };
+
+  const handleTransferBox = async () => {
+    if (!selectedTargetObject) {
+      setError("Bitte wähle ein Zielobjekt");
+      return;
+    }
+
+    setTransferLoading(true);
+    try {
+      const token = localStorage.getItem("trapmap_token");
+      const API = import.meta.env.VITE_API_URL;
+
+      const response = await fetch(`${API}/boxes/${box.id}/move`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ target_object_id: selectedTargetObject })
+      });
+
+      if (response.ok) {
+        setShowTransferDialog(false);
+        onSave && onSave();
+        onClose();
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Fehler beim Verschieben");
+      }
+    } catch (e) {
+      console.error("Transfer error:", e);
+      setError(e.message);
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
   // 🆕 handleSave - OFFLINE-FÄHIG
   const handleSave = async () => {
     if (!boxTypeId) {
@@ -414,11 +483,120 @@ export default function BoxEditDialog({
     return box?.id || "?";
   };
 
+  // Transfer Dialog Component (inline)
+  const TransferDialog = () => {
+    const [searchQuery, setSearchQuery] = useState("");
+    
+    const filteredObjects = transferObjects.filter(obj => 
+      obj.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      obj.address?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    return (
+      <div 
+        className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
+        style={{ background: "rgba(0,0,0,0.9)" }}
+        onClick={() => {
+          setShowTransferDialog(false);
+          setSelectedTargetObject(null);
+        }}
+      >
+        <div 
+          className="bg-gray-900 rounded-xl border border-white/10 w-full max-w-md max-h-[80vh] flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="p-5 border-b border-white/10">
+            <h3 className="text-base font-semibold text-white flex items-center gap-2 mb-2">
+              <ArrowRight size={16} />
+              Box zu anderem Objekt verschieben
+            </h3>
+            <p className="text-xs text-gray-400">
+              Wähle das Zielobjekt für {box?.short_code || 'diese Box'}
+            </p>
+          </div>
+
+          {/* Search */}
+          <div className="p-4 border-b border-white/10">
+            <input
+              type="text"
+              placeholder="Objekt suchen..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-800 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Object List */}
+          <div className="flex-1 overflow-y-auto p-2">
+            {filteredObjects.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 text-sm">
+                Keine Objekte gefunden
+              </div>
+            ) : (
+              filteredObjects.map(obj => (
+                <button
+                  key={obj.id}
+                  onClick={() => setSelectedTargetObject(obj.id)}
+                  className={`w-full p-3 mb-1 rounded-lg border text-left transition-all ${
+                    selectedTargetObject === obj.id
+                      ? 'bg-blue-600 border-blue-500 text-white'
+                      : 'bg-gray-800 border-white/10 text-white hover:bg-gray-700'
+                  }`}
+                >
+                  <div className="font-medium text-sm flex items-center gap-2">
+                    <Building2 size={14} />
+                    {obj.name}
+                  </div>
+                  {obj.address && (
+                    <div className="text-xs text-gray-400 mt-1">
+                      {obj.address}
+                    </div>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="p-4 border-t border-white/10 flex gap-2">
+            <button
+              onClick={() => {
+                setShowTransferDialog(false);
+                setSelectedTargetObject(null);
+              }}
+              disabled={transferLoading}
+              className="flex-1 px-4 py-2 rounded-lg border border-white/10 text-gray-400 hover:bg-gray-800 transition-colors text-sm"
+            >
+              Abbrechen
+            </button>
+            <button
+              onClick={handleTransferBox}
+              disabled={transferLoading || !selectedTargetObject}
+              className={`flex-1 px-4 py-2 rounded-lg text-white font-medium text-sm transition-colors ${
+                (!selectedTargetObject || transferLoading)
+                  ? 'bg-gray-700 cursor-not-allowed'
+                  : 'bg-green-600 hover:bg-green-700'
+              }`}
+            >
+              {transferLoading ? "Verschieben..." : "Verschieben"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div 
-      onClick={onClose}
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
-    >
+    <>
+      {/* Transfer Dialog */}
+      {showTransferDialog && <TransferDialog />}
+
+      {/* Main Dialog */}
+      <div 
+        onClick={onClose}
+        className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
+      >
       <div 
         onClick={(e) => e.stopPropagation()}
         className="bg-white dark:bg-gray-900 rounded-xl w-full max-w-md max-h-[90vh] border border-gray-200 dark:border-white/10 shadow-2xl overflow-hidden flex flex-col"
@@ -917,6 +1095,20 @@ export default function BoxEditDialog({
           )}
         </div>
 
+        {/* Transfer Button */}
+        {box?.object_id && !isFirstSetup && (
+          <div className="px-4 pb-2">
+            <button
+              onClick={handleOpenTransferDialog}
+              disabled={saving}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-medium transition-all border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400"
+            >
+              <ArrowRight size={14} />
+              Zu anderem Objekt verschieben
+            </button>
+          </div>
+        )}
+
         {/* Footer */}
         <div className="flex gap-3 p-4 border-t border-white/10 dark:border-white/20 bg-gray-950 dark:bg-black">
           <button
@@ -941,5 +1133,6 @@ export default function BoxEditDialog({
         </div>
       </div>
     </div>
+    </>
   );
 }
