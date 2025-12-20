@@ -690,6 +690,36 @@
     }
   }
 
+  /* Grouped Search Results */
+  .mobile-search-results.combined {
+    max-height: 400px;
+  }
+
+  .mobile-search-results .result-group {
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .mobile-search-results .result-group:last-child {
+    border-bottom: none;
+  }
+
+  .mobile-search-results .result-group-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .mobile-search-results .result-group-header svg {
+    color: var(--text-muted);
+  }
+
   .mobile-search-results .result-item {
     display: flex;
     align-items: center;
@@ -718,6 +748,24 @@
     color: var(--text-primary);
     font-size: 13px;
     line-height: 1.4;
+  }
+
+  .mobile-search-results .result-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+  }
+
+  .mobile-search-results .result-item-name {
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .mobile-search-results .result-item-meta {
+    color: var(--text-muted);
+    font-size: 11px;
   }
 
   /* Mobile Create Object Button */

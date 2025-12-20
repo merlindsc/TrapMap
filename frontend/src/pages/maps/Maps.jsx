@@ -374,13 +374,17 @@ export default function Maps() {
   const [tempObjectLatLng, setTempObjectLatLng] = useState(null);
   const [repositionBox, setRepositionBox] = useState(null);
 
-  // Search
+  // Search - Combined for Mobile
   const [objectSearchQuery, setObjectSearchQuery] = useState("");
   const [addressQuery, setAddressQuery] = useState("");
   const [addressResults, setAddressResults] = useState([]);
   const [addressSearching, setAddressSearching] = useState(false);
   const [mobileSearchExpanded, setMobileSearchExpanded] = useState(false);
+  const [combinedSearchQuery, setCombinedSearchQuery] = useState(""); // New: Unified search
+  const [combinedSearchResults, setCombinedSearchResults] = useState({ objects: [], addresses: [] });
+  const [combinedSearching, setCombinedSearching] = useState(false);
   const addressTimeoutRef = useRef(null);
+  const combinedSearchTimeoutRef = useRef(null);
 
   // Drag & Drop
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -778,6 +782,77 @@ export default function Maps() {
     }
     setAddressQuery(result.place_name);
     setAddressResults([]);
+  };
+
+  /* ============================================================
+     COMBINED SEARCH (Objects + Addresses) - For Mobile
+     ============================================================ */
+  const handleCombinedSearch = useCallback((query) => {
+    if (combinedSearchTimeoutRef.current) {
+      clearTimeout(combinedSearchTimeoutRef.current);
+    }
+
+    if (!query || query.length < 2) {
+      setCombinedSearchResults({ objects: [], addresses: [] });
+      return;
+    }
+
+    combinedSearchTimeoutRef.current = setTimeout(async () => {
+      setCombinedSearching(true);
+      
+      try {
+        // 1. Filter objects locally
+        const q = query.toLowerCase();
+        const matchedObjects = objects.filter(o =>
+          o.name?.toLowerCase().includes(q) ||
+          o.address?.toLowerCase().includes(q) ||
+          o.city?.toLowerCase().includes(q)
+        );
+
+        // 2. Fetch addresses from geocoding API (if query is long enough)
+        let addresses = [];
+        if (query.length >= 3) {
+          try {
+            const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN}&language=de&country=de,at,ch&limit=5`;
+            const res = await fetch(url);
+            const data = await res.json();
+            
+            if (data.features) {
+              addresses = data.features.map(f => ({
+                place_name: f.place_name,
+                center: f.center,
+              }));
+            }
+          } catch (err) {
+            console.error("Geocoding error:", err);
+          }
+        }
+
+        setCombinedSearchResults({
+          objects: matchedObjects,
+          addresses: addresses
+        });
+      } finally {
+        setCombinedSearching(false);
+      }
+    }, 300);
+  }, [objects]);
+
+  const handleCombinedObjectSelect = (object) => {
+    handleObjectClick(object);
+    setCombinedSearchQuery("");
+    setCombinedSearchResults({ objects: [], addresses: [] });
+    setMobileSearchExpanded(false);
+  };
+
+  const handleCombinedAddressSelect = (result) => {
+    if (result.center && mapRef.current) {
+      const [lng, lat] = result.center;
+      mapRef.current.flyTo([lat, lng], 17, { duration: 1.2 });
+    }
+    setCombinedSearchQuery("");
+    setCombinedSearchResults({ objects: [], addresses: [] });
+    setMobileSearchExpanded(false);
   };
 
   /* ============================================================
@@ -1395,37 +1470,37 @@ export default function Maps() {
                 onClick={handleSheetToggle}
               />
               
-              {/* 📱 Mobile Controls: Address Search & Create Object */}
+              {/* 📱 Mobile Controls: Combined Search & Create Object */}
               <div className="mobile-sheet-controls">
-                {/* Address Search */}
+                {/* Combined Search (Objects + Addresses) */}
                 <div className={`mobile-search-wrapper ${mobileSearchExpanded ? 'expanded' : ''}`}>
                   {!mobileSearchExpanded ? (
                     <button 
                       className="mobile-search-toggle"
                       onClick={() => setMobileSearchExpanded(true)}
-                      aria-label="Adresssuche öffnen"
+                      aria-label="Suche öffnen"
                     >
                       <Search size={18} />
-                      <span>Adresse suchen</span>
+                      <span>Suchen</span>
                     </button>
                   ) : (
                     <div className="mobile-search-input">
                       <Search size={18} />
                       <input
                         type="text"
-                        placeholder="Adresse suchen..."
-                        value={addressQuery}
+                        placeholder="Objekt oder Adresse suchen..."
+                        value={combinedSearchQuery}
                         onChange={(e) => {
-                          setAddressQuery(e.target.value);
-                          handleAddressSearch(e.target.value);
+                          setCombinedSearchQuery(e.target.value);
+                          handleCombinedSearch(e.target.value);
                         }}
                         autoFocus
                       />
-                      {addressSearching && <div className="search-spinner" />}
+                      {combinedSearching && <div className="search-spinner" />}
                       <button 
                         onClick={() => { 
-                          setAddressQuery(""); 
-                          setAddressResults([]); 
+                          setCombinedSearchQuery(""); 
+                          setCombinedSearchResults({ objects: [], addresses: [] }); 
                           setMobileSearchExpanded(false);
                         }} 
                         className="search-close"
@@ -1435,21 +1510,50 @@ export default function Maps() {
                       </button>
                     </div>
                   )}
-                  {mobileSearchExpanded && addressResults.length > 0 && (
-                    <div className="mobile-search-results">
-                      {addressResults.map((result, idx) => (
-                        <div
-                          key={idx}
-                          className="result-item"
-                          onClick={() => {
-                            handleAddressSelect(result);
-                            setMobileSearchExpanded(false);
-                          }}
-                        >
-                          <MapPin size={14} />
-                          <span>{result.place_name}</span>
+                  {mobileSearchExpanded && (combinedSearchResults.objects.length > 0 || combinedSearchResults.addresses.length > 0) && (
+                    <div className="mobile-search-results combined">
+                      {/* Objects Section */}
+                      {combinedSearchResults.objects.length > 0 && (
+                        <div className="result-group">
+                          <div className="result-group-header">
+                            <Building2 size={14} />
+                            <span>Objekte ({combinedSearchResults.objects.length})</span>
+                          </div>
+                          {combinedSearchResults.objects.map((obj) => (
+                            <div
+                              key={obj.id}
+                              className="result-item"
+                              onClick={() => handleCombinedObjectSelect(obj)}
+                            >
+                              <Building2 size={14} />
+                              <div className="result-item-info">
+                                <span className="result-item-name">{obj.name}</span>
+                                {obj.address && <span className="result-item-meta">{obj.address}</span>}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
+                      
+                      {/* Addresses Section */}
+                      {combinedSearchResults.addresses.length > 0 && (
+                        <div className="result-group">
+                          <div className="result-group-header">
+                            <MapPin size={14} />
+                            <span>Adressen ({combinedSearchResults.addresses.length})</span>
+                          </div>
+                          {combinedSearchResults.addresses.map((result, idx) => (
+                            <div
+                              key={idx}
+                              className="result-item"
+                              onClick={() => handleCombinedAddressSelect(result)}
+                            >
+                              <MapPin size={14} />
+                              <span>{result.place_name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
