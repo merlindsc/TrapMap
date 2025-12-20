@@ -88,44 +88,78 @@ export function isValidQrCode(str) {
 }
 
 /**
- * Extracts QR code from a pool box object (from /qr/codes endpoint)
- * Handles various data structures with fallbacks
- * @param {Object} qrObj - QR code object from API
+ * Extracts QR code from a pool box object (from /boxes/pool endpoint)
+ * Expects flat box structure with direct qr_code property
+ * @param {Object} box - Box object from API
  * @returns {string|null} - Extracted QR code or null if not found
  */
-export function extractQrCodeFromPoolBox(qrObj) {
-  if (!qrObj) return null;
-  
-  // ✅ FIX: Bei /qr/codes Response ist "id" der QR-Code!
-  // Prüfe das ZUERST, da es das häufigste Format ist
-  // QR-Codes haben typischerweise Format wie "DSE-0096" oder "TM-00001234"
-  // Verwendet weniger strenge Validierung als isValidQrCode() um false negatives zu vermeiden
-  if (typeof qrObj.id === 'string' && qrObj.id.includes('-') && qrObj.id.length >= 5) {
-    return qrObj.id;
+export function extractQrCodeFromPoolBox(box) {
+  if (!box) {
+    console.warn("⚠️ extractQrCodeFromPoolBox: box is null/undefined");
+    return null;
   }
   
-  // Andere Datenstrukturen (z.B. von /boxes/pool)
-  if (qrObj.qr_code) return qrObj.qr_code;
-  if (qrObj.boxes?.qr_code) return qrObj.boxes.qr_code;
-  if (qrObj.code) return qrObj.code;
+  // Primary: Direct qr_code property (from /boxes/pool)
+  if (box.qr_code && typeof box.qr_code === 'string' && box.qr_code.trim()) {
+    return box.qr_code.trim();
+  }
   
+  // Legacy fallback: nested structure (from old /qr/codes endpoint)
+  if (box.boxes?.qr_code && typeof box.boxes.qr_code === 'string' && box.boxes.qr_code.trim()) {
+    console.warn("⚠️ Using nested box structure - should use /boxes/pool endpoint");
+    return box.boxes.qr_code.trim();
+  }
+  
+  // Last resort: id might be the QR code in some cases
+  if (box.id && typeof box.id === 'string' && box.id.includes('-') && box.id.length >= 5) {
+    console.warn("⚠️ Using box.id as QR code - verify data structure");
+    return box.id.trim();
+  }
+  
+  console.error("❌ No valid QR code found in box:", { 
+    id: box.id, 
+    has_qr_code: !!box.qr_code, 
+    has_nested: !!box.boxes 
+  });
   return null;
 }
 
 /**
  * Extracts QR codes from an array of pool box objects
- * Filters out null/invalid values
- * @param {Array} poolBoxes - Array of QR/box objects from API
+ * Filters out null/invalid values and validates QR codes
+ * @param {Array} poolBoxes - Array of box objects from /boxes/pool API
  * @param {number} count - Number of QR codes to extract
  * @returns {Array<string>} - Array of valid QR codes
  */
 export function extractQrCodesFromPoolBoxes(poolBoxes, count) {
-  if (!Array.isArray(poolBoxes) || count < 1) {
+  if (!Array.isArray(poolBoxes)) {
+    console.error("❌ extractQrCodesFromPoolBoxes: poolBoxes is not an array");
     return [];
   }
   
-  return poolBoxes
+  if (count < 1) {
+    console.warn("⚠️ extractQrCodesFromPoolBoxes: count < 1");
+    return [];
+  }
+  
+  console.log(`📦 Extracting ${count} QR codes from ${poolBoxes.length} boxes`);
+  
+  const extracted = poolBoxes
     .slice(0, count)
-    .map(extractQrCodeFromPoolBox)
+    .map((box, index) => {
+      const qr = extractQrCodeFromPoolBox(box);
+      if (!qr) {
+        console.warn(`⚠️ Box at index ${index} has no valid QR code:`, box);
+      }
+      return qr;
+    })
     .filter(qr => qr !== null && typeof qr === 'string' && qr.length > 0);
+  
+  console.log(`✅ Extracted ${extracted.length} valid QR codes:`, extracted.slice(0, 5));
+  
+  if (extracted.length < count) {
+    console.warn(`⚠️ Only extracted ${extracted.length} of ${count} requested QR codes`);
+  }
+  
+  return extracted;
 }
