@@ -213,13 +213,5 @@ async function fixBoxQrLinks() {
 // Run the script
 fixBoxQrLinks()
   .then((result) => {
-    if (result.success) {
-      process.exit(0);
-    } else {
-      process.exit(1);
-    }
-  })
-  .catch((error) => {
-    console.error('Unhandled error:', error);
-    process.exit(1);
+    process.exit(result.success ? 0 : 1);
   });
