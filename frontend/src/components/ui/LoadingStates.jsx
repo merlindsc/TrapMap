@@ -61,9 +61,15 @@ export const FullPageLoading = ({ message = 'Laden...' }) => (
 
 /**
  * List Loading Skeleton - Shows multiple skeleton items
+ * @param {number} count - Number of skeleton items to show
+ * @param {'box' | 'object'} type - Type of skeleton to render
  */
 export const ListLoadingSkeleton = ({ count = 3, type = 'box' }) => {
-  const SkeletonComponent = type === 'box' ? SkeletonBoxItem : SkeletonObjectItem;
+  // Validate type parameter
+  const validTypes = ['box', 'object'];
+  const skeletonType = validTypes.includes(type) ? type : 'box';
+  
+  const SkeletonComponent = skeletonType === 'box' ? SkeletonBoxItem : SkeletonObjectItem;
   
   return (
     <div className="list-loading-skeleton">

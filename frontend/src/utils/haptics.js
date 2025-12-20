@@ -18,18 +18,24 @@ export const isHapticsSupported = () => {
 
 /**
  * Trigger light haptic feedback (for selections, taps)
+ * 
+ * Compatible with:
+ * - Capacitor 4.x and 5.x with @capacitor/haptics plugin
+ * - Capacitor 6.x (uses Plugins.Haptics)
+ * - Browser Vibration API fallback
  */
 export const hapticLight = () => {
   if (!isHapticsSupported()) return;
   
   try {
-    // Try modern Haptics API first (iOS)
+    // Try modern Haptics API first (Capacitor iOS/Android)
+    // Works with Capacitor 4.x+
     if (window.Capacitor?.Plugins?.Haptics) {
       window.Capacitor.Plugins.Haptics.impact({ style: 'LIGHT' });
       return;
     }
     
-    // Fallback to vibration API
+    // Fallback to vibration API (Web/PWA)
     navigator.vibrate(10);
   } catch (error) {
     console.debug('Haptic feedback not available:', error);

@@ -1869,7 +1869,7 @@ export default function Maps() {
                           </div>
                           <span className="drag-hint" style={{ color: boxToPlace?.id === box.id ? '#10b981' : undefined }}>
                             {isMobile 
-                              ? (boxToPlace?.id === box.id ? '✓ Tippe Karte' : '→ Antippen') 
+                              ? (boxToPlace?.id === box.id ? '✓ Karte tippen' : '→ Antippen') 
                               : '⇢ Ziehen'}
                           </span>
                         </div>
