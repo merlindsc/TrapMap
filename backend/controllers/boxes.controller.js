@@ -240,25 +240,30 @@ exports.assignToObject = async (req, res) => {
 // ============================================
 exports.bulkAssignToObject = async (req, res) => {
   try {
-    const { box_ids, object_id } = req.body;
+    const { box_ids, qr_codes, object_id } = req.body;
     
-    if (!box_ids || !Array.isArray(box_ids) || box_ids.length === 0) {
-      return res.status(400).json({ error: "box_ids Array erforderlich" });
+    // Accept either box_ids (legacy) or qr_codes (new, preferred)
+    const identifiers = qr_codes || box_ids;
+    const useQrCodes = !!qr_codes;
+    
+    if (!identifiers || !Array.isArray(identifiers) || identifiers.length === 0) {
+      return res.status(400).json({ error: "qr_codes oder box_ids Array erforderlich" });
     }
 
     if (!object_id) {
       return res.status(400).json({ error: "object_id erforderlich" });
     }
 
-    if (box_ids.length > 100) {
+    if (identifiers.length > 100) {
       return res.status(400).json({ error: "Maximal 100 Boxen auf einmal" });
     }
 
     const result = await boxesService.bulkAssignToObject(
-      box_ids,
+      identifiers,
       object_id,
       req.user.organisation_id,
-      req.user.id
+      req.user.id,
+      useQrCodes
     );
 
     if (!result.success) {

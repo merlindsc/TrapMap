@@ -173,18 +173,23 @@ exports.assign = async (req, res) => {
 // POST /api/qr/assign-object - Box einem Objekt zuweisen
 exports.assignToObject = async (req, res) => {
   try {
-    const { box_id, object_id } = req.body;
+    const { box_id, qr_code, object_id } = req.body;
     const org = req.user.organisation_id;
 
-    if (!box_id || !object_id) {
-      return res.status(400).json({ error: "box_id und object_id erforderlich" });
+    // Accept either qr_code (preferred) or box_id (legacy)
+    if (!qr_code && !box_id) {
+      return res.status(400).json({ error: "qr_code oder box_id erforderlich" });
     }
 
-    console.log(`📦 assignToObject: box=${box_id}, object=${object_id}, org=${org}`);
+    if (!object_id) {
+      return res.status(400).json({ error: "object_id erforderlich" });
+    }
 
-    const result = await qrService.assignToObject(box_id, object_id, org);
+    console.log(`📦 assignToObject: ${qr_code ? `qr_code=${qr_code}` : `box_id=${box_id}`}, object=${object_id}, org=${org}`);
+
+    const result = await qrService.assignToObject(qr_code || null, box_id || null, object_id, org);
     
-    console.log(`✅ Box ${box_id} zu Objekt ${object_id} zugewiesen`);
+    console.log(`✅ Box zu Objekt ${object_id} zugewiesen`);
     res.json(result);
   } catch (err) {
     console.error("QR assignToObject error:", err);

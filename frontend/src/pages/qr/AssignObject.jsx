@@ -61,17 +61,19 @@ export default function AssignObject() {
 
   // Box einem Objekt zuweisen
   const handleAssign = async (object) => {
-    if (!boxId || assigning) return;
+    // Use QR code instead of box_id
+    if ((!code && !boxId) || assigning) return;
     
     setAssigning(true);
     setError(null);
 
     try {
-      // Box zuweisen
+      // Box zuweisen - prefer QR code over box_id
       await axios.post(
         `${API}/qr/assign-object`,
         {
-          box_id: parseInt(boxId),
+          qr_code: code || null,
+          box_id: boxId ? parseInt(boxId) : null,
           object_id: parseInt(object.id),
         },
         {

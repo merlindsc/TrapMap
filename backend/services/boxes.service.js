@@ -345,27 +345,35 @@ exports.assignToObject = async (boxId, objectId, organisationId, userId) => {
 
 // ============================================
 // BULK ASSIGN TO OBJECT - MEHRERE BOXEN ZUWEISEN
+// Unterstützt sowohl Box-IDs als auch QR-Codes
 // ============================================
-exports.bulkAssignToObject = async (boxIds, objectId, organisationId, userId) => {
+exports.bulkAssignToObject = async (identifiers, objectId, organisationId, userId, useQrCodes = false) => {
   try {
-    if (!Array.isArray(boxIds) || boxIds.length === 0) {
-      return { success: false, message: "Keine Box-IDs angegeben" };
+    if (!Array.isArray(identifiers) || identifiers.length === 0) {
+      return { success: false, message: "Keine Identifikatoren angegeben" };
     }
 
-    if (boxIds.length > 100) {
+    if (identifiers.length > 100) {
       return { success: false, message: "Maximal 100 Boxen auf einmal" };
     }
 
     // ✅ Logging zur Debugging
-    console.log(`📦 Bulk Assign: ${boxIds.length} Boxen zu Objekt ${objectId}`);
-    console.log(`📦 Box IDs:`, boxIds);
+    console.log(`📦 Bulk Assign: ${identifiers.length} Boxen zu Objekt ${objectId}`);
+    console.log(`📦 Identifiers (${useQrCodes ? 'QR-Codes' : 'Box-IDs'}):`, identifiers);
 
-    // Prüfen ob Boxen existieren und im Pool sind
-    const { data: boxes, error: fetchError } = await supabase
+    // Prüfen ob Boxen existieren - entweder über QR-Code oder ID
+    let query = supabase
       .from("boxes")
       .select("id, qr_code, object_id")
-      .in("id", boxIds)
       .eq("organisation_id", organisationId);
+    
+    if (useQrCodes) {
+      query = query.in("qr_code", identifiers);
+    } else {
+      query = query.in("id", identifiers);
+    }
+
+    const { data: boxes, error: fetchError } = await query;
 
     if (fetchError) {
       console.error("❌ Fetch error:", fetchError);
@@ -373,7 +381,7 @@ exports.bulkAssignToObject = async (boxIds, objectId, organisationId, userId) =>
     }
 
     if (!boxes || boxes.length === 0) {
-      console.error("❌ Keine Boxen gefunden für IDs:", boxIds);
+      console.error("❌ Keine Boxen gefunden für:", identifiers);
       return { success: false, message: "Keine gültigen Boxen gefunden" };
     }
 
