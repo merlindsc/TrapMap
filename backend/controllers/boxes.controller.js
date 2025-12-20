@@ -242,35 +242,48 @@ exports.bulkAssignToObject = async (req, res) => {
   try {
     const { box_ids, qr_codes, object_id } = req.body;
     
-    // Debug logging (only in development)
-    if (process.env.NODE_ENV !== 'production') {
-      console.log("📦 Bulk assign request:", { 
-        box_ids_count: box_ids?.length, 
-        qr_codes_count: qr_codes?.length, 
-        object_id,
-        box_ids_sample: box_ids?.slice(0, 3),
-        qr_codes_sample: qr_codes?.slice(0, 3)
-      });
-    }
+    // Ausführliches Debug-Logging
+    console.log("📦 Bulk assign request received:", {
+      has_qr_codes: !!qr_codes,
+      qr_codes_is_array: Array.isArray(qr_codes),
+      qr_codes_length: Array.isArray(qr_codes) ? qr_codes.length : 'n/a',
+      has_box_ids: !!box_ids,
+      box_ids_is_array: Array.isArray(box_ids),
+      box_ids_length: Array.isArray(box_ids) ? box_ids.length : 'n/a',
+      object_id: object_id,
+      raw_body: JSON.stringify(req.body).substring(0, 500)
+    });
     
-    // Accept either box_ids (legacy) or qr_codes (new, preferred)
-    const identifiers = qr_codes || box_ids;
-    const useQrCodes = !!qr_codes;
+    // ========================================
+    // FIX: Korrekte Prüfung auf nicht-leere Arrays
+    // ========================================
+    const hasValidQrCodes = Array.isArray(qr_codes) && qr_codes.length > 0;
+    const hasValidBoxIds = Array.isArray(box_ids) && box_ids.length > 0;
     
-    if (!identifiers || !Array.isArray(identifiers) || identifiers.length === 0) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.error("❌ Keine gültigen Identifikatoren:", { 
-          has_box_ids: !!box_ids, 
-          has_qr_codes: !!qr_codes 
-        });
-      }
+    let identifiers;
+    let useQrCodes;
+    
+    if (hasValidQrCodes) {
+      // Bevorzuge QR-Codes wenn vorhanden und nicht-leer
+      identifiers = qr_codes;
+      useQrCodes = true;
+      console.log("✅ Using QR codes:", qr_codes.slice(0, 5));
+    } else if (hasValidBoxIds) {
+      // Fallback auf Box-IDs
+      identifiers = box_ids;
+      useQrCodes = false;
+      console.log("✅ Using Box IDs:", box_ids.slice(0, 5));
+    } else {
+      // Weder noch - Fehler
+      console.error("❌ Keine gültigen Identifikatoren gefunden");
       return res.status(400).json({ 
         error: "qr_codes oder box_ids Array erforderlich",
-        debug: process.env.NODE_ENV !== 'production' ? {
-          received_box_ids: box_ids,
+        debug: {
           received_qr_codes: qr_codes,
-          received_object_id: object_id
-        } : undefined
+          received_box_ids: box_ids,
+          received_object_id: object_id,
+          hint: "Arrays müssen nicht-leer sein"
+        }
       });
     }
 
@@ -282,6 +295,8 @@ exports.bulkAssignToObject = async (req, res) => {
       return res.status(400).json({ error: "Maximal 100 Boxen auf einmal" });
     }
 
+    console.log(`📦 Calling service with ${identifiers.length} ${useQrCodes ? 'QR-Codes' : 'Box-IDs'}`);
+
     const result = await boxesService.bulkAssignToObject(
       identifiers,
       object_id,
@@ -291,6 +306,7 @@ exports.bulkAssignToObject = async (req, res) => {
     );
 
     if (!result.success) {
+      console.error("❌ Service returned error:", result.message);
       return res.status(400).json({ error: result.message });
     }
 
