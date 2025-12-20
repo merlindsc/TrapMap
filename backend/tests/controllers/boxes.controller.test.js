@@ -293,6 +293,43 @@ describe('Boxes Controller', () => {
       expect(response.body.error).toContain('qr_codes oder box_ids');
     });
 
+    it('should fallback to box_ids when qr_codes is empty array', async () => {
+      // This tests the critical bug fix: empty qr_codes array should fallback to box_ids
+      const mockResponse = {
+        success: true,
+        count: 3,
+        skipped: 0,
+        data: [
+          { id: 'box-1', object_id: 'object-id' },
+          { id: 'box-2', object_id: 'object-id' },
+          { id: 'box-3', object_id: 'object-id' }
+        ]
+      };
+
+      boxesService.bulkAssignToObject.mockResolvedValue(mockResponse);
+
+      const response = await request(app)
+        .post('/api/boxes/bulk-assign')
+        .set('Authorization', 'Bearer test-token')
+        .send({ 
+          qr_codes: [],  // Empty array (truthy but not valid)
+          box_ids: ['box-1', 'box-2', 'box-3'],  // Should use these instead
+          object_id: 'object-id' 
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.count).toBe(3);
+      // Verify service was called with box_ids (useQrCodes = false)
+      expect(boxesService.bulkAssignToObject).toHaveBeenCalledWith(
+        ['box-1', 'box-2', 'box-3'],
+        'object-id',
+        'test-org-id',
+        'test-user-id',
+        false  // useQrCodes should be false when falling back to box_ids
+      );
+    });
+
     it('should return error if trying to assign more than 100 boxes', async () => {
       const boxIds = Array.from({ length: 101 }, (_, i) => `box-${i}`);
       
