@@ -21,6 +21,7 @@ import {
   RocketLaunchIcon,
   CubeIcon
 } from "@heroicons/react/24/outline";
+import { extractQrCodesFromPoolBoxes } from "../../utils/boxUtils";
 import "./BoxPool.css";
 
 const API = import.meta.env.VITE_API_URL;
@@ -172,22 +173,23 @@ export default function BoxPool() {
       return;
     }
 
-    const boxesToAssign = poolBoxes.slice(0, count);
-    // ✅ Extrahiere Box-IDs korrekt aus QR-Code Objekten
-    const boxIds = boxesToAssign
-      .map(qr => qr.boxes?.id || qr.box_id)
-      .filter(Boolean);
+    // ✅ Verwende QR-Codes statt Box-IDs - QR-Codes sind immer unique!
+    const qrCodes = extractQrCodesFromPoolBoxes(poolBoxes, count);
     
-    if (boxIds.length === 0) {
+    if (qrCodes.length === 0) {
       setAssignMessage({ type: "error", text: "Keine gültigen Boxen gefunden" });
       return;
     }
 
+    if (qrCodes.length < count) {
+      console.warn(`⚠️ Nur ${qrCodes.length} von ${count} Boxen haben gültige QR-Codes`);
+    }
+
     setAssigning(true);
-    setAssignMessage({ type: "info", text: `Weise ${boxIds.length} Boxen zu...` });
+    setAssignMessage({ type: "info", text: `Weise ${qrCodes.length} Boxen zu...` });
 
     try {
-      // ✅ Verwende Bulk-Assign statt Loop
+      // ✅ Verwende qr_codes statt box_ids
       const res = await fetch(`${API}/boxes/bulk-assign`, {
         method: "POST",
         headers: {
@@ -195,7 +197,7 @@ export default function BoxPool() {
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({ 
-          box_ids: boxIds,
+          qr_codes: qrCodes,
           object_id: quickObjectId 
         })
       });
@@ -206,7 +208,7 @@ export default function BoxPool() {
         
         setAssignMessage({ 
           type: "success", 
-          text: `✓ ${data.count || boxIds.length} Boxen zu "${objName}" zugewiesen` 
+          text: `✓ ${data.count || qrCodes.length} Boxen zu "${objName}" zugewiesen` 
         });
       } else {
         const err = await res.json();

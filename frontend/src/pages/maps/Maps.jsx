@@ -18,7 +18,7 @@ import {
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { getBoxShortLabel, getBoxLabel } from "../../utils/boxUtils";
+import { getBoxShortLabel, getBoxLabel, extractQrCodesFromPoolBoxes } from "../../utils/boxUtils";
 
 // 🆕 Offline API Imports
 import { 
@@ -731,50 +731,60 @@ export default function Maps() {
       return;
     }
 
-    const boxesToAssign = poolBoxes.slice(0, count);
-    
+    // ✅ QR-Codes extrahieren - verschiedene Datenstrukturen unterstützen
+    const qrCodes = extractQrCodesFromPoolBoxes(poolBoxes, count);
+
+    if (qrCodes.length === 0) {
+      hapticError();
+      setRequestMessage({ type: "error", text: "Keine gültigen Boxen im Pool" });
+      return;
+    }
+
+    if (qrCodes.length < count) {
+      console.warn(`⚠️ Nur ${qrCodes.length} von ${count} Boxen haben gültige QR-Codes`);
+    }
+
     setRequesting(true);
-    setRequestMessage({ type: "info", text: `Weise ${count} Boxen zu...` });
+    setRequestMessage({ type: "info", text: `Weise ${qrCodes.length} Boxen zu...` });
 
-    let successCount = 0;
-    let errorCount = 0;
+    try {
+      // ✅ Bulk-Assign mit QR-Codes
+      const res = await fetch(`${API}/boxes/bulk-assign`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          qr_codes: qrCodes,
+          object_id: selectedObject.id
+        })
+      });
 
-    for (const qr of boxesToAssign) {
-      const boxId = qr.boxes?.id || qr.box_id;
-      if (!boxId) {
-        errorCount++;
-        continue;
-      }
-
-      try {
-        const res = await fetch(`${API}/boxes/${boxId}/assign`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify({ object_id: selectedObject.id })
+      if (res.ok) {
+        const data = await res.json();
+        hapticSuccess();
+        setRequestMessage({ 
+          type: "success", 
+          text: `✓ ${data.count} Boxen zugewiesen` 
         });
-
-        if (res.ok) successCount++;
-        else errorCount++;
-      } catch (err) {
-        errorCount++;
+        
+        // Reload data
+        await loadBoxes(selectedObject.id);
+        await loadPoolBoxes();
+        setRequestCount("");
+      } else {
+        const err = await res.json();
+        hapticError();
+        setRequestMessage({ type: "error", text: err.error || "Zuweisung fehlgeschlagen" });
       }
+    } catch (err) {
+      console.error("Request boxes error:", err);
+      hapticError();
+      setRequestMessage({ type: "error", text: "Netzwerkfehler" });
+    } finally {
+      setRequesting(false);
     }
-    
-    if (errorCount === 0) {
-      hapticSuccess(); // Haptic feedback on success
-      setRequestMessage({ type: "success", text: `✓ ${successCount} Boxen zugewiesen` });
-    } else {
-      hapticError(); // Haptic feedback on partial error
-      setRequestMessage({ type: "warning", text: `${successCount} OK, ${errorCount} Fehler` });
-    }
-
-    setRequestCount("");
-    loadBoxes(selectedObject.id);
-    loadPoolBoxes();
-    setRequesting(false);
 
     setTimeout(() => setRequestMessage(null), 3000);
   };

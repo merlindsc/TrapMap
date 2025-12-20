@@ -242,12 +242,36 @@ exports.bulkAssignToObject = async (req, res) => {
   try {
     const { box_ids, qr_codes, object_id } = req.body;
     
+    // Debug logging (only in development)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log("📦 Bulk assign request:", { 
+        box_ids_count: box_ids?.length, 
+        qr_codes_count: qr_codes?.length, 
+        object_id,
+        box_ids_sample: box_ids?.slice(0, 3),
+        qr_codes_sample: qr_codes?.slice(0, 3)
+      });
+    }
+    
     // Accept either box_ids (legacy) or qr_codes (new, preferred)
     const identifiers = qr_codes || box_ids;
     const useQrCodes = !!qr_codes;
     
     if (!identifiers || !Array.isArray(identifiers) || identifiers.length === 0) {
-      return res.status(400).json({ error: "qr_codes oder box_ids Array erforderlich" });
+      if (process.env.NODE_ENV !== 'production') {
+        console.error("❌ Keine gültigen Identifikatoren:", { 
+          has_box_ids: !!box_ids, 
+          has_qr_codes: !!qr_codes 
+        });
+      }
+      return res.status(400).json({ 
+        error: "qr_codes oder box_ids Array erforderlich",
+        debug: process.env.NODE_ENV !== 'production' ? {
+          received_box_ids: box_ids,
+          received_qr_codes: qr_codes,
+          received_object_id: object_id
+        } : undefined
+      });
     }
 
     if (!object_id) {
