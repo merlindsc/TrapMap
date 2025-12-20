@@ -73,3 +73,56 @@ export function getBoxLabelWithType(box) {
   const name = box.box_name ? ` ${box.box_name}` : '';
   return `${typeDisplay}${num}${name}`;
 }
+
+/**
+ * Validates if a string looks like a valid QR code
+ * QR codes typically follow patterns like "TM-123456", "DSE-0096", etc.
+ * @param {string} str - String to validate
+ * @returns {boolean} - True if looks like a valid QR code
+ */
+export function isValidQrCode(str) {
+  if (!str || typeof str !== 'string') return false;
+  // QR codes should have at least 3 characters and contain letters/numbers
+  // Most have a dash but not strictly required
+  return str.length >= 3 && /[A-Za-z]/.test(str) && /\d/.test(str);
+}
+
+/**
+ * Extracts QR code from a pool box object (from /qr/codes endpoint)
+ * Handles various data structures with fallbacks
+ * @param {Object} qrObj - QR code object from API
+ * @returns {string|null} - Extracted QR code or null if not found
+ */
+export function extractQrCodeFromPoolBox(qrObj) {
+  if (!qrObj) return null;
+  
+  // Try different property paths based on API structure
+  if (qrObj.qr_code) return qrObj.qr_code;
+  if (qrObj.boxes?.qr_code) return qrObj.boxes.qr_code;
+  if (qrObj.code) return qrObj.code;
+  
+  // Fallback: Use ID if it looks like a QR code
+  if (qrObj.id && isValidQrCode(qrObj.id)) {
+    return qrObj.id;
+  }
+  
+  return null;
+}
+
+/**
+ * Extracts QR codes from an array of pool box objects
+ * Filters out null/invalid values
+ * @param {Array} poolBoxes - Array of QR/box objects from API
+ * @param {number} count - Number of QR codes to extract
+ * @returns {Array<string>} - Array of valid QR codes
+ */
+export function extractQrCodesFromPoolBoxes(poolBoxes, count) {
+  if (!Array.isArray(poolBoxes) || count < 1) {
+    return [];
+  }
+  
+  return poolBoxes
+    .slice(0, count)
+    .map(extractQrCodeFromPoolBox)
+    .filter(qr => qr !== null && typeof qr === 'string' && qr.length > 0);
+}

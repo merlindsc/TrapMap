@@ -18,7 +18,7 @@ import {
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { getBoxShortLabel, getBoxLabel } from "../../utils/boxUtils";
+import { getBoxShortLabel, getBoxLabel, extractQrCodesFromPoolBoxes } from "../../utils/boxUtils";
 
 // 🆕 Offline API Imports
 import { 
@@ -732,16 +732,7 @@ export default function Maps() {
     }
 
     // ✅ QR-Codes extrahieren - verschiedene Datenstrukturen unterstützen
-    const qrCodes = poolBoxes
-      .slice(0, count)
-      .map(box => {
-        // Pool-Boxen können verschiedene Strukturen haben
-        if (box.qr_code) return box.qr_code;
-        if (box.boxes?.qr_code) return box.boxes.qr_code;
-        if (box.id && typeof box.id === 'string' && box.id.includes('-')) return box.id;
-        return null;
-      })
-      .filter(qr => qr !== null && typeof qr === 'string' && qr.length > 0);
+    const qrCodes = extractQrCodesFromPoolBoxes(poolBoxes, count);
 
     if (qrCodes.length === 0) {
       hapticError();

@@ -21,6 +21,7 @@ import {
   RocketLaunchIcon,
   CubeIcon
 } from "@heroicons/react/24/outline";
+import { extractQrCodesFromPoolBoxes } from "../../utils/boxUtils";
 import "./BoxPool.css";
 
 const API = import.meta.env.VITE_API_URL;
@@ -173,17 +174,7 @@ export default function BoxPool() {
     }
 
     // ✅ Verwende QR-Codes statt Box-IDs - QR-Codes sind immer unique!
-    const qrCodes = poolBoxes
-      .slice(0, count)
-      .map(qr => {
-        // Handle verschiedene Datenstrukturen
-        if (qr.qr_code) return qr.qr_code;
-        if (qr.boxes?.qr_code) return qr.boxes.qr_code;
-        if (qr.code) return qr.code;
-        if (qr.id && typeof qr.id === 'string' && qr.id.includes('-')) return qr.id;
-        return null;
-      })
-      .filter(qr => qr !== null && typeof qr === 'string' && qr.length > 0);
+    const qrCodes = extractQrCodesFromPoolBoxes(poolBoxes, count);
     
     if (qrCodes.length === 0) {
       setAssignMessage({ type: "error", text: "Keine gültigen Boxen gefunden" });
