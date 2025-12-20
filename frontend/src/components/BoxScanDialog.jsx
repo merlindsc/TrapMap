@@ -16,7 +16,7 @@
    ============================================================ */
 
 import { useState, useEffect, useRef } from "react";
-import { X, Save, Camera, Clock, CheckCircle, AlertCircle, Edit3, MapPin, Navigation, Maximize2, Hash, Archive, AlertTriangle, WifiOff, Cloud } from "lucide-react";
+import { X, Save, Camera, Clock, CheckCircle, AlertCircle, Edit3, MapPin, Navigation, Maximize2, Hash, Archive, AlertTriangle, WifiOff, Cloud, ArrowRight } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -335,6 +335,140 @@ function OfflineIndicator({ isOffline, pendingCount }) {
 }
 
 // ============================================
+// BOX TRANSFER DIALOG
+// ============================================
+function BoxTransferDialog({ 
+  box, 
+  objects, 
+  selectedObjectId, 
+  onSelectObject, 
+  onConfirm, 
+  onCancel, 
+  loading 
+}) {
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  const filteredObjects = objects.filter(obj => 
+    obj.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    obj.address?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)",
+      zIndex: 10002, display: "flex", alignItems: "center", justifyContent: "center",
+      padding: 20
+    }}>
+      <div style={{
+        background: "#161b22", borderRadius: 12, width: "100%", maxWidth: 400,
+        border: "1px solid #30363d", overflow: "hidden",
+        maxHeight: "80vh", display: "flex", flexDirection: "column"
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "16px 20px", background: "#21262d",
+          borderBottom: "1px solid #30363d"
+        }}>
+          <h3 style={{ 
+            margin: 0, fontSize: 15, fontWeight: 600, color: "#e6edf3",
+            display: "flex", alignItems: "center", gap: 8
+          }}>
+            <ArrowRight size={16} />
+            Box zu anderem Objekt verschieben
+          </h3>
+          <p style={{ margin: "6px 0 0", fontSize: 12, color: "#8b949e" }}>
+            Wähle das Zielobjekt für {box?.short_code || 'diese Box'}
+          </p>
+        </div>
+
+        {/* Search */}
+        <div style={{ padding: "12px 16px", borderBottom: "1px solid #30363d" }}>
+          <input
+            type="text"
+            placeholder="Objekt suchen..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{
+              width: "100%", padding: "8px 12px", borderRadius: 6,
+              border: "1px solid #30363d", background: "#0d1117",
+              color: "#e6edf3", fontSize: 13
+            }}
+          />
+        </div>
+
+        {/* Object List */}
+        <div style={{ 
+          flex: 1, overflowY: "auto", padding: "8px"
+        }}>
+          {filteredObjects.length === 0 ? (
+            <div style={{ 
+              padding: "32px 16px", textAlign: "center", 
+              color: "#8b949e", fontSize: 13 
+            }}>
+              Keine Objekte gefunden
+            </div>
+          ) : (
+            filteredObjects.map(obj => (
+              <button
+                key={obj.id}
+                onClick={() => onSelectObject(obj.id)}
+                style={{
+                  width: "100%", padding: "12px", marginBottom: 4,
+                  borderRadius: 6, border: "1px solid #30363d",
+                  background: selectedObjectId === obj.id ? "#1f6feb" : "#0d1117",
+                  color: "#e6edf3", fontSize: 13, textAlign: "left",
+                  cursor: "pointer", transition: "all 0.15s",
+                  display: "flex", flexDirection: "column", gap: 4
+                }}
+              >
+                <div style={{ fontWeight: 600 }}>{obj.name}</div>
+                {obj.address && (
+                  <div style={{ fontSize: 11, color: "#8b949e" }}>
+                    {obj.address}
+                  </div>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ 
+          padding: "12px 16px", background: "#21262d",
+          borderTop: "1px solid #30363d",
+          display: "flex", gap: 8
+        }}>
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            style={{
+              flex: 1, padding: "10px", borderRadius: 6,
+              border: "1px solid #30363d", background: "transparent",
+              color: "#8b949e", fontSize: 13, cursor: "pointer"
+            }}
+          >
+            Abbrechen
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading || !selectedObjectId}
+            style={{
+              flex: 1, padding: "10px", borderRadius: 6, border: "none",
+              background: (!selectedObjectId || loading) ? "#21262d" : "#238636",
+              color: "#fff", fontSize: 13, fontWeight: 600,
+              cursor: (!selectedObjectId || loading) ? "not-allowed" : "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6
+            }}
+          >
+            {loading ? "Verschieben..." : "Verschieben"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
 // HAUPTKOMPONENTE
 // ============================================
 export default function BoxScanDialog({ 
@@ -381,6 +515,12 @@ export default function BoxScanDialog({
   // State für Bestätigungsdialog
   const [showReturnConfirm, setShowReturnConfirm] = useState(false);
   const [returnLoading, setReturnLoading] = useState(false);
+
+  // State für Box-Transfer
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [transferLoading, setTransferLoading] = useState(false);
+  const [transferObjects, setTransferObjects] = useState([]);
+  const [selectedTargetObject, setSelectedTargetObject] = useState(null);
 
   // Box-Info
   const boxInfo = getBoxDisplayInfo(box);
@@ -582,6 +722,77 @@ export default function BoxScanDialog({
     }
   };
 
+  // 🆕 Box Transfer Handlers
+  const handleOpenTransferDialog = async () => {
+    try {
+      // Fetch all objects for selection
+      const token = localStorage.getItem("trapmap_token");
+      const API = import.meta.env.VITE_API_URL;
+      
+      const response = await fetch(`${API}/objects`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Filter out current object and Pool
+        const availableObjects = data.filter(obj => 
+          obj.id !== box.object_id && obj.id !== null
+        );
+        setTransferObjects(availableObjects);
+        setShowTransferDialog(true);
+      } else {
+        setToast({ type: "error", msg: "Objekte konnten nicht geladen werden" });
+      }
+    } catch (e) {
+      console.error("Error loading objects:", e);
+      setToast({ type: "error", msg: "Fehler beim Laden der Objekte" });
+    }
+  };
+
+  const handleTransferBox = async () => {
+    if (!selectedTargetObject) {
+      setToast({ type: "error", msg: "Bitte wähle ein Zielobjekt" });
+      return;
+    }
+
+    setTransferLoading(true);
+    try {
+      const token = localStorage.getItem("trapmap_token");
+      const API = import.meta.env.VITE_API_URL;
+
+      const response = await fetch(`${API}/boxes/${box.id}/move`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ target_object_id: selectedTargetObject })
+      });
+
+      if (response.ok) {
+        setToast({ type: "success", msg: "Box erfolgreich verschoben!" });
+        setShowTransferDialog(false);
+        
+        setTimeout(() => {
+          if (onSave) {
+            onSave();
+          } else {
+            onClose();
+          }
+        }, 600);
+      } else {
+        const error = await response.json();
+        throw new Error(error.message || "Fehler beim Verschieben");
+      }
+    } catch (e) {
+      console.error("Transfer error:", e);
+      setToast({ type: "error", msg: e.message });
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
   const getUserName = (scan) => {
     // 🆕 Offline-Scans kennzeichnen
     if (scan.offline || scan.pending) {
@@ -624,6 +835,22 @@ export default function BoxScanDialog({
           onCancel={() => setShowReturnConfirm(false)}
           loading={returnLoading}
           isOffline={currentlyOffline}
+        />
+      )}
+
+      {/* BOX TRANSFER DIALOG */}
+      {showTransferDialog && (
+        <BoxTransferDialog
+          box={box}
+          objects={transferObjects}
+          selectedObjectId={selectedTargetObject}
+          onSelectObject={setSelectedTargetObject}
+          onConfirm={handleTransferBox}
+          onCancel={() => {
+            setShowTransferDialog(false);
+            setSelectedTargetObject(null);
+          }}
+          loading={transferLoading}
         />
       )}
 
@@ -1183,6 +1410,35 @@ export default function BoxScanDialog({
                   }}
                 >
                   <Archive size={14}/> Zurück ins Lager
+                </button>
+              )}
+
+              {/* Transfer to Another Object Button */}
+              {box?.object_id && (
+                <button 
+                  onClick={handleOpenTransferDialog} 
+                  disabled={loading}
+                  style={{
+                    width: "100%", padding: "11px", borderRadius: 6, 
+                    border: "1px solid #30363d",
+                    background: "transparent", color: "#3b82f6",
+                    fontSize: 12, fontWeight: 500, 
+                    cursor: loading ? "not-allowed" : "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                    marginTop: 8, transition: "all 0.2s"
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!loading) {
+                      e.currentTarget.style.background = "rgba(59, 130, 246, 0.15)";
+                      e.currentTarget.style.borderColor = "#3b82f6";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.borderColor = "#30363d";
+                  }}
+                >
+                  <ArrowRight size={14}/> Zu anderem Objekt verschieben
                 </button>
               )}
             </div>
