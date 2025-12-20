@@ -138,8 +138,8 @@ export default function BoxPool() {
     
     return sourceBoxes
       .filter((box) => {
-        // Apply filter logic
-        if (filter === "pool" && box.object_id) return false;
+        // Apply filter logic (pool boxes don't need additional filtering)
+        if (filter === "pool") return true; // Already filtered by backend
         if (filter === "assigned") {
           const hasObject = !!box.object_id;
           const isPlaced = box.position_type && box.position_type !== "none";
@@ -242,7 +242,7 @@ export default function BoxPool() {
       console.warn("⚠️ Fallback: Using box IDs for assignment:", boxIds.length);
     }
 
-    const identifiersCount = (payload.qr_codes || payload.box_ids).length;
+    const identifiersCount = (payload.qr_codes || payload.box_ids || []).length;
     if (identifiersCount < count) {
       console.warn(`⚠️ Only ${identifiersCount} of ${count} boxes have valid identifiers`);
     }
@@ -263,7 +263,7 @@ export default function BoxPool() {
       if (res.ok) {
         const data = await res.json();
         const objName = objects.find(o => o.id == quickObjectId)?.name || "Objekt";
-        const assignedCount = data.count || (payload.qr_codes || payload.box_ids).length;
+        const assignedCount = data.count || (payload.qr_codes || payload.box_ids || []).length;
         
         setAssignMessage({ 
           type: "success", 
