@@ -83,28 +83,46 @@ async function createDemoQRCodesAndBoxes(organization, user) {
       throw boxTypeError;
     }
 
-    // 3. Create boxes in storage
+    // 3. Create boxes in storage with QR codes assigned
     console.log(`📦 Creating ${DEMO_BOX_COUNT} boxes for demo organization...`);
     
     const boxes = [];
     for (let i = 1; i <= DEMO_BOX_COUNT; i++) {
+      const qrCode = `${organization.qr_prefix}-${String(i).padStart(4, '0')}`;
       boxes.push({
         number: i,
+        qr_code: qrCode,
         box_name: `DEMO-${String(i).padStart(3, '0')}`,
         box_type_id: boxType.id,
         organisation_id: organization.id,
-        current_status: 'green',
-        status: 'pool',
+        current_status: null,
+        status: 'active',
+        object_id: null,
+        position_type: null,
         active: true,
         created_at: new Date().toISOString()
       });
     }
 
-    const { error: boxError } = await supabase
+    const { data: createdBoxes, error: boxError } = await supabase
       .from('boxes')
-      .insert(boxes);
+      .insert(boxes)
+      .select('id, qr_code');
 
     if (boxError) throw boxError;
+
+    // 4. Update qr_codes to link them with boxes and mark as assigned
+    if (createdBoxes && createdBoxes.length > 0) {
+      for (const box of createdBoxes) {
+        await supabase
+          .from('qr_codes')
+          .update({ 
+            box_id: box.id, 
+            assigned: true 
+          })
+          .eq('id', box.qr_code);
+      }
+    }
 
     console.log(`✅ Successfully created ${DEMO_QR_COUNT} QR codes and ${DEMO_BOX_COUNT} boxes for demo account`);
     
