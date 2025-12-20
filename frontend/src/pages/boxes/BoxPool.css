@@ -647,52 +647,246 @@
 }
 
 /* ============================================================
-   RESPONSIVE
+   RESPONSIVE - MOBILE OPTIMIZATIONS
    ============================================================ */
 @media (max-width: 768px) {
+  /* Page padding */
   .box-pool-page {
     padding: 16px;
   }
   
+  /* Header */
   .box-pool-header {
     flex-direction: column;
     align-items: flex-start;
   }
   
+  .box-pool-title {
+    font-size: 20px;
+  }
+  
+  .title-icon {
+    width: 24px;
+    height: 24px;
+  }
+  
+  /* Quick Assign Card - More compact on mobile */
+  .quick-assign-card {
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+  
+  .quick-assign-header h2 {
+    font-size: 15px;
+  }
+  
+  .quick-assign-icon {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .quick-assign-desc {
+    font-size: 12px;
+    margin-bottom: 14px;
+  }
+  
+  /* Quick Assign Form - Stack vertically on mobile */
   .quick-assign-form {
     flex-direction: column;
+    gap: 10px;
   }
   
+  .form-group {
+    width: 100%;
+    min-width: unset;
+  }
+  
+  .form-group.flex-grow {
+    flex: 1 1 auto;
+  }
+  
+  .form-group label {
+    font-size: 11px;
+  }
+  
+  /* Inputs - Full width and touch-friendly */
   .count-input {
     width: 100%;
+    padding: 12px 14px;
+    font-size: 16px; /* Prevent zoom on iOS */
+    min-height: 44px; /* Touch target */
   }
   
+  .object-select {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 14px;
+    min-height: 44px; /* Touch target */
+  }
+  
+  /* Assign Button - Full width on mobile */
   .assign-btn {
     width: 100%;
     justify-content: center;
+    padding: 12px 20px;
+    min-height: 44px; /* Touch target */
+    font-size: 15px;
   }
   
+  /* Pool Info - More compact */
+  .pool-info {
+    padding: 8px 10px;
+    margin-top: 10px;
+  }
+  
+  .pool-info span {
+    font-size: 12px;
+  }
+  
+  .pool-info-icon {
+    width: 14px;
+    height: 14px;
+  }
+  
+  /* Assign Message */
+  .assign-message {
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+  
+  /* Stats Grid - 2 columns on mobile */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  
+  .stat-card {
+    padding: 10px;
+  }
+  
+  .stat-label {
+    font-size: 10px;
+  }
+  
+  .stat-value {
+    font-size: 20px;
+  }
+  
+  /* Search */
+  .search-wrapper {
+    max-width: 100%;
+  }
+  
+  .search-input {
+    font-size: 14px;
+  }
+  
+  /* Box Rows - Stack on mobile */
   .box-row {
     flex-wrap: wrap;
+    padding: 10px 12px;
+    gap: 10px;
   }
   
+  .box-number {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .box-number span {
+    font-size: 13px;
+  }
+  
+  .box-number span.small {
+    font-size: 10px;
+  }
+  
+  .box-info {
+    flex: 1 1 auto;
+    min-width: 120px;
+  }
+  
+  .box-qr span {
+    font-size: 10px;
+  }
+  
+  .box-object {
+    font-size: 12px;
+  }
+  
+  /* Status Badge - Move to top right */
   .status-badge {
     order: -1;
     margin-left: auto;
+    font-size: 11px;
+    padding: 3px 8px;
   }
   
+  .status-icon {
+    width: 11px;
+    height: 11px;
+  }
+  
+  /* Action Buttons - Full width on mobile */
   .action-btn {
     width: 100%;
     justify-content: center;
     margin-top: 8px;
+    min-height: 44px; /* Touch target */
+    font-size: 14px;
   }
   
+  /* Assign Dropdown - Stack vertically */
   .assign-dropdown {
     width: 100%;
     flex-direction: column;
+    gap: 8px;
   }
   
   .assign-select {
     width: 100%;
+    min-height: 44px;
+    font-size: 14px;
+  }
+  
+  .cancel-btn {
+    width: 100%;
+    min-height: 44px;
+    font-size: 14px;
+  }
+  
+  /* More boxes summary */
+  .more-boxes-summary {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+  
+  .chevron-icon {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+/* Extra small devices (phones in portrait, less than 375px) */
+@media (max-width: 374px) {
+  .box-pool-page {
+    padding: 12px;
+  }
+  
+  .quick-assign-card {
+    padding: 12px;
+  }
+  
+  .box-pool-title {
+    font-size: 18px;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .stat-value {
+    font-size: 18px;
   }
 }

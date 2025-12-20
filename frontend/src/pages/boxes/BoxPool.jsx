@@ -53,12 +53,22 @@ export default function BoxPool() {
     setLoading(true);
     try {
       const [boxRes, objRes] = await Promise.all([
-        fetch(`${API}/qr/codes`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API}/boxes/pool`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`${API}/objects`, { headers: { Authorization: `Bearer ${token}` } })
       ]);
 
       if (boxRes.ok) {
         const data = await boxRes.json();
+        console.log("📦 Pool boxes loaded:", data?.length || 0, "boxes");
+        // Debug: Show first box structure
+        if (data && data.length > 0) {
+          console.log("📦 First box structure:", {
+            id: data[0].id,
+            qr_code: data[0].qr_code,
+            number: data[0].number,
+            object_id: data[0].object_id
+          });
+        }
         setBoxes(data || []);
       }
       
@@ -67,7 +77,7 @@ export default function BoxPool() {
         setObjects(Array.isArray(data) ? data : data.data || []);
       }
     } catch (err) {
-      console.error("Load error:", err);
+      console.error("❌ Load error:", err);
     } finally {
       setLoading(false);
     }
@@ -77,47 +87,54 @@ export default function BoxPool() {
     loadData();
   }, [loadData]);
 
-  // Nummer extrahieren
-  const extractNumber = (qr) => {
-    if (qr.sequence_number != null && !isNaN(qr.sequence_number)) {
-      return qr.sequence_number;
+  // Nummer extrahieren - Arbeitet jetzt mit flacher Box-Struktur
+  const extractNumber = (box) => {
+    // Direkt von box.number
+    if (box.number != null && !isNaN(box.number)) {
+      return box.number;
     }
-    if (qr.boxes?.number != null && !isNaN(qr.boxes.number)) {
-      return qr.boxes.number;
+    // Aus QR-Code extrahieren (z.B. "DSE-0096" -> 96)
+    if (box.qr_code) {
+      const match = box.qr_code.match(/(\d+)$/);
+      if (match) {
+        return parseInt(match[1], 10);
+      }
     }
-    const match = qr.id?.match(/(\d+)$/);
-    if (match) {
-      return parseInt(match[1], 10);
+    // Fallback: Aus ID extrahieren
+    if (box.id) {
+      const match = box.id.match(/(\d+)$/);
+      if (match) {
+        return parseInt(match[1], 10);
+      }
     }
     return 999999;
   };
 
-  // Stats berechnen
+  // Stats berechnen - Jetzt mit flacher Struktur
   const stats = useMemo(() => ({
-    pool: boxes.filter((q) => !q.boxes?.object_id).length,
-    assigned: boxes.filter((q) => q.boxes?.object_id && (!q.boxes?.position_type || q.boxes?.position_type === "none")).length,
-    placed: boxes.filter((q) => q.boxes?.position_type && q.boxes?.position_type !== "none").length,
+    pool: boxes.filter((box) => !box.object_id).length,
+    assigned: boxes.filter((box) => box.object_id && (!box.position_type || box.position_type === "none")).length,
+    placed: boxes.filter((box) => box.position_type && box.position_type !== "none").length,
     total: boxes.length
   }), [boxes]);
 
-  // Gefilterte & sortierte Boxen
+  // Gefilterte & sortierte Boxen - Flache Struktur
   const filteredBoxes = useMemo(() => {
     return boxes
-      .filter((qr) => {
-        const box = qr.boxes;
-        if (filter === "pool" && box?.object_id) return false;
+      .filter((box) => {
+        if (filter === "pool" && box.object_id) return false;
         if (filter === "assigned") {
-          const hasObject = !!box?.object_id;
-          const isPlaced = box?.position_type && box?.position_type !== "none";
+          const hasObject = !!box.object_id;
+          const isPlaced = box.position_type && box.position_type !== "none";
           if (!hasObject || isPlaced) return false;
         }
-        if (filter === "placed" && (!box?.position_type || box?.position_type === "none")) return false;
+        if (filter === "placed" && (!box.position_type || box.position_type === "none")) return false;
 
         if (search) {
           const term = search.toLowerCase();
-          const matchCode = qr.id?.toLowerCase().includes(term);
-          const matchNumber = extractNumber(qr).toString().includes(term);
-          const matchObject = box?.objects?.name?.toLowerCase().includes(term);
+          const matchCode = box.qr_code?.toLowerCase().includes(term);
+          const matchNumber = extractNumber(box).toString().includes(term);
+          const matchObject = box.objects?.name?.toLowerCase().includes(term);
           if (!matchCode && !matchNumber && !matchObject) return false;
         }
         return true;
@@ -125,14 +142,14 @@ export default function BoxPool() {
       .sort((a, b) => extractNumber(a) - extractNumber(b));
   }, [boxes, filter, search]);
 
-  // Nur Pool-Boxen (verfügbar für Zuweisung)
+  // Nur Pool-Boxen (verfügbar für Zuweisung) - Flache Struktur
   const poolBoxes = useMemo(() => {
     return boxes
-      .filter(qr => !qr.boxes?.object_id)
+      .filter(box => !box.object_id)
       .sort((a, b) => extractNumber(a) - extractNumber(b));
   }, [boxes]);
 
-  // Status-Badge
+  // Status-Badge - Direkter Zugriff auf Box-Properties
   const getStatusBadge = (box) => {
     if (!box) return { label: "Fehler", color: "red", Icon: ExclamationCircleIcon };
     if (!box.object_id) return { label: "Im Lager", color: "gray", Icon: ArchiveBoxIcon };
@@ -176,7 +193,10 @@ export default function BoxPool() {
     // ✅ Verwende QR-Codes statt Box-IDs - QR-Codes sind immer unique!
     const qrCodes = extractQrCodesFromPoolBoxes(poolBoxes, count);
     
+    console.log("📦 Quick assign:", { count, available: poolBoxes.length, extracted: qrCodes.length });
+    
     if (qrCodes.length === 0) {
+      console.error("❌ Keine gültigen QR-Codes extrahiert");
       setAssignMessage({ type: "error", text: "Keine gültigen Boxen gefunden" });
       return;
     }
@@ -230,11 +250,16 @@ export default function BoxPool() {
     }
   };
 
-  // Einzelne Box zuweisen
-  const handleSingleAssign = async (qr, objectId) => {
-    const boxId = qr.boxes?.id || qr.box_id;
-    if (!boxId || !objectId) return;
+  // Einzelne Box zuweisen - Box-ID ist jetzt direkt verfügbar
+  const handleSingleAssign = async (box, objectId) => {
+    const boxId = box.id;
+    if (!boxId || !objectId) {
+      console.error("❌ Missing boxId or objectId:", { boxId, objectId });
+      return;
+    }
 
+    console.log("📦 Single assign:", { boxId, qr_code: box.qr_code, objectId });
+    
     setAssigning(true);
     try {
       const res = await fetch(`${API}/boxes/${boxId}/assign`, {
@@ -247,12 +272,15 @@ export default function BoxPool() {
       });
 
       if (res.ok) {
+        console.log("✅ Box assigned successfully");
         loadData();
       } else {
         const err = await res.json();
+        console.error("❌ Assign failed:", err);
         alert(err.error || "Fehler beim Zuweisen");
       }
     } catch (err) {
+      console.error("❌ Network error:", err);
       alert("Netzwerkfehler");
     } finally {
       setAssigning(false);
@@ -428,10 +456,10 @@ export default function BoxPool() {
       ) : (
         <>
           <div className="box-list">
-            {first10Boxes.map(qr => (
+            {first10Boxes.map(box => (
               <BoxRow 
-                key={qr.id} 
-                qr={qr} 
+                key={box.id} 
+                box={box} 
                 extractNumber={extractNumber}
                 getStatusBadge={getStatusBadge}
                 activeObjects={activeObjects}
@@ -451,10 +479,10 @@ export default function BoxPool() {
               </summary>
               
               <div className="box-list">
-                {remainingBoxes.map(qr => (
+                {remainingBoxes.map(box => (
                   <BoxRow 
-                    key={qr.id} 
-                    qr={qr} 
+                    key={box.id} 
+                    box={box} 
                     extractNumber={extractNumber}
                     getStatusBadge={getStatusBadge}
                     activeObjects={activeObjects}
@@ -473,14 +501,13 @@ export default function BoxPool() {
 }
 
 // ============================================
-// BOX ROW COMPONENT
+// BOX ROW COMPONENT - Flache Box-Struktur
 // ============================================
-function BoxRow({ qr, extractNumber, getStatusBadge, activeObjects, onAssign, assigning, navigate }) {
+function BoxRow({ box, extractNumber, getStatusBadge, activeObjects, onAssign, assigning, navigate }) {
   const [showAssign, setShowAssign] = useState(false);
-  const box = qr.boxes;
   const status = getStatusBadge(box);
   const StatusIcon = status.Icon;
-  const num = extractNumber(qr);
+  const num = extractNumber(box);
 
   return (
     <div className={`box-row status-${status.color}`}>
@@ -495,10 +522,10 @@ function BoxRow({ qr, extractNumber, getStatusBadge, activeObjects, onAssign, as
       <div className="box-info">
         <div className="box-qr">
           <QrCodeIcon className="qr-icon" />
-          <span>{qr.id}</span>
+          <span>{box.qr_code || box.id}</span>
         </div>
         <div className="box-object">
-          {box?.objects?.name || <span className="no-object">Kein Objekt</span>}
+          {box.objects?.name || <span className="no-object">Kein Objekt</span>}
         </div>
       </div>
 
@@ -509,14 +536,14 @@ function BoxRow({ qr, extractNumber, getStatusBadge, activeObjects, onAssign, as
       </div>
 
       {/* Actions */}
-      {!box?.object_id ? (
+      {!box.object_id ? (
         showAssign ? (
           <div className="assign-dropdown">
             <select
               autoFocus
               onChange={(e) => {
                 if (e.target.value) {
-                  onAssign(qr, e.target.value);
+                  onAssign(box, e.target.value);
                   setShowAssign(false);
                 }
               }}
