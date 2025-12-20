@@ -266,10 +266,11 @@ exports.generateCodesForOrder = async (orderId) => {
           organisation_id: order.organisation_id,
           qr_code: codeId,
           number: i,
-          status: 'pool',
-          position_type: 'none',
-          current_status: 'green',
-          active: true
+          status: 'active',
+          position_type: null,
+          current_status: null,
+          active: true,
+          object_id: null
         })
         .select()
         .single();
