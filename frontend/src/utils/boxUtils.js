@@ -99,7 +99,8 @@ export function extractQrCodeFromPoolBox(qrObj) {
   // ✅ FIX: Bei /qr/codes Response ist "id" der QR-Code!
   // Prüfe das ZUERST, da es das häufigste Format ist
   // QR-Codes haben typischerweise Format wie "DSE-0096" oder "TM-00001234"
-  if (typeof qrObj.id === 'string' && qrObj.id.includes('-') && qrObj.id.length >= 3) {
+  // Verwendet weniger strenge Validierung als isValidQrCode() um false negatives zu vermeiden
+  if (typeof qrObj.id === 'string' && qrObj.id.includes('-') && qrObj.id.length >= 5) {
     return qrObj.id;
   }
   
