@@ -204,7 +204,35 @@ describe('Boxes Controller', () => {
   });
 
   describe('POST /api/boxes/bulk-assign - Bulk assign boxes to object', () => {
-    it('should assign multiple boxes to an object', async () => {
+    it('should assign multiple boxes to an object using qr_codes', async () => {
+      const mockResponse = {
+        success: true,
+        count: 3,
+        skipped: 0,
+        data: [
+          { id: 'box-1', qr_code: 'DSE-0001', object_id: 'object-id' },
+          { id: 'box-2', qr_code: 'DSE-0002', object_id: 'object-id' },
+          { id: 'box-3', qr_code: 'DSE-0003', object_id: 'object-id' }
+        ]
+      };
+
+      boxesService.bulkAssignToObject.mockResolvedValue(mockResponse);
+
+      const response = await request(app)
+        .post('/api/boxes/bulk-assign')
+        .set('Authorization', 'Bearer test-token')
+        .send({ 
+          qr_codes: ['DSE-0001', 'DSE-0002', 'DSE-0003'],
+          object_id: 'object-id' 
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.count).toBe(3);
+      expect(response.body.skipped).toBe(0);
+    });
+
+    it('should assign multiple boxes to an object using box_ids (legacy)', async () => {
       const mockResponse = {
         success: true,
         count: 3,
@@ -232,14 +260,14 @@ describe('Boxes Controller', () => {
       expect(response.body.skipped).toBe(0);
     });
 
-    it('should return error if box_ids is not provided', async () => {
+    it('should return error if neither qr_codes nor box_ids is provided', async () => {
       const response = await request(app)
         .post('/api/boxes/bulk-assign')
         .set('Authorization', 'Bearer test-token')
         .send({ object_id: 'object-id' });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toContain('box_ids');
+      expect(response.body.error).toContain('qr_codes oder box_ids');
     });
 
     it('should return error if object_id is not provided', async () => {
@@ -252,17 +280,17 @@ describe('Boxes Controller', () => {
       expect(response.body.error).toContain('object_id');
     });
 
-    it('should return error if box_ids array is empty', async () => {
+    it('should return error if qr_codes array is empty', async () => {
       const response = await request(app)
         .post('/api/boxes/bulk-assign')
         .set('Authorization', 'Bearer test-token')
         .send({ 
-          box_ids: [],
+          qr_codes: [],
           object_id: 'object-id' 
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toContain('box_ids');
+      expect(response.body.error).toContain('qr_codes oder box_ids');
     });
 
     it('should return error if trying to assign more than 100 boxes', async () => {
@@ -304,6 +332,57 @@ describe('Boxes Controller', () => {
       expect(response.status).toBe(200);
       expect(response.body.count).toBe(2);
       expect(response.body.skipped).toBe(1);
+    });
+  });
+
+  describe('GET /api/boxes/pool - Get pool boxes', () => {
+    it('should return only boxes without object_id and with valid qr_codes', async () => {
+      const mockPoolBoxes = [
+        {
+          id: 'box-1',
+          qr_code: 'DSE-0001',
+          number: 1,
+          object_id: null,
+          status: 'active'
+        },
+        {
+          id: 'box-2',
+          qr_code: 'DSE-0002',
+          number: 2,
+          object_id: null,
+          status: 'active'
+        }
+      ];
+
+      boxesService.getPoolBoxes.mockResolvedValue({
+        success: true,
+        data: mockPoolBoxes
+      });
+
+      const response = await request(app)
+        .get('/api/boxes/pool')
+        .set('Authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveLength(2);
+      expect(response.body[0].qr_code).toBe('DSE-0001');
+      expect(response.body[0].object_id).toBeNull();
+      expect(response.body[1].qr_code).toBe('DSE-0002');
+      expect(response.body[1].object_id).toBeNull();
+    });
+
+    it('should not return boxes without qr_code', async () => {
+      boxesService.getPoolBoxes.mockResolvedValue({
+        success: true,
+        data: [] // Backend filters out boxes without qr_code
+      });
+
+      const response = await request(app)
+        .get('/api/boxes/pool')
+        .set('Authorization', 'Bearer test-token');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveLength(0);
     });
   });
 });

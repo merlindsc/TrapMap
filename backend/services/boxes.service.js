@@ -253,12 +253,19 @@ exports.getPoolBoxes = async (organisationId) => {
     const { data, error } = await supabase
       .from("boxes")
       .select(`
-        *,
+        id,
+        qr_code,
+        number,
+        display_number,
+        status,
+        current_status,
+        box_type_id,
         box_types ( id, name, category )
       `)
       .eq("organisation_id", organisationId)
       .is("object_id", null)
-      .neq("status", "archived");
+      .neq("status", "archived")
+      .not("qr_code", "is", null);
 
     if (error) throw error;
 
