@@ -88,9 +88,11 @@ async function createDemoQRCodesAndBoxes(organization, user) {
     
     const boxes = [];
     for (let i = 1; i <= DEMO_BOX_COUNT; i++) {
+      const qrCode = `${organization.qr_prefix}-${String(i).padStart(4, '0')}`;
       boxes.push({
         number: i,
         box_name: `DEMO-${String(i).padStart(3, '0')}`,
+        qr_code: qrCode,
         box_type_id: boxType.id,
         organisation_id: organization.id,
         current_status: 'green',
