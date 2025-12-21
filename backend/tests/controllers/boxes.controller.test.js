@@ -350,6 +350,8 @@ describe('Boxes Controller', () => {
         success: true,
         count: 2,
         skipped: 1,
+        skipped_reason: 'already_assigned',
+        skipped_codes: ['DSE-0003'],
         data: [
           { id: 'box-1', object_id: 'object-id' },
           { id: 'box-2', object_id: 'object-id' }
@@ -369,6 +371,40 @@ describe('Boxes Controller', () => {
       expect(response.status).toBe(200);
       expect(response.body.count).toBe(2);
       expect(response.body.skipped).toBe(1);
+      expect(response.body.skipped_reason).toBe('already_assigned');
+      expect(response.body.skipped_codes).toEqual(['DSE-0003']);
+    });
+
+    it('should return detailed info about skipped boxes when using qr_codes', async () => {
+      const mockResponse = {
+        success: true,
+        count: 1,
+        skipped: 2,
+        skipped_reason: 'already_assigned',
+        skipped_codes: ['DSE-0002', 'DSE-0003'],
+        data: [
+          { id: 'box-1', qr_code: 'DSE-0001', object_id: 'object-id' }
+        ]
+      };
+
+      boxesService.bulkAssignToObject.mockResolvedValue(mockResponse);
+
+      const response = await request(app)
+        .post('/api/boxes/bulk-assign')
+        .set('Authorization', 'Bearer test-token')
+        .send({ 
+          qr_codes: ['DSE-0001', 'DSE-0002', 'DSE-0003'],
+          object_id: 'object-id' 
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.count).toBe(1);
+      expect(response.body.skipped).toBe(2);
+      expect(response.body.skipped_reason).toBe('already_assigned');
+      expect(response.body.skipped_codes).toHaveLength(2);
+      expect(response.body.skipped_codes).toContain('DSE-0002');
+      expect(response.body.skipped_codes).toContain('DSE-0003');
     });
   });
 

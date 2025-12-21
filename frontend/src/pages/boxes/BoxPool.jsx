@@ -268,11 +268,20 @@ export default function BoxPool() {
 
       if (res.ok) {
         const objName = objects.find(o => o.id == quickObjectId)?.name || "Objekt";
-        const assignedCount = responseData.count || (payload.qr_codes || payload.box_ids || []).length;
+        const assignedCount = responseData.count || 0;
+        const skippedCount = responseData.skipped || 0;
+        
+        // Build user-friendly message
+        let message;
+        if (skippedCount > 0) {
+          message = `✓ ${assignedCount} von ${assignedCount + skippedCount} Boxen zu "${objName}" zugewiesen (${skippedCount} bereits vergeben)`;
+        } else {
+          message = `✓ ${assignedCount} Boxen zu "${objName}" zugewiesen`;
+        }
         
         setAssignMessage({ 
           type: "success", 
-          text: `✓ ${assignedCount} Boxen zu "${objName}" zugewiesen` 
+          text: message
         });
       } else {
         console.error("❌ Bulk assign failed:", responseData);
@@ -289,7 +298,12 @@ export default function BoxPool() {
       });
     } finally {
       setQuickCount("");
-      loadData();
+      // Always reload data after assignment attempt to reflect current state
+      try {
+        await loadData();
+      } catch (error) {
+        console.error("Failed to reload data after assignment:", error);
+      }
       setAssigning(false);
     }
   };

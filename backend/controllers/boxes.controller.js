@@ -315,6 +315,8 @@ exports.bulkAssignToObject = async (req, res) => {
       success: true, 
       count: result.count,
       skipped: result.skipped || 0,
+      skipped_reason: result.skipped_reason || null,
+      skipped_codes: result.skipped_codes || [],
       data: result.data
     });
   } catch (err) {
