@@ -268,11 +268,23 @@ export default function BoxPool() {
 
       if (res.ok) {
         const objName = objects.find(o => o.id == quickObjectId)?.name || "Objekt";
-        const assignedCount = responseData.count || (payload.qr_codes || payload.box_ids || []).length;
+        const assignedCount = responseData.count || 0;
+        const skippedCount = responseData.skipped || 0;
+        
+        // Reload pool data immediately after successful assignment
+        await loadData();
+        
+        // Build user-friendly message
+        let message;
+        if (skippedCount > 0) {
+          message = `✓ ${assignedCount} von ${assignedCount + skippedCount} Boxen zu "${objName}" zugewiesen (${skippedCount} bereits vergeben)`;
+        } else {
+          message = `✓ ${assignedCount} Boxen zu "${objName}" zugewiesen`;
+        }
         
         setAssignMessage({ 
           type: "success", 
-          text: `✓ ${assignedCount} Boxen zu "${objName}" zugewiesen` 
+          text: message
         });
       } else {
         console.error("❌ Bulk assign failed:", responseData);
@@ -280,6 +292,8 @@ export default function BoxPool() {
           type: "error", 
           text: responseData.error || "Zuweisung fehlgeschlagen" 
         });
+        // Reload data even on error to reflect current state
+        await loadData();
       }
     } catch (err) {
       console.error("Bulk assign error:", err);
@@ -287,9 +301,10 @@ export default function BoxPool() {
         type: "error", 
         text: "Netzwerkfehler beim Zuweisen" 
       });
+      // Reload data even on network error to refresh state
+      await loadData();
     } finally {
       setQuickCount("");
-      loadData();
       setAssigning(false);
     }
   };

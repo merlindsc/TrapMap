@@ -228,8 +228,18 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
           if (boxRes.ok) {
             const boxData = await boxRes.json();
             console.log(`✅ ${boxData.count} Boxen zugewiesen, ${boxData.skipped || 0} übersprungen`);
+            
+            // Reload pool data after assignment
+            await loadPoolBoxes();
+            
+            // Show user-friendly message if some boxes were skipped
             if (boxData.skipped > 0) {
-              console.warn("⚠️ Einige Boxen wurden übersprungen (bereits zugewiesen?)");
+              console.warn(`⚠️ ${boxData.skipped} Boxen wurden übersprungen (bereits zugewiesen)`);
+              const skippedInfo = boxData.skipped_codes && boxData.skipped_codes.length > 0 
+                ? ` (${boxData.skipped_codes.slice(0, 3).join(', ')}${boxData.skipped_codes.length > 3 ? '...' : ''})`
+                : '';
+              // Note: We don't show an error, just log it - the object was created successfully
+              console.info(`ℹ️ ${boxData.count} von ${qrCodesArray.length} Boxen zugewiesen${skippedInfo}`);
             }
           } else {
             const errorData = await boxRes.json();
