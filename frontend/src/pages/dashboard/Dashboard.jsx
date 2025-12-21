@@ -8,20 +8,20 @@
    ============================================================ */
 
 import React, { useEffect, useState, useMemo } from "react";
-import {
-  Package, BarChart3, AlertTriangle, Radio,
+import { 
+  Package, BarChart3, AlertTriangle, Radio, 
   TrendingUp, CheckCircle, XCircle, Clock,
   ChevronDown, X, ArrowLeft, Calendar,
   Building2, Filter, ExternalLink, WifiOff
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import "./DashboardV5.css";
+import "./Dashboard.css";
 
 // 🆕 Offline API statt axios
-import {
-  getObjects,
-  getBoxes,
-  isOnline
+import { 
+  getObjects, 
+  getBoxes, 
+  isOnline 
 } from "../../utils/offlineAPI";
 import { useOffline } from "../../context/OfflineContext";
 import { getRecentScans as fetchRecentScans } from "../../api/dashboard";
@@ -36,7 +36,7 @@ export default function Dashboard() {
   const [objects, setObjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
+  
   // 🆕 Offline-Status
   const { isOffline } = useOffline();
 
@@ -74,32 +74,16 @@ export default function Dashboard() {
 
       // Dashboard-Stats aus geladenen Daten berechnen
       const stats = calculateStats(boxes);
-      const getEnhancedScans = (scans) => {
-        return scans.map(scan => {
-          // Loose comparison for safety
-          const localBox = boxes.find(b => b.id == scan.box_id);
-          const qrCode = localBox ? localBox.qr_code : scan.box_qr_code;
-          // Prefer QR Code -> Name -> ID
-          const boxName = localBox ? (localBox.qr_code || localBox.name) : (scan.box_qr_code || scan.box_name);
-
-          return {
-            ...scan,
-            box_name: boxName || `Box ${scan.box_id}`,
-            box_qr_code: qrCode
-          };
-        });
-      };
-
       // Echte Scans verwenden wenn vorhanden, sonst aus Boxen extrahieren
-      const recentScans = (Array.isArray(scansData) && scansData.length > 0)
-        ? getEnhancedScans(scansData)
+      const recentScans = (Array.isArray(scansData) && scansData.length > 0) 
+        ? scansData 
         : extractRecentScans(boxes);
 
-      console.log("📊 Dashboard geladen:", {
-        boxes: boxes.length,
+      console.log("📊 Dashboard geladen:", { 
+        boxes: boxes.length, 
         objects: objects.length,
         scans: recentScans.length,
-        offline: boxesResult.offline || objectsResult.offline
+        offline: boxesResult.offline || objectsResult.offline 
       });
 
       setStats(stats);
@@ -122,7 +106,7 @@ export default function Dashboard() {
   function calculateStats(boxes) {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
+    
     let green = 0, yellow = 0, orange = 0, red = 0;
     let scansToday = 0;
     let warnings = 0;
@@ -170,7 +154,7 @@ export default function Dashboard() {
       .map(box => ({
         id: `box-${box.id}`,
         box_id: box.id,
-        box_name: box.qr_code || box.name || `Box ${box.id}`,
+        box_name: box.name || `Box ${box.id}`,
         box_qr_code: box.qr_code,
         object_id: box.object_id,
         object_name: box.object_name,
@@ -204,10 +188,10 @@ export default function Dashboard() {
     const now = new Date();
     return allBoxes.filter(box => {
       if (!box.last_scan || box.status === 'archived') return false;
-
+      
       const lastScan = new Date(box.last_scan);
       const daysSince = Math.floor((now - lastScan) / (1000 * 60 * 60 * 24));
-
+      
       // Check gegen Kontrollintervall
       if (box.control_interval_type === 'range') {
         return daysSince > (box.control_interval_max || 30);
@@ -257,13 +241,6 @@ export default function Dashboard() {
 
   const safeStats = stats || {};
 
-  const statsData = [
-    { label: "Aktive Boxen", value: filterByObject(allBoxes).length, icon: Package, color: "indigo", viewName: "boxes", clickable: true },
-    { label: "Scans heute", value: safeStats.scansToday || 0, icon: BarChart3, color: "green", viewName: "scans", clickable: true },
-    { label: "Überfällig", value: filterByObject(overdueBoxes).length, icon: AlertTriangle, color: "yellow", viewName: "warnings", clickable: true, highlight: filterByObject(overdueBoxes).length > 0 },
-    { label: "Letzte Sync", value: formatTime(safeStats.lastSync), icon: Radio, color: "purple", isText: true }
-  ];
-
   return (
     <div className="dashboard">
       {/* Header mit Objekt-Filter */}
@@ -282,7 +259,7 @@ export default function Dashboard() {
               {activeView === "scans" && "Letzte Scans"}
               {activeView === "boxes" && "Alle Boxen"}
             </h1>
-            <p className="dashboard-subtitle text-slate-600 dark:text-slate-400">
+            <p className="dashboard-subtitle">
               {activeView === "overview" && "Übersicht über alle Aktivitäten"}
               {activeView === "warnings" && `${filterByObject(sortByNumber(overdueBoxes)).length} Boxen über Kontrollintervall`}
               {activeView === "status" && `${filterByObject(sortByNumber(boxesByStatus[selectedStatus] || [])).length} Boxen mit diesem Status`}
@@ -303,36 +280,36 @@ export default function Dashboard() {
 
           {/* Objekt-Filter */}
           <div className="object-filter">
-            <button
+            <button 
               className="object-filter-btn"
-              onClick={() => setObjectDropdownOpen(!objectDropdownOpen)}
-            >
-              <Building2 size={18} />
-              <span>{selectedObject === 'all' ? 'Alle Objekte' : getObjectName(selectedObject)}</span>
-              <ChevronDown size={16} className={objectDropdownOpen ? 'rotated' : ''} />
-            </button>
+            onClick={() => setObjectDropdownOpen(!objectDropdownOpen)}
+          >
+            <Building2 size={18} />
+            <span>{selectedObject === 'all' ? 'Alle Objekte' : getObjectName(selectedObject)}</span>
+            <ChevronDown size={16} className={objectDropdownOpen ? 'rotated' : ''} />
+          </button>
 
-            {objectDropdownOpen && (
-              <div className="object-dropdown">
-                <div
-                  className={`dropdown-item ${selectedObject === 'all' ? 'active' : ''}`}
-                  onClick={() => { setSelectedObject('all'); setObjectDropdownOpen(false); }}
-                >
-                  <Filter size={16} />
-                  Alle Objekte
-                </div>
-                {objects.map(obj => (
-                  <div
-                    key={obj.id}
-                    className={`dropdown-item ${selectedObject === obj.id ? 'active' : ''}`}
-                    onClick={() => { setSelectedObject(obj.id); setObjectDropdownOpen(false); }}
-                  >
-                    <Building2 size={16} />
-                    {obj.name}
-                  </div>
-                ))}
+          {objectDropdownOpen && (
+            <div className="object-dropdown">
+              <div 
+                className={`dropdown-item ${selectedObject === 'all' ? 'active' : ''}`}
+                onClick={() => { setSelectedObject('all'); setObjectDropdownOpen(false); }}
+              >
+                <Filter size={16} />
+                Alle Objekte
               </div>
-            )}
+              {objects.map(obj => (
+                <div 
+                  key={obj.id}
+                  className={`dropdown-item ${selectedObject === obj.id ? 'active' : ''}`}
+                  onClick={() => { setSelectedObject(obj.id); setObjectDropdownOpen(false); }}
+                >
+                  <Building2 size={16} />
+                  {obj.name}
+                </div>
+              ))}
+            </div>
+          )}
           </div>
         </div>
       </div>
@@ -350,48 +327,72 @@ export default function Dashboard() {
         <>
           {/* KPI Cards - Klickbar! */}
           <div className="kpi-grid">
-            {statsData.map((stat, index) => (
-              <div
-                key={index}
-                className={`kpi-card ${stat.color} ${stat.clickable ? 'clickable' : ''} ${stat.highlight ? 'highlight' : ''}`}
-                onClick={() => stat.clickable && handleKpiClick(stat.viewName)}
-              >
-                <div className="kpi-icon-wrapper">
-                  <stat.icon className="kpi-icon" />
-                </div>
-                <div className="kpi-content">
-                  <div className="kpi-value text-slate-700 dark:text-white">{stat.value}</div>
-                  <div className="kpi-label text-slate-600 dark:text-slate-400">{stat.label}</div>
-                </div>
-                {stat.clickable && <ChevronDown className="kpi-arrow" size={16} />}
-              </div>
-            ))}
+            <KPICard
+              title="Aktive Boxen"
+              value={filterByObject(allBoxes).length}
+              icon={Package}
+              color="indigo"
+              onClick={() => setActiveView("boxes")}
+              clickable
+            />
+            <KPICard
+              title="Scans heute"
+              value={safeStats.scansToday || 0}
+              icon={BarChart3}
+              color="green"
+              onClick={() => setActiveView("scans")}
+              clickable
+            />
+            <KPICard
+              title="Überfällig"
+              value={filterByObject(overdueBoxes).length}
+              icon={AlertTriangle}
+              color="yellow"
+              onClick={() => setActiveView("warnings")}
+              clickable
+              highlight={filterByObject(overdueBoxes).length > 0}
+            />
+            <KPICard
+              title="Letzte Sync"
+              value={formatTime(safeStats.lastSync)}
+              icon={Radio}
+              color="purple"
+              isText
+            />
           </div>
 
           {/* Status Cards - Klickbar! */}
           <div className="status-section">
             <h2 className="section-title">Status Übersicht</h2>
             <div className="status-grid">
-              <StatusCard
-                label="Auffällig"
-                count={filterByObject(boxesByStatus.yellow).length}
-                color="yellow"
+              <StatusCard 
+                label="OK" 
+                count={filterByObject(boxesByStatus.green).length} 
+                color="green" 
+                icon={CheckCircle}
+                onClick={() => { setSelectedStatus('green'); setActiveView('status'); }}
+                clickable
+              />
+              <StatusCard 
+                label="Auffällig" 
+                count={filterByObject(boxesByStatus.yellow).length} 
+                color="yellow" 
                 icon={AlertTriangle}
                 onClick={() => { setSelectedStatus('yellow'); setActiveView('status'); }}
                 clickable
               />
-              <StatusCard
-                label="Erhöht"
-                count={filterByObject(boxesByStatus.orange).length}
-                color="orange"
+              <StatusCard 
+                label="Erhöht" 
+                count={filterByObject(boxesByStatus.orange).length} 
+                color="orange" 
                 icon={TrendingUp}
                 onClick={() => { setSelectedStatus('orange'); setActiveView('status'); }}
                 clickable
               />
-              <StatusCard
-                label="Befall"
-                count={filterByObject(boxesByStatus.red).length}
-                color="red"
+              <StatusCard 
+                label="Befall" 
+                count={filterByObject(boxesByStatus.red).length} 
+                color="red" 
                 icon={XCircle}
                 onClick={() => { setSelectedStatus('red'); setActiveView('status'); }}
                 clickable
@@ -400,8 +401,8 @@ export default function Dashboard() {
           </div>
 
           {/* Recent Scans Preview */}
-          <RecentScansSection
-            scans={filterByObject(recentScans, 'object_id').slice(0, 5)}
+          <RecentScansSection 
+            scans={filterByObject(recentScans, 'object_id').slice(0, 5)} 
             objects={objects}
             onViewAll={() => setActiveView("scans")}
           />
@@ -412,7 +413,7 @@ export default function Dashboard() {
           WARNINGS - Überfällige Boxen
           ============================================================ */}
       {activeView === "warnings" && (
-        <BoxList
+        <BoxList 
           boxes={filterByObject(sortByNumber(overdueBoxes))}
           objects={objects}
           showDaysOverdue
@@ -424,7 +425,7 @@ export default function Dashboard() {
           STATUS - Boxen nach Status
           ============================================================ */}
       {activeView === "status" && selectedStatus && (
-        <BoxList
+        <BoxList 
           boxes={filterByObject(sortByNumber(boxesByStatus[selectedStatus] || []))}
           objects={objects}
           emptyMessage={`Keine Boxen mit Status "${getStatusLabel(selectedStatus)}"`}
@@ -435,7 +436,7 @@ export default function Dashboard() {
           SCANS - Letzte 10 Scans
           ============================================================ */}
       {activeView === "scans" && (
-        <ScansList
+        <ScansList 
           scans={filterByObject(recentScans, 'object_id').slice(0, 10)}
           objects={objects}
         />
@@ -445,7 +446,7 @@ export default function Dashboard() {
           BOXES - Alle Boxen
           ============================================================ */}
       {activeView === "boxes" && (
-        <BoxList
+        <BoxList 
           boxes={filterByObject(sortByNumber(allBoxes))}
           objects={objects}
           emptyMessage="Keine Boxen gefunden"
@@ -467,7 +468,7 @@ function KPICard({ title, value, icon: Icon, color, trend, isText, onClick, clic
   };
 
   return (
-    <div
+    <div 
       className={`kpi-card ${colorClasses[color]} ${clickable ? 'clickable' : ''} ${highlight ? 'highlight' : ''}`}
       onClick={clickable ? onClick : undefined}
     >
@@ -475,8 +476,8 @@ function KPICard({ title, value, icon: Icon, color, trend, isText, onClick, clic
         <Icon className="kpi-icon" />
       </div>
       <div className="kpi-content">
-        <div className={`kpi-value ${isText ? 'text' : ''} text-slate-700 dark:text-white`}>{value}</div>
-        <div className="kpi-label text-slate-600 dark:text-slate-400">{title}</div>
+        <div className={`kpi-value ${isText ? 'text' : ''}`}>{value}</div>
+        <div className="kpi-label">{title}</div>
         {trend && <div className="kpi-trend">{trend}</div>}
       </div>
       {clickable && <ChevronDown size={16} className="kpi-arrow" style={{ transform: 'rotate(-90deg)' }} />}
@@ -489,18 +490,15 @@ function KPICard({ title, value, icon: Icon, color, trend, isText, onClick, clic
    ============================================================ */
 function StatusCard({ label, count, color, icon: Icon, onClick, clickable }) {
   return (
-    <div
+    <div 
       className={`status-card status-${color} ${clickable ? 'clickable' : ''}`}
       onClick={clickable ? onClick : undefined}
     >
       <div className="status-icon-wrapper">
         <Icon className="status-icon" />
       </div>
-      <div className="status-icon-wrapper">
-        <Icon className="status-icon" />
-      </div>
-      <div className="status-count text-slate-700 dark:text-white">{count}</div>
-      <div className="status-label text-slate-600 dark:text-slate-400">{label}</div>
+      <div className="status-count">{count}</div>
+      <div className="status-label">{label}</div>
       {clickable && <div className="status-click-hint">Klicken für Details</div>}
     </div>
   );
@@ -520,11 +518,11 @@ function BoxList({ boxes, objects, showDaysOverdue, emptyMessage }) {
     const now = new Date();
     const lastScan = new Date(box.last_scan);
     const daysSince = Math.floor((now - lastScan) / (1000 * 60 * 60 * 24));
-
-    const maxDays = box.control_interval_type === 'range'
+    
+    const maxDays = box.control_interval_type === 'range' 
       ? (box.control_interval_max || 30)
       : (box.control_interval_days || 30);
-
+    
     return daysSince - maxDays;
   };
 
@@ -541,10 +539,10 @@ function BoxList({ boxes, objects, showDaysOverdue, emptyMessage }) {
     <div className="box-list">
       {boxes.map(box => {
         const daysOverdue = showDaysOverdue ? getDaysOverdue(box) : null;
-
+        
         return (
-          <Link
-            key={box.id}
+          <Link 
+            key={box.id} 
             to={`/boxes?highlight=${box.id}`}
             className="box-list-item"
           >
@@ -603,7 +601,7 @@ function ScansList({ scans, objects }) {
           <div className={`scan-status-dot status-${scan.status || 'gray'}`} />
           <div className="scan-info">
             <div className="scan-box-name">
-              {scan.box_name}
+              {scan.box_name || 'Box'} {scan.box_qr_code ? scan.box_qr_code : ''}
             </div>
             <div className="scan-object">{scan.object_name || getObjectName(scan.object_id)}</div>
             <div className="scan-message">{scan.message || `Status: ${scan.status}`}</div>
@@ -670,7 +668,7 @@ function RecentScansSection({ scans, objects, onViewAll }) {
                     <div className={`scan-dot status-${scan.status || 'gray'}`} />
                     <div className="scan-info">
                       <div className="scan-box">
-                        {scan.box_name}
+                        {scan.box_name || 'Box'} {scan.box_qr_code ? scan.box_qr_code : ''}
                       </div>
                       <div className="scan-message">{scan.message || `Status: ${scan.status}`}</div>
                     </div>
@@ -730,10 +728,10 @@ function timeAgo(ts) {
 
 function formatDate(ts) {
   if (!ts) return "";
-  return new Date(ts).toLocaleDateString('de-DE', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
+  return new Date(ts).toLocaleDateString('de-DE', { 
+    day: '2-digit', 
+    month: '2-digit', 
+    year: 'numeric' 
   });
 }
 

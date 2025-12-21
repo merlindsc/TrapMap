@@ -12,7 +12,7 @@ import { Bars3Icon, SunIcon, MoonIcon } from "@heroicons/react/24/outline";
 import { LogOut, Plus, Satellite } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useMapControls } from "../../context/MapControlsContext";
-import ThemeModal from "../ui/ThemeModal";
+import Modal from "../ui/Modal";
 import "./DashboardLayout.css";
 import trapMapLogo from "../../assets/trapmap-logo-200.png";
 
@@ -21,7 +21,7 @@ import trapMapLogo from "../../assets/trapmap-logo-200.png";
 // ============================================================
 const ThemeContext = createContext({
   theme: 'light',
-  toggleTheme: () => { }
+  toggleTheme: () => {}
 });
 
 export function useTheme() {
@@ -35,16 +35,47 @@ export function ThemeProvider({ children }) {
   });
 
   useEffect(() => {
-    // Theme Update via Data Attribute
-    document.documentElement.setAttribute("data-theme", theme);
-
-    // Optional: Add/Remove 'dark' class for Tailwind 'darkMode: class' support
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
+    // CSS-Variablen direkt auf :root setzen
+    const root = document.documentElement;
+    root.classList.toggle('dark', theme === 'dark');
+    
+    if (theme === 'light') {
+      root.style.setProperty('--bg-primary', '#f8fafc');
+      root.style.setProperty('--bg-secondary', '#ffffff');
+      root.style.setProperty('--bg-card', '#ffffff');
+      root.style.setProperty('--bg-hover', 'rgba(0, 0, 0, 0.03)');
+      root.style.setProperty('--text-primary', '#1e293b');
+      root.style.setProperty('--text-secondary', '#475569');
+      root.style.setProperty('--text-muted', '#64748b');
+      root.style.setProperty('--border-color', 'rgba(0, 0, 0, 0.08)');
+      root.style.setProperty('--shadow-sm', '0 1px 2px rgba(0, 0, 0, 0.05)');
+      root.style.setProperty('--shadow-md', '0 4px 6px rgba(0, 0, 0, 0.07)');
+      root.style.setProperty('--shadow-lg', '0 10px 25px rgba(0, 0, 0, 0.1)');
+      root.style.setProperty('--sidebar-bg', 'linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%)');
+      root.style.setProperty('--sidebar-text', '#64748b');
+      root.style.setProperty('--sidebar-text-hover', '#1e293b');
+      root.style.setProperty('--sidebar-item-hover', 'rgba(0, 0, 0, 0.04)');
+      root.style.setProperty('--sidebar-footer-bg', 'rgba(0, 0, 0, 0.03)');
     } else {
-      document.documentElement.classList.remove('dark');
+      root.style.setProperty('--bg-primary', '#0b1120');
+      root.style.setProperty('--bg-secondary', '#111827');
+      root.style.setProperty('--bg-card', '#1f2937');
+      root.style.setProperty('--bg-hover', 'rgba(255, 255, 255, 0.05)');
+      root.style.setProperty('--text-primary', '#ffffff');
+      root.style.setProperty('--text-secondary', '#94a3b8');
+      root.style.setProperty('--text-muted', '#64748b');
+      root.style.setProperty('--border-color', 'rgba(255, 255, 255, 0.08)');
+      root.style.setProperty('--shadow-sm', '0 1px 2px rgba(0, 0, 0, 0.3)');
+      root.style.setProperty('--shadow-md', '0 4px 6px rgba(0, 0, 0, 0.3)');
+      root.style.setProperty('--shadow-lg', '0 10px 25px rgba(0, 0, 0, 0.4)');
+      root.style.setProperty('--sidebar-bg', 'linear-gradient(180deg, #1a1f3a 0%, #0f1419 100%)');
+      root.style.setProperty('--sidebar-text', '#94a3b8');
+      root.style.setProperty('--sidebar-text-hover', '#ffffff');
+      root.style.setProperty('--sidebar-item-hover', 'rgba(255, 255, 255, 0.05)');
+      root.style.setProperty('--sidebar-footer-bg', 'rgba(0, 0, 0, 0.2)');
     }
-
+    
+    document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("trapmap_theme", theme);
   }, [theme]);
 
@@ -104,7 +135,7 @@ export default function DashboardLayout({ children }) {
     <div className="dashboard-layout">
       {/* Mobile Overlay */}
       {isMobile && sidebarOpen && (
-        <div
+        <div 
           className="sidebar-overlay"
           onClick={() => setSidebarOpen(false)}
         />
@@ -112,8 +143,8 @@ export default function DashboardLayout({ children }) {
 
       {/* Sidebar */}
       <aside className={`sidebar-container ${isMobile ? 'mobile' : ''} ${sidebarOpen ? 'open' : ''}`}>
-        <Sidebar
-          activePath={pathname}
+        <Sidebar 
+          activePath={pathname} 
           isMobile={isMobile}
           onClose={() => setSidebarOpen(false)}
         />
@@ -124,7 +155,7 @@ export default function DashboardLayout({ children }) {
         {/* Mobile Header mit Logo */}
         {isMobile && (
           <header className="mobile-header">
-            <button
+            <button 
               className="hamburger-btn"
               onClick={() => setSidebarOpen(true)}
               aria-label="Menu öffnen"
@@ -137,7 +168,7 @@ export default function DashboardLayout({ children }) {
               {isMapView && (
                 <>
                   {/* Object Create Button */}
-                  <button
+                  <button 
                     className={`mobile-map-btn ${objectPlacingMode ? 'active' : ''}`}
                     onClick={() => setObjectPlacingMode(!objectPlacingMode)}
                     aria-label="Objekt erstellen"
@@ -159,7 +190,7 @@ export default function DashboardLayout({ children }) {
 
                   {/* Satellite Toggle Button */}
                   <div style={{ position: 'relative' }}>
-                    <button
+                    <button 
                       className="mobile-map-btn"
                       onClick={() => setStyleOpen(!styleOpen)}
                       aria-label="Karten-Stil"
@@ -178,9 +209,9 @@ export default function DashboardLayout({ children }) {
                     >
                       <Satellite size={20} />
                     </button>
-
+                    
                     {styleOpen && (
-                      <div
+                      <div 
                         style={{
                           position: 'absolute',
                           top: 'calc(100% + 8px)',
@@ -194,7 +225,7 @@ export default function DashboardLayout({ children }) {
                           zIndex: 1000
                         }}
                       >
-                        <button
+                        <button 
                           onClick={() => { setMapStyle("streets"); setStyleOpen(false); }}
                           style={{
                             width: '100%',
@@ -210,7 +241,7 @@ export default function DashboardLayout({ children }) {
                         >
                           🗺️ Straßen
                         </button>
-                        <button
+                        <button 
                           onClick={() => { setMapStyle("satellite"); setStyleOpen(false); }}
                           style={{
                             width: '100%',
@@ -226,7 +257,7 @@ export default function DashboardLayout({ children }) {
                         >
                           🛰️ Satellit
                         </button>
-                        <button
+                        <button 
                           onClick={() => { setMapStyle("hybrid"); setStyleOpen(false); }}
                           style={{
                             width: '100%',
@@ -247,8 +278,8 @@ export default function DashboardLayout({ children }) {
                   </div>
                 </>
               )}
-
-              <button
+              
+              <button 
                 className="mobile-theme-toggle"
                 onClick={toggleTheme}
                 aria-label={theme === 'dark' ? 'Zum hellen Modus wechseln' : 'Zum dunklen Modus wechseln'}
@@ -259,7 +290,7 @@ export default function DashboardLayout({ children }) {
                   <MoonIcon className="theme-icon" />
                 )}
               </button>
-              <button
+              <button 
                 className="mobile-logout-btn"
                 onClick={handleLogoutClick}
                 aria-label="Abmelden"
@@ -283,7 +314,7 @@ export default function DashboardLayout({ children }) {
               {isMapView && (
                 <>
                   {/* Object Create Button */}
-                  <button
+                  <button 
                     className={`navbar-btn ${objectPlacingMode ? 'active' : ''}`}
                     onClick={() => setObjectPlacingMode(!objectPlacingMode)}
                     title="Neues Objekt erstellen"
@@ -318,7 +349,7 @@ export default function DashboardLayout({ children }) {
 
                   {/* Satellite Toggle Button */}
                   <div style={{ position: 'relative' }}>
-                    <button
+                    <button 
                       className="navbar-btn"
                       onClick={() => setStyleOpen(!styleOpen)}
                       title="Karten-Stil wechseln"
@@ -346,9 +377,9 @@ export default function DashboardLayout({ children }) {
                       <Satellite size={18} />
                       <span>Layer</span>
                     </button>
-
+                    
                     {styleOpen && (
-                      <div
+                      <div 
                         style={{
                           position: 'absolute',
                           top: 'calc(100% + 8px)',
@@ -362,7 +393,7 @@ export default function DashboardLayout({ children }) {
                           zIndex: 1000
                         }}
                       >
-                        <button
+                        <button 
                           onClick={() => { setMapStyle("streets"); setStyleOpen(false); }}
                           style={{
                             width: '100%',
@@ -389,7 +420,7 @@ export default function DashboardLayout({ children }) {
                         >
                           🗺️ Straßen
                         </button>
-                        <button
+                        <button 
                           onClick={() => { setMapStyle("satellite"); setStyleOpen(false); }}
                           style={{
                             width: '100%',
@@ -416,7 +447,7 @@ export default function DashboardLayout({ children }) {
                         >
                           🛰️ Satellit
                         </button>
-                        <button
+                        <button 
                           onClick={() => { setMapStyle("hybrid"); setStyleOpen(false); }}
                           style={{
                             width: '100%',
@@ -478,8 +509,8 @@ export default function DashboardLayout({ children }) {
       </div>
 
       {/* Logout Confirmation Modal */}
-      <ThemeModal
-        isOpen={showLogoutConfirm}
+      <Modal 
+        isOpen={showLogoutConfirm} 
         onClose={handleLogoutCancel}
         title="Logout bestätigen"
       >
@@ -488,13 +519,13 @@ export default function DashboardLayout({ children }) {
             Möchten Sie sich wirklich abmelden?
           </p>
           <div className="logout-confirm-actions">
-            <button
+            <button 
               className="btn-cancel"
               onClick={handleLogoutCancel}
             >
               Abbrechen
             </button>
-            <button
+            <button 
               className="btn-confirm-logout"
               onClick={handleLogoutConfirm}
             >
@@ -503,7 +534,7 @@ export default function DashboardLayout({ children }) {
             </button>
           </div>
         </div>
-      </ThemeModal>
+      </Modal>
     </div>
   );
 }
