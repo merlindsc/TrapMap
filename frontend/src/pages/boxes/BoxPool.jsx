@@ -271,9 +271,6 @@ export default function BoxPool() {
         const assignedCount = responseData.count || 0;
         const skippedCount = responseData.skipped || 0;
         
-        // Reload pool data immediately after successful assignment
-        await loadData();
-        
         // Build user-friendly message
         let message;
         if (skippedCount > 0) {
@@ -292,8 +289,6 @@ export default function BoxPool() {
           type: "error", 
           text: responseData.error || "Zuweisung fehlgeschlagen" 
         });
-        // Reload data even on error to reflect current state
-        await loadData();
       }
     } catch (err) {
       console.error("Bulk assign error:", err);
@@ -301,10 +296,10 @@ export default function BoxPool() {
         type: "error", 
         text: "Netzwerkfehler beim Zuweisen" 
       });
-      // Reload data even on network error to refresh state
-      await loadData();
     } finally {
       setQuickCount("");
+      // Always reload data after assignment attempt to reflect current state
+      await loadData();
       setAssigning(false);
     }
   };
