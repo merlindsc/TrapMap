@@ -326,6 +326,51 @@ exports.bulkAssignToObject = async (req, res) => {
 };
 
 // ============================================
+// BULK ASSIGN BY COUNT - Backend wählt Boxen aus Pool
+// ============================================
+exports.bulkAssignByCount = async (req, res) => {
+  try {
+    const { count, object_id } = req.body;
+    
+    console.log("📦 Bulk assign by count request:", { count, object_id });
+    
+    if (!count || count < 1) {
+      return res.status(400).json({ error: "count muss mindestens 1 sein" });
+    }
+    
+    if (count > 300) {
+      return res.status(400).json({ error: "Maximal 300 Boxen auf einmal" });
+    }
+    
+    if (!object_id) {
+      return res.status(400).json({ error: "object_id erforderlich" });
+    }
+
+    const result = await boxesService.bulkAssignByCount(
+      count,
+      object_id,
+      req.user.organisation_id,
+      req.user.id
+    );
+
+    if (!result.success) {
+      console.error("❌ Service returned error:", result.message);
+      return res.status(400).json({ error: result.message });
+    }
+
+    console.log(`✅ ${result.count} Boxen zu Objekt ${object_id} zugewiesen von User ${req.user.id}`);
+    return res.json({ 
+      success: true, 
+      count: result.count,
+      data: result.data
+    });
+  } catch (err) {
+    console.error("bulkAssignByCount error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
+// ============================================
 // RETURN TO POOL - EINZELNE BOX
 // ============================================
 exports.returnToPool = async (req, res) => {

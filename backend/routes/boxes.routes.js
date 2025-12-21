@@ -62,6 +62,9 @@ router.post("/:id/assign", authenticate, requireEditor, asyncHandler(boxesContro
 // Bulk-Assign: Mehrere Boxen auf einmal zuweisen
 router.post("/bulk-assign", authenticate, requireEditor, asyncHandler(boxesController.bulkAssignToObject));
 
+// Bulk-Assign by Count: Backend wählt automatisch N Boxen aus dem Pool
+router.post("/bulk-assign-count", authenticate, requireEditor, asyncHandler(boxesController.bulkAssignByCount));
+
 // Box zurück in Pool
 router.post("/:id/return-to-pool", authenticate, requireEditor, asyncHandler(boxesController.returnToPool));
 

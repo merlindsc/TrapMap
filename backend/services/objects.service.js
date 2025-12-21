@@ -143,12 +143,45 @@ exports.update = async (id, organisationId, updates) => {
 
 // ============================================
 // DELETE OBJECT + CLEANUP FLOOR PLAN IMAGES
+// ⚠️ ACHTUNG: Beim Löschen werden ALLE DATEN unwiderruflich gelöscht:
+//    - Alle Scans/Scan-Historie
+//    - Alle Grundrisse (Layouts)
+//    - Alle Zonen
+//    - Alle Fotos
+//    → Boxen werden ERHALTEN und gehen zurück ins Lager!
 // ============================================
 exports.remove = async (id, organisationId) => {
   try {
-    console.log(`🗑️ Deleting object ${id} and cleaning up floor plan images...`);
+    console.log(`🗑️ Deleting object ${id}...`);
+    console.log(`⚠️ WARNUNG: Alle Scans, Grundrisse und Zonen werden UNWIDERRUFLICH gelöscht!`);
+    console.log(`📦 Boxen werden zurück ins Lager verschoben...`);
 
-    // 1. Get all floor plans for this object to find images
+    // 1. BOXEN ZURÜCK INS LAGER (vor dem Löschen!)
+    const { data: returnedBoxes, error: boxResetError } = await supabase
+      .from("boxes")
+      .update({
+        object_id: null,
+        box_type_id: null,
+        lat: null,
+        lng: null,
+        floor_plan_id: null,
+        pos_x: null,
+        pos_y: null,
+        grid_position: null,
+        position_type: null,
+        layout_id: null
+      })
+      .eq("object_id", id)
+      .select("id, qr_code");
+
+    if (boxResetError) {
+      console.warn("⚠️ Fehler beim Zurücksetzen der Boxen:", boxResetError);
+    } else {
+      const boxCount = returnedBoxes?.length || 0;
+      console.log(`✅ ${boxCount} Boxen zurück ins Lager verschoben`);
+    }
+
+    // 2. Get all floor plans for this object to find images
     const { data: floorPlans, error: fpError } = await supabase
       .from("layouts")
       .select("id, image_url")
@@ -159,7 +192,7 @@ exports.remove = async (id, organisationId) => {
       console.warn("⚠️ Could not load floor plans for cleanup:", fpError);
     }
 
-    // 2. Delete images from Supabase Storage
+    // 3. Delete images from Supabase Storage
     if (floorPlans && floorPlans.length > 0) {
       const filePaths = [];
       
@@ -190,7 +223,7 @@ exports.remove = async (id, organisationId) => {
       }
     }
 
-    // 3. Delete the object (cascade will handle layouts, boxes, scans)
+    // 4. Delete the object (cascade will handle layouts, scans, zones - Boxen wurden bereits zurück ins Lager verschoben!)
     const { error } = await supabase
       .from("objects")
       .delete()
@@ -199,8 +232,9 @@ exports.remove = async (id, organisationId) => {
 
     if (error) return { success: false, message: error.message };
 
-    console.log(`✅ Object ${id} deleted successfully`);
-    return { success: true };
+    const boxCount = returnedBoxes?.length || 0;
+    console.log(`✅ Objekt ${id} gelöscht. ${boxCount} Boxen sind jetzt im Lager verfügbar.`);
+    return { success: true, boxesReturned: boxCount };
 
   } catch (err) {
     console.error("Error deleting object:", err);
@@ -282,11 +316,12 @@ exports.archive = async (id, organisationId, userId, reason = null) => {
       return { success: false, message: archiveError.message };
     }
 
-    // 2. Alle Boxen des Objekts zurück in Pool (Position reset)
+    // 2. Alle Boxen des Objekts zurück in Pool (Position + Typ reset)
     const { data: boxes, error: boxError } = await supabase
       .from("boxes")
       .update({
         object_id: null,
+        box_type_id: null,
         lat: null,
         lng: null,
         floor_plan_id: null,

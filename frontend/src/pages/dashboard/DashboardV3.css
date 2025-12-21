@@ -62,6 +62,11 @@
   margin: 0;
 }
 
+[data-theme="light"] .dashboard-subtitle {
+  color: #4b5563 !important;
+  /* gray-600 */
+}
+
 /* Header Right Section */
 .header-right-section {
   display: flex;
@@ -288,7 +293,13 @@
 }
 
 [data-theme="light"] .kpi-value {
-  color: #1e293b !important;
+  color: #374151 !important;
+  /* gray-700 - Softer dark gray */
+}
+
+[data-theme="light"] .kpi-label {
+  color: #4b5563 !important;
+  /* gray-600 - Darker than muted for readability */
 }
 
 .kpi-value.text {
@@ -435,7 +446,8 @@
 }
 
 [data-theme="light"] .status-count {
-  color: #1e293b !important;
+  color: #374151 !important;
+  /* gray-700 */
 }
 
 .status-label {

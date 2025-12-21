@@ -452,6 +452,87 @@ exports.bulkAssignToObject = async (identifiers, objectId, organisationId, userI
 };
 
 // ============================================
+// BULK ASSIGN BY COUNT - Backend wählt automatisch
+// ============================================
+exports.bulkAssignByCount = async (count, objectId, organisationId, userId) => {
+  try {
+    if (count < 1 || count > 300) {
+      return { success: false, message: "Anzahl muss zwischen 1 und 300 liegen" };
+    }
+
+    // Hole ALLE verfügbaren Pool-Boxen (wir sortieren selbst nach QR-Nummer)
+    const { data: allPoolBoxes, error: poolError } = await supabase
+      .from("boxes")
+      .select("id, qr_code, number")
+      .eq("organisation_id", organisationId)
+      .is("object_id", null)
+      .neq("status", "archived")
+      .not("qr_code", "is", null);
+
+    if (poolError) throw poolError;
+
+    if (!allPoolBoxes || allPoolBoxes.length === 0) {
+      return { success: false, message: "Keine Boxen im Lager verfügbar" };
+    }
+
+    // Sortiere nach QR-Code Nummer (z.B. DSE-0001 → 1, XX19 → 19)
+    const sortedBoxes = allPoolBoxes.sort((a, b) => {
+      return extractQrNumber(a.qr_code) - extractQrNumber(b.qr_code);
+    });
+
+    // Nimm die ersten 'count' Boxen (kleinste Nummern)
+    const poolBoxes = sortedBoxes.slice(0, count);
+
+    console.log(`📦 Selecting ${poolBoxes.length} boxes with lowest numbers:`, 
+      poolBoxes.map(b => ({ qr: b.qr_code, num: extractQrNumber(b.qr_code) }))
+    );
+
+    if (poolBoxes.length < count) {
+      console.log(`⚠️ Nur ${poolBoxes.length} von ${count} angeforderten Boxen verfügbar`);
+    }
+
+    const boxIds = poolBoxes.map(b => b.id);
+
+    console.log(`📦 Assigning ${boxIds.length} boxes to object ${objectId}`);
+
+    // Boxen zuweisen
+    const { data, error } = await supabase
+      .from("boxes")
+      .update({
+        object_id: objectId,
+        position_type: "none",
+        updated_at: new Date().toISOString()
+      })
+      .in("id", boxIds)
+      .eq("organisation_id", organisationId)
+      .is("object_id", null) // Doppelte Sicherheit: nur unzugewiesene
+      .select();
+
+    if (error) throw error;
+
+    // Audit Log
+    for (const box of data) {
+      await logBoxEvent(box.id, userId, "assigned_to_object", { 
+        object_id: objectId,
+        bulk_operation: true,
+        method: "count_based"
+      });
+    }
+
+    console.log(`✅ ${data.length} Boxen erfolgreich zugewiesen`);
+
+    return { 
+      success: true, 
+      data,
+      count: data.length
+    };
+  } catch (err) {
+    console.error("❌ bulkAssignByCount error:", err);
+    return { success: false, message: err.message };
+  }
+};
+
+// ============================================
 // RETURN TO POOL - VOLLSTÄNDIGER RESET!
 // WICHTIG: number wird NICHT auf NULL gesetzt!
 // ============================================

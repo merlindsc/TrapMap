@@ -16,22 +16,22 @@
   --bg-secondary: #111827;
   --bg-card: #1f2937;
   --bg-hover: rgba(255, 255, 255, 0.05);
-  
+
   --text-primary: #ffffff;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
-  
+
   --border-color: rgba(255, 255, 255, 0.08);
-  
+
   --accent-indigo: #6366f1;
   --accent-purple: #8b5cf6;
   --accent-blue: #3b82f6;
-  
+
   --status-green: #10b981;
   --status-yellow: #eab308;
   --status-orange: #f97316;
   --status-red: #ef4444;
-  
+
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.4);
@@ -45,6 +45,28 @@
   --sidebar-item-active-bg: rgba(99, 102, 241, 0.15);
   --sidebar-item-active-border: #6366f1;
   --sidebar-item-active-text: #818cf8;
+  /* Widget & Toast Semantics */
+  --bg-toast-success: #064e3b;
+  /* green-900 */
+  --border-toast-success: #065f46;
+  /* green-800 */
+  --text-toast-success: #d1fae5;
+  /* green-100 */
+
+  --bg-toast-error: #7f1d1d;
+  /* red-900 */
+  --border-toast-error: #991b1b;
+  /* red-800 */
+  --text-toast-error: #fee2e2;
+  /* red-100 */
+
+  --bg-toast-info: #1e3a8a;
+  /* blue-900 */
+  --border-toast-info: #1e40af;
+  /* blue-800 */
+  --text-toast-info: #dbeafe;
+  /* blue-100 */
+
   --sidebar-footer-bg: rgba(0, 0, 0, 0.2);
 }
 
@@ -56,13 +78,13 @@
   --bg-secondary: #ffffff;
   --bg-card: #ffffff;
   --bg-hover: rgba(0, 0, 0, 0.03);
-  
+
   --text-primary: #1e293b;
   --text-secondary: #475569;
   --text-muted: #94a3b8;
-  
+
   --border-color: rgba(0, 0, 0, 0.08);
-  
+
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
   --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1);
@@ -76,7 +98,30 @@
   --sidebar-item-active-bg: rgba(99, 102, 241, 0.1);
   --sidebar-item-active-border: #6366f1;
   --sidebar-item-active-text: #4f46e5;
+  --sidebar-item-active-text: #4f46e5;
   --sidebar-footer-bg: rgba(0, 0, 0, 0.03);
+
+  /* Widget & Toast Semantics - Light */
+  --bg-toast-success: #d1fae5;
+  /* green-100 */
+  --border-toast-success: #86efac;
+  /* green-300 */
+  --text-toast-success: #065f46;
+  /* green-800 */
+
+  --bg-toast-error: #fee2e2;
+  /* red-100 */
+  --border-toast-error: #fca5a5;
+  /* red-300 */
+  --text-toast-error: #991b1b;
+  /* red-800 */
+
+  --bg-toast-info: #dbeafe;
+  /* blue-100 */
+  --border-toast-info: #93c5fd;
+  /* blue-300 */
+  --text-toast-info: #1e40af;
+  /* blue-800 */
 }
 
 /* ============================================================
@@ -182,15 +227,37 @@ body,
   border-color: var(--text-muted);
 }
 
-.status-green { color: var(--status-green); }
-.status-yellow { color: var(--status-yellow); }
-.status-orange { color: var(--status-orange); }
-.status-red { color: var(--status-red); }
+.status-green {
+  color: var(--status-green);
+}
 
-.bg-status-green { background: rgba(16, 185, 129, 0.15); }
-.bg-status-yellow { background: rgba(234, 179, 8, 0.15); }
-.bg-status-orange { background: rgba(249, 115, 22, 0.15); }
-.bg-status-red { background: rgba(239, 68, 68, 0.15); }
+.status-yellow {
+  color: var(--status-yellow);
+}
+
+.status-orange {
+  color: var(--status-orange);
+}
+
+.status-red {
+  color: var(--status-red);
+}
+
+.bg-status-green {
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.bg-status-yellow {
+  background: rgba(234, 179, 8, 0.15);
+}
+
+.bg-status-orange {
+  background: rgba(249, 115, 22, 0.15);
+}
+
+.bg-status-red {
+  background: rgba(239, 68, 68, 0.15);
+}
 
 .loading-spinner {
   width: 40px;
@@ -202,7 +269,9 @@ body,
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .fade-in {
@@ -210,20 +279,46 @@ body,
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
-.bg-primary { background: var(--bg-primary); }
-.bg-secondary { background: var(--bg-secondary); }
-.bg-card { background: var(--bg-card); }
-.bg-hover { background: var(--bg-hover); }
+.bg-primary {
+  background: var(--bg-primary);
+}
 
-.text-primary { color: var(--text-primary); }
-.text-secondary { color: var(--text-secondary); }
-.text-muted { color: var(--text-muted); }
+.bg-secondary {
+  background: var(--bg-secondary);
+}
 
-.border-theme { border-color: var(--border-color); }
+.bg-card {
+  background: var(--bg-card);
+}
+
+.bg-hover {
+  background: var(--bg-hover);
+}
+
+.text-primary {
+  color: var(--text-primary);
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.border-theme {
+  border-color: var(--border-color);
+}
 
 /* ============================================================
    LOGO OPTIMIERUNGEN - SCHÄRFERE DARSTELLUNG
@@ -246,6 +341,7 @@ body,
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -262,30 +358,32 @@ body,
 
 /* Portrait Mobile - Buttons verstecken/optimieren */
 @media (max-width: 768px) and (orientation: portrait) {
+
   /* Button-Texte generell verkürzen auf Mobile Portrait */
   .btn-text-mobile-hide {
     display: none !important;
   }
-  
+
   /* Responsive Buttons kompakter machen */
   .mobile-responsive-btn {
     padding: 8px 12px !important;
     font-size: 14px !important;
-    min-width: 44px; /* Touch-Target Mindestgröße */
+    min-width: 44px;
+    /* Touch-Target Mindestgröße */
   }
-  
+
   /* Icon-only Buttons für Mobile */
   .mobile-icon-only span {
     display: none !important;
   }
-  
+
   /* Spezielle Button-Container auf Mobile anpassen */
   .button-container-mobile {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
   }
-  
+
   /* Überlauf-Buttons in Dropdown verstecken */
   .mobile-overflow-hidden {
     display: none;
@@ -297,7 +395,7 @@ body,
   .btn-text-mobile-hide {
     display: inline;
   }
-  
+
   .mobile-icon-only span {
     display: inline;
   }

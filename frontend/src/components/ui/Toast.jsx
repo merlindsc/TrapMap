@@ -14,24 +14,44 @@ export default function Toast({ message, type = "success", onClose, duration = 3
   }, [duration, onClose]);
 
   const icons = {
-    success: <CheckCircle size={20} className="text-green-400" />,
-    error: <AlertCircle size={20} className="text-red-400" />,
-    info: <Info size={20} className="text-blue-400" />,
+    success: <CheckCircle size={20} />,
+    error: <AlertCircle size={20} />,
+    info: <Info size={20} />,
   };
 
+  /* Use custom CSS variables to support Theme switching (Light/Dark) */
   const bgColors = {
-    success: "bg-green-900 border-green-700",
-    error: "bg-red-900 border-red-700",
-    info: "bg-blue-900 border-blue-700",
+    success: {
+      background: 'var(--bg-toast-success)',
+      borderColor: 'var(--border-toast-success)',
+      color: 'var(--text-toast-success)'
+    },
+    error: {
+      background: 'var(--bg-toast-error)',
+      borderColor: 'var(--border-toast-error)',
+      color: 'var(--text-toast-error)'
+    },
+    info: {
+      background: 'var(--bg-toast-info)',
+      borderColor: 'var(--border-toast-info)',
+      color: 'var(--text-toast-info)'
+    },
   };
+
+  const currentStyle = bgColors[type] || bgColors.info;
+
 
   return (
     <div
-      className={`fixed top-20 right-4 z-[100000] ${bgColors[type]} border rounded-lg p-4 shadow-xl max-w-md animate-slide-in`}
+      className={`fixed top-20 right-4 z-[100000] border rounded-lg p-4 shadow-xl max-w-md animate-slide-in`}
+      style={{
+        background: currentStyle.background,
+        borderColor: currentStyle.borderColor,
+      }}
     >
       <div className="flex items-start gap-3">
-        {icons[type]}
-        <p className="text-white flex-1">{message}</p>
+        <div style={{ color: currentStyle.color }}>{icons[type]}</div>
+        <p className="flex-1" style={{ color: currentStyle.color }}>{message}</p>
         <button
           onClick={onClose}
           className="text-gray-400 hover:text-white transition"

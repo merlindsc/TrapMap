@@ -58,8 +58,12 @@
 
 .dashboard-subtitle {
   font-size: 15px;
-  color: var(--text-muted, #64748b);
   margin: 0;
+}
+
+html[data-theme="light"] .dashboard-subtitle {
+  color: #4b5563 !important;
+  /* gray-600 */
 }
 
 /* Header Right Section */
@@ -282,13 +286,21 @@
 .kpi-value {
   font-size: 36px;
   font-weight: 700;
-  color: var(--text-primary);
   line-height: 1.1;
   margin-bottom: 4px;
+  color: var(--text-primary);
+  /* Default for dark mode */
 }
 
-[data-theme="light"] .kpi-value {
-  color: #1e293b !important;
+/* Force light mode colors with higher specificity */
+html[data-theme="light"] .kpi-value {
+  color: #374151 !important;
+  /* gray-700 */
+}
+
+html[data-theme="light"] .kpi-label {
+  color: #4b5563 !important;
+  /* gray-600 */
 }
 
 .kpi-value.text {
@@ -430,12 +442,12 @@
   font-weight: 700;
   line-height: 1;
   margin-bottom: 4px;
-  margin-bottom: 4px;
   color: var(--text-primary);
 }
 
-[data-theme="light"] .status-count {
-  color: #1e293b !important;
+html[data-theme="light"] .status-count {
+  color: #374151 !important;
+  /* gray-700 */
 }
 
 .status-label {

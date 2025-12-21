@@ -29,16 +29,16 @@ export default function UpdateWidget() {
   return (
     <div className="fixed bottom-4 right-4 z-50 max-w-md animate-slide-up">
       <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg shadow-2xl p-1">
-        <div className="bg-gray-900 rounded-lg p-4">
+        <div className="bg-card rounded-lg p-4">
           {/* Header */}
           <div className="flex items-start justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-yellow-400" />
-              <h3 className="font-semibold text-white">Neue Features!</h3>
+              <Sparkles className="w-5 h-5 text-yellow-500" />
+              <h3 className="font-semibold text-primary">Neue Features!</h3>
             </div>
             <button
               onClick={handleClose}
-              className="text-gray-400 hover:text-white transition-colors"
+              className="text-secondary hover:text-primary transition-colors"
               aria-label="Schließen"
             >
               <X className="w-5 h-5" />
@@ -48,60 +48,60 @@ export default function UpdateWidget() {
           {/* Updates */}
           <div className="space-y-3 text-sm">
             {/* Feature 1: Box-Kürzel */}
-            <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+            <div className="bg-primary/50 rounded-lg p-3 border border-theme">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-blue-400 font-semibold">📦 Neue Box-Anzeige</span>
+                <span className="text-blue-500 font-semibold">📦 Neue Box-Anzeige</span>
               </div>
-              <p className="text-gray-300 text-xs">
-                Boxen werden jetzt überall mit <span className="font-mono bg-gray-700 px-1.5 py-0.5 rounded">Kürzel-Nummer Name</span> angezeigt.
+              <p className="text-secondary text-xs">
+                Boxen werden jetzt überall mit <span className="font-mono bg-hover px-1.5 py-0.5 rounded">Kürzel-Nummer Name</span> angezeigt.
                 <br />
-                <span className="text-gray-400">Beispiel: <span className="font-mono text-blue-300">RK-12 Eingang Lager</span></span>
+                <span className="text-muted">Beispiel: <span className="font-mono text-blue-400">RK-12 Eingang Lager</span></span>
               </p>
             </div>
 
             {/* Feature 2: Objekt-Farben */}
-            <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+            <div className="bg-primary/50 rounded-lg p-3 border border-theme">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-green-400 font-semibold">🎨 Objekt-Status-Farben</span>
+                <span className="text-green-500 font-semibold">🎨 Objekt-Status-Farben</span>
               </div>
-              <p className="text-gray-300 text-xs mb-2">
+              <p className="text-secondary text-xs mb-2">
                 Objekte auf der Karte zeigen jetzt den Befallsstatus in Farbe:
               </p>
               <div className="flex gap-2 flex-wrap text-xs">
                 <span className="flex items-center gap-1">
                   <span className="w-3 h-3 rounded-full bg-green-500"></span>
-                  <span className="text-gray-300">Kein Befall</span>
+                  <span className="text-secondary">Kein Befall</span>
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="w-3 h-3 rounded-full bg-yellow-500"></span>
-                  <span className="text-gray-300">Gering</span>
+                  <span className="text-secondary">Gering</span>
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="w-3 h-3 rounded-full bg-orange-500"></span>
-                  <span className="text-gray-300">Mittel</span>
+                  <span className="text-secondary">Mittel</span>
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="w-3 h-3 rounded-full bg-red-500"></span>
-                  <span className="text-gray-300">Hoch</span>
+                  <span className="text-secondary">Hoch</span>
                 </span>
               </div>
             </div>
 
             {/* Feature 3: Offline-Verbesserungen */}
-            <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+            <div className="bg-primary/50 rounded-lg p-3 border border-theme">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-purple-400 font-semibold">📴 Offline-Modus verbessert</span>
+                <span className="text-purple-500 font-semibold">📴 Offline-Modus verbessert</span>
               </div>
-              <p className="text-gray-300 text-xs">
+              <p className="text-secondary text-xs">
                 Die Karte lädt jetzt auch ohne Internet.
                 <br />
-                <span className="text-gray-400">Pool-Boxen werden automatisch gecacht – Scanner funktioniert komplett offline!</span>
+                <span className="text-muted">Pool-Boxen werden automatisch gecacht – Scanner funktioniert komplett offline!</span>
               </p>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="mt-4 pt-3 border-t border-gray-700">
+          <div className="mt-4 pt-3 border-t border-theme">
             <button
               onClick={handleClose}
               className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium py-2 px-4 rounded-lg transition-all"
