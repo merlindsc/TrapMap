@@ -299,7 +299,11 @@ export default function BoxPool() {
     } finally {
       setQuickCount("");
       // Always reload data after assignment attempt to reflect current state
-      await loadData();
+      try {
+        await loadData();
+      } catch (error) {
+        console.error("Failed to reload data after assignment:", error);
+      }
       setAssigning(false);
     }
   };

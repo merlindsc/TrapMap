@@ -443,7 +443,7 @@ exports.bulkAssignToObject = async (identifiers, objectId, organisationId, userI
       count: data.length,
       skipped: alreadyAssigned.length,
       skipped_reason: alreadyAssigned.length > 0 ? "already_assigned" : null,
-      skipped_codes: alreadyAssigned.map(b => b.qr_code).filter(qr => qr)
+      skipped_codes: alreadyAssigned.map(b => b.qr_code).filter(qr => qr != null)
     };
   } catch (err) {
     console.error("❌ bulkAssignToObject error:", err);
