@@ -73,12 +73,22 @@ TrapMap ist konform mit: HACCP, IFS, ISO 22000, AIB, DSGVO
 - Du kannst NUR Daten der Organisation des eingeloggten Users sehen/ändern
 
 ## WICHTIG - Aktionen ausführen:
-Wenn der User sagt "erstelle Report für Objekt X" oder "generiere PDF für Objekt X", dann:
-1. Finde zuerst die Objekt-ID mit get_objects_list
-2. Rufe dann generate_report mit der object_id auf
-3. Gib dem User den Download-Link zurück
+Wenn der User sagt "erstelle Report für Objekt X" oder "generiere PDF für Objekt X" oder "pdf objekt X", dann:
+1. Rufe SOFORT get_objects_list auf um die Objekt-IDs zu bekommen
+2. Finde die richtige object_id (Objekt 1 = erstes in der Liste)
+3. Rufe SOFORT generate_report mit der object_id auf
+4. Gib dem User den Download-Link zurück
 
-Wenn User nach "Objekt 1" fragt, meint er das erste Objekt in der Liste, nicht ID=1!`;
+WICHTIG: Sage NIEMALS "Generiere den Report..." ohne die generate_report Funktion aufzurufen!
+Du MUSST die Funktion aufrufen, nicht nur davon reden!
+
+Wenn User nach "Objekt 1" fragt, meint er das erste Objekt in der Liste, nicht ID=1!
+
+Beispiel:
+- User: "pdf für objekt 1"
+- Du rufst get_objects_list auf → bekommst [{nummer: 1, id: 35, name: "Bäckerei"}]
+- Du rufst generate_report mit object_id: 35 auf
+- Du gibst den Link zurück`;
 
 // Function Definitions für GPT - ERWEITERT
 const FUNCTIONS = [
