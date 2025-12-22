@@ -1,22 +1,224 @@
 <!DOCTYPE html>
+
 <html lang="de">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="TrapMap - Professional Pest Control Monitoring" />
-    <meta name="theme-color" content="#3B82F6" />
-    
-    <!-- PWA Manifest -->
-    <link rel="manifest" href="/manifest.json" />
-    
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
-    <title>TrapMap - Schädlingsüberwachung</title>
+
+```
+<!-- Primary Meta Tags -->
+<title>TrapMap - Digitales Schädlingsmonitoring | HACCP & IFS konform</title>
+<meta name="title" content="TrapMap - Digitales Schädlingsmonitoring | HACCP & IFS konform" />
+<meta name="description" content="TrapMap digitalisiert Ihr Schädlingsmonitoring. QR-Code scannen, Status dokumentieren, Report generieren. Audit-sicher in nur 2 Minuten. HACCP, IFS, ISO 22000, DSGVO konform." />
+<meta name="keywords" content="Schädlingsmonitoring, Schädlingsbekämpfung, HACCP, IFS, Pest Control, QR-Code, digitale Dokumentation, Audit, Monitoring Software, Deutschland" />
+<meta name="author" content="TrapMap" />
+<meta name="robots" content="index, follow" />
+<meta name="theme-color" content="#10B981" />
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://trap-map.de/" />
+<meta property="og:title" content="TrapMap - Nie wieder Zettelwirtschaft bei der Schädlingskontrolle" />
+<meta property="og:description" content="TrapMap digitalisiert Ihr Schädlingsmonitoring. QR-Code scannen, Status dokumentieren, Report generieren. Audit-sicher in nur 2 Minuten." />
+<meta property="og:image" content="https://trap-map.de/og-image.png" />
+<meta property="og:locale" content="de_DE" />
+<meta property="og:site_name" content="TrapMap" />
+
+<!-- Twitter -->
+<meta property="twitter:card" content="summary_large_image" />
+<meta property="twitter:url" content="https://trap-map.de/" />
+<meta property="twitter:title" content="TrapMap - Digitales Schädlingsmonitoring" />
+<meta property="twitter:description" content="Nie wieder Zettelwirtschaft bei der Schädlingskontrolle. HACCP, IFS, ISO 22000 konform." />
+<meta property="twitter:image" content="https://trap-map.de/og-image.png" />
+
+<!-- Canonical URL -->
+<link rel="canonical" href="https://trap-map.de/" />
+
+<!-- Structured Data / Schema.org -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "TrapMap",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web, iOS, Android",
+  "description": "Digitales Schädlingsmonitoring für professionelle Schädlingsbekämpfer. QR-Code basierte Dokumentation, HACCP/IFS konforme Reports.",
+  "url": "https://trap-map.de",
+  "author": {
+    "@type": "Organization",
+    "name": "TrapMap",
+    "url": "https://trap-map.de"
+  },
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "EUR",
+    "description": "Kostenlose BETA bis März 2026"
+  },
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "5",
+    "ratingCount": "1"
+  },
+  "featureList": [
+    "QR-Code Scanning",
+    "GPS Kartenansicht",
+    "Lageplan-Integration",
+    "HACCP konforme Reports",
+    "IFS konforme Dokumentation",
+    "ISO 22000 Unterstützung",
+    "DSGVO konform",
+    "Offline-fähig"
+  ]
+}
+</script>
+
+<!-- Organization Schema -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "TrapMap",
+  "url": "https://trap-map.de",
+  "logo": "https://trap-map.de/logo.svg",
+  "contactPoint": {
+    "@type": "ContactPoint",
+    "telephone": "+49-152-026-370-89",
+    "contactType": "customer service",
+    "email": "info@trap-map.de",
+    "availableLanguage": "German"
+  },
+  "address": {
+    "@type": "PostalAddress",
+    "addressCountry": "DE"
+  }
+}
+</script>
+
+<!-- PWA Manifest -->
+<link rel="manifest" href="/manifest.json" />
+<link rel="apple-touch-icon" href="/logo-192.png" />
+
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+<!-- Preconnect for performance -->
+<link rel="preconnect" href="https://unpkg.com" />
+<link rel="preconnect" href="https://api.maptiler.com" />
+
+<!-- Noscript Styles -->
+<style>
+  .noscript-fallback {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 40px 20px;
+    color: #1a1a2e;
+    line-height: 1.6;
+  }
+  .noscript-fallback h1 {
+    color: #10B981;
+    font-size: 2rem;
+    margin-bottom: 1rem;
+  }
+  .noscript-fallback h2 {
+    color: #333;
+    font-size: 1.5rem;
+    margin-top: 2rem;
+  }
+  .noscript-fallback .badge {
+    display: inline-block;
+    background: #10B981;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.875rem;
+    margin-right: 8px;
+    margin-bottom: 8px;
+  }
+  .noscript-fallback .cta {
+    display: inline-block;
+    background: #10B981;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    margin-top: 1rem;
+  }
+  .noscript-fallback ul {
+    list-style: none;
+    padding: 0;
+  }
+  .noscript-fallback li {
+    padding: 8px 0;
+    padding-left: 24px;
+    position: relative;
+  }
+  .noscript-fallback li::before {
+    content: "✓";
+    position: absolute;
+    left: 0;
+    color: #10B981;
+  }
+</style>
+```
+
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+
+```
+<!-- Noscript Fallback for SEO Crawlers -->
+<noscript>
+  <div class="noscript-fallback">
+    <h1>TrapMap - Digitales Schädlingsmonitoring</h1>
+    
+    <p><strong>Nie wieder Zettelwirtschaft bei der Schädlingskontrolle.</strong></p>
+    
+    <p>TrapMap digitalisiert Ihr Schädlingsmonitoring. QR-Code scannen, Status dokumentieren, Report generieren – fertig. Audit-sicher in nur 2 Minuten.</p>
+    
+    <div style="margin: 20px 0;">
+      <span class="badge">HACCP</span>
+      <span class="badge">IFS</span>
+      <span class="badge">ISO 22000</span>
+      <span class="badge">DSGVO</span>
+      <span class="badge">AIB</span>
+    </div>
+    
+    <h2>Features</h2>
+    <ul>
+      <li>QR-Code Scanning - Jede Box eindeutig identifizieren</li>
+      <li>GPS Kartenansicht - Boxen auf der Karte positionieren</li>
+      <li>Lageplan-Integration - Boxen auf Gebäudeplänen platzieren</li>
+      <li>Automatische Reports - HACCP/IFS konforme PDF-Reports</li>
+      <li>Offline-fähig - Auch ohne Internet dokumentieren</li>
+      <li>Multi-Mandanten - Mehrere Kunden verwalten</li>
+      <li>Partner-Accounts - Kunden Zugriff auf ihre Daten geben</li>
+    </ul>
+    
+    <h2>Kostenlos testen</h2>
+    <p>Testen Sie TrapMap kostenlos bis März 2026. Keine Kreditkarte erforderlich. 20 QR-Codes inklusive.</p>
+    
+    <a href="mailto:info@trap-map.de" class="cta">Demo anfragen</a>
+    
+    <h2>Kontakt</h2>
+    <p>
+      E-Mail: <a href="mailto:info@trap-map.de">info@trap-map.de</a><br>
+      Telefon: <a href="tel:+4915202637089">0152 / 026 370 89</a>
+    </p>
+    
+    <p style="margin-top: 40px; font-size: 0.875rem; color: #666;">
+      © 2025 TrapMap. Alle Rechte vorbehalten. | 
+      <a href="/impressum">Impressum</a> | 
+      <a href="/datenschutz">Datenschutz</a>
+    </p>
+  </div>
+</noscript>
+
+<script type="module" src="/src/main.jsx"></script>
+```
+
   </body>
 </html>
