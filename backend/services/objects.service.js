@@ -296,18 +296,61 @@ exports.getArchived = async (organisationId) => {
 // ARCHIVE OBJECT
 // Boxen zurück ins Lager (Pool), Objekt als archiviert markieren
 // ============================================
-exports.archive = async (id, organisationId, userId, reason = null) => {
+exports.archive = async (id, organisationId, userId, reason = null, generatePdf = false) => {
   try {
     console.log(`📦 Archiving object ${id}...`);
 
-    // 1. Objekt archivieren
+    // 1. Objekt-Daten vor Archivierung speichern (für PDF)
+    let objectData = null;
+    let boxesData = null;
+    let scansData = null;
+    
+    if (generatePdf) {
+      // Hole alle Daten für PDF-Bericht
+      const { data: obj } = await supabase
+        .from("objects")
+        .select("*")
+        .eq("id", id)
+        .eq("organisation_id", organisationId)
+        .single();
+      objectData = obj;
+      
+      // Hole Boxen und deren Scans
+      const { data: boxes } = await supabase
+        .from("boxes")
+        .select(`
+          *,
+          box_type:box_types(name)
+        `)
+        .eq("object_id", id);
+      boxesData = boxes;
+      
+      // Hole alle Scans
+      if (boxes && boxes.length > 0) {
+        const boxIds = boxes.map(b => b.id);
+        const { data: scans } = await supabase
+          .from("scans")
+          .select("*")
+          .in("box_id", boxIds)
+          .order("scanned_at", { ascending: false });
+        scansData = scans;
+      }
+    }
+
+    // 2. Objekt archivieren (archived_by kann null sein wenn Spalte nicht UUID ist)
+    const updateData = {
+      archived_at: new Date().toISOString(),
+      archive_reason: reason || null
+    };
+    
+    // Nur archived_by setzen wenn userId eine gültige UUID ist
+    if (userId && typeof userId === 'string' && userId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      updateData.archived_by = userId;
+    }
+    
     const { error: archiveError } = await supabase
       .from("objects")
-      .update({
-        archived_at: new Date().toISOString(),
-        archived_by: userId,
-        archive_reason: reason || null
-      })
+      .update(updateData)
       .eq("id", id)
       .eq("organisation_id", organisationId);
 
@@ -358,7 +401,26 @@ exports.archive = async (id, organisationId, userId, reason = null) => {
     }
 
     console.log(`✅ Object ${id} archived successfully`);
-    return { success: true, boxesReturned };
+    
+    const result = { 
+      success: true, 
+      boxesReturned,
+      reportGenerated: generatePdf
+    };
+    
+    // Speichere Archiv-Daten für PDF-Generierung
+    if (generatePdf && objectData) {
+      result.archiveData = {
+        object: objectData,
+        boxes: boxesData || [],
+        scans: scansData || [],
+        reason: reason,
+        archived_at: new Date().toISOString(),
+        boxes_returned: boxesReturned
+      };
+    }
+    
+    return result;
 
   } catch (err) {
     console.error("Error archiving object:", err);

@@ -49,6 +49,9 @@ router.patch("/:id/gps-edit", authenticate, requireEditor, asyncHandler(objectsC
 // ARCHIVE object (Boxen zurück ins Lager)
 router.post("/:id/archive", authenticate, requireEditor, asyncHandler(objectsController.archive));
 
+// GENERATE Archive PDF Report
+router.get("/:id/archive-report", authenticate, asyncHandler(objectsController.generateArchiveReport));
+
 // RESTORE archived object
 router.post("/:id/restore", authenticate, requireEditor, asyncHandler(objectsController.restore));
 

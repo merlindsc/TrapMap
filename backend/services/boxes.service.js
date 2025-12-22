@@ -371,16 +371,32 @@ exports.bulkAssignToObject = async (identifiers, objectId, organisationId, userI
     // Prüfen ob Boxen existieren - entweder über QR-Code oder ID
     let query = supabase
       .from("boxes")
-      .select("id, qr_code, object_id")
+      .select("id, qr_code, object_id, organisation_id")
       .eq("organisation_id", organisationId);
     
     if (useQrCodes) {
+      // WICHTIG: Trimme und normalisiere QR-Codes
+      const normalizedCodes = identifiers.map(code => code.trim().toUpperCase());
+      console.log(`📦 Normalized QR-Codes:`, normalizedCodes);
       query = query.in("qr_code", identifiers);
+      
+      // Debug: Hole auch alle Boxen der Org um zu sehen was in DB ist
+      const { data: allBoxes } = await supabase
+        .from("boxes")
+        .select("qr_code")
+        .eq("organisation_id", organisationId)
+        .limit(10);
+      console.log(`📦 Sample QR-Codes in DB:`, allBoxes?.map(b => b.qr_code));
     } else {
       query = query.in("id", identifiers);
     }
 
     const { data: boxes, error: fetchError } = await query;
+
+    console.log(`📦 Query result: Found ${boxes?.length || 0} boxes`);
+    if (boxes && boxes.length > 0) {
+      console.log(`📦 Found boxes:`, boxes.map(b => ({ id: b.id, qr: b.qr_code, org: b.organisation_id })));
+    }
 
     if (fetchError) {
       console.error("❌ Fetch error:", fetchError);

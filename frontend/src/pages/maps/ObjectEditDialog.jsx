@@ -91,7 +91,7 @@ export default function ObjectEditDialog({ object, onClose, onSave, onDelete, bo
   };
 
   // ============================================
-  // ARCHIVIEREN: Neuer API-Endpoint mit Grund
+  // ARCHIVIEREN: Mit PDF-Bericht-Generierung
   // ============================================
   const [archiveReason, setArchiveReason] = useState("");
   
@@ -99,13 +99,17 @@ export default function ObjectEditDialog({ object, onClose, onSave, onDelete, bo
     setArchiveLoading(true);
     
     try {
+      // 1. Objekt archivieren
       const res = await fetch(`${API}/objects/${object.id}/archive`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ reason: archiveReason || null }),
+        body: JSON.stringify({ 
+          reason: archiveReason || null,
+          generate_pdf: true  // PDF-Bericht erstellen
+        }),
       });
 
       if (!res.ok) {
@@ -116,11 +120,37 @@ export default function ObjectEditDialog({ object, onClose, onSave, onDelete, bo
       const result = await res.json();
       console.log(`✅ Objekt archiviert, ${result.boxesReturned || 0} Boxen zurück ins Lager`);
       
-      setToast({ type: "success", msg: `Objekt archiviert${result.boxesReturned > 0 ? `, ${result.boxesReturned} Boxen im Lager` : ''}` });
+      // 2. PDF-Archivbericht herunterladen
+      if (result.pdfUrl || result.reportGenerated) {
+        setToast({ type: "success", msg: "Erstelle Archiv-Bericht..." });
+        
+        // PDF herunterladen
+        const pdfRes = await fetch(`${API}/objects/${object.id}/archive-report`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (pdfRes.ok) {
+          const blob = await pdfRes.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `Archiv_${object.name.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+          
+          setToast({ type: "success", msg: `Objekt archiviert, PDF-Bericht heruntergeladen` });
+        } else {
+          setToast({ type: "success", msg: `Objekt archiviert${result.boxesReturned > 0 ? `, ${result.boxesReturned} Boxen im Lager` : ''}` });
+        }
+      } else {
+        setToast({ type: "success", msg: `Objekt archiviert${result.boxesReturned > 0 ? `, ${result.boxesReturned} Boxen im Lager` : ''}` });
+      }
       
       setTimeout(() => {
         if (onDelete) onDelete(object.id);
-      }, 500);
+      }, 1000);
       
     } catch (e) {
       console.error("Error archiving object:", e);
@@ -134,6 +164,24 @@ export default function ObjectEditDialog({ object, onClose, onSave, onDelete, bo
   // LÖSCHEN: Nur Objekt löschen (Boxen bleiben)
   // ============================================
   const handleDelete = async () => {
+    // Bessere Warnung vor dem Löschen
+    const confirmed = window.confirm(
+      `⚠️ WARNUNG: Objekt "${object.name}" wirklich PERMANENT löschen?\n\n` +
+      `✅ Alle Boxen werden automatisch ins Lager zurückgelegt\n` +
+      `❌ Alle Informationen über dieses Objekt werden PERMANENT gelöscht:\n` +
+      `   • Adresse, Kontakt, Notizen\n` +
+      `   • Grundriss und Positionen\n` +
+      `   • Scan-Historie und Berichte\n` +
+      `   • Audit-Protokolle\n\n` +
+      `💡 TIPP: Besser "Archivieren" nutzen!\n` +
+      `   → Objekt wird ausgeblendet (für 3 Jahre)\n` +
+      `   → Alle Daten bleiben erhalten\n` +
+      `   → Kann jederzeit wiederhergestellt werden\n\n` +
+      `Wirklich PERMANENT löschen?`
+    );
+    
+    if (!confirmed) return;
+    
     setSaving(true);
     try {
       const res = await fetch(`${API}/objects/${object.id}`, {
@@ -147,7 +195,11 @@ export default function ObjectEditDialog({ object, onClose, onSave, onDelete, bo
         throw new Error("Delete failed");
       }
 
-      if (onDelete) onDelete(object.id);
+      setToast({ type: "success", msg: "Objekt gelöscht, Boxen im Lager" });
+      
+      setTimeout(() => {
+        if (onDelete) onDelete(object.id);
+      }, 800);
     } catch (e) {
       console.error("Error deleting object:", e);
       setToast({ type: "error", msg: "Fehler beim Löschen" });
@@ -246,32 +298,23 @@ export default function ObjectEditDialog({ object, onClose, onSave, onDelete, bo
                   <p style={{ color: "#fca5a5", margin: 0, fontSize: 13, lineHeight: 1.5 }}>
                     {boxCount > 0 ? (
                       <>
-                        <strong>{boxCount} Boxen</strong> werden zurück ins Lager verschoben und vollständig zurückgesetzt.
-                        Die Scan-Historie bleibt erhalten.
+                        📦 <strong>{boxCount} Boxen</strong> werden automatisch ins Lager zurückgelegt.<br />
+                        📄 Ein <strong>PDF-Archivbericht</strong> wird mit allen Aktivitäten erstellt.<br />
+                        🔒 Das Objekt wird permanent archiviert (keine Wiederherstellung).
                       </>
                     ) : (
-                      "Das Objekt hat keine zugewiesenen Boxen."
+                      <>
+                        📄 Ein <strong>PDF-Archivbericht</strong> wird mit allen Aktivitäten erstellt.<br />
+                        🔒 Das Objekt wird permanent archiviert (keine Wiederherstellung).
+                      </>
                     )}
                   </p>
                 </div>
               </div>
               
-              {boxCount > 0 && (
-                <div style={{
-                  padding: 10, background: "rgba(0,0,0,0.2)", borderRadius: 6,
-                  marginBottom: 12, display: "flex", alignItems: "center", gap: 8
-                }}>
-                  <Package size={16} color="#fca5a5" />
-                  <span style={{ color: "#fca5a5", fontSize: 12 }}>
-                    {boxCount} Boxen → Lager (mit Reset)
-                  </span>
-                </div>
-              )}
-              
-              {/* Grund für Archivierung (optional) */}
               <div style={{ marginBottom: 12 }}>
-                <label style={{ display: "block", color: "#fca5a5", fontSize: 12, marginBottom: 4 }}>
-                  Grund (optional)
+                <label style={{ color: "#fca5a5", fontSize: 13, display: "block", marginBottom: 6 }}>
+                  Grund für Archivierung:
                 </label>
                 <input
                   type="text"
