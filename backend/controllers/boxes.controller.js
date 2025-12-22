@@ -240,6 +240,16 @@ exports.assignToObject = async (req, res) => {
 // ============================================
 exports.bulkAssignToObject = async (req, res) => {
   try {
+    // KRITISCHES DEBUG: Body-Parsing prüfen
+    console.log("📦 RAW REQUEST INFO:", {
+      content_type: req.headers['content-type'],
+      body_exists: !!req.body,
+      body_type: typeof req.body,
+      body_is_object: typeof req.body === 'object',
+      body_keys: req.body ? Object.keys(req.body) : [],
+      raw_body_string: JSON.stringify(req.body)
+    });
+    
     const { box_ids, qr_codes, object_id } = req.body;
     
     // Ausführliches Debug-Logging
@@ -247,10 +257,13 @@ exports.bulkAssignToObject = async (req, res) => {
       has_qr_codes: !!qr_codes,
       qr_codes_is_array: Array.isArray(qr_codes),
       qr_codes_length: Array.isArray(qr_codes) ? qr_codes.length : 'n/a',
+      qr_codes_type: typeof qr_codes,
+      qr_codes_value: qr_codes,
       has_box_ids: !!box_ids,
       box_ids_is_array: Array.isArray(box_ids),
       box_ids_length: Array.isArray(box_ids) ? box_ids.length : 'n/a',
       object_id: object_id,
+      object_id_type: typeof object_id,
       raw_body: JSON.stringify(req.body).substring(0, 500)
     });
     

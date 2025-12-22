@@ -192,6 +192,13 @@ export default function BoxPool() {
       return;
     }
 
+    // KRITISCH: Prüfe ob poolBoxes ein Array ist
+    if (!Array.isArray(poolBoxes)) {
+      console.error("❌ poolBoxes ist kein Array:", typeof poolBoxes, poolBoxes);
+      setAssignMessage({ type: "error", text: "Fehler: Boxen-Daten ungültig" });
+      return;
+    }
+
     if (poolBoxes.length < count) {
       setAssignMessage({ 
         type: "error", 
@@ -224,6 +231,10 @@ export default function BoxPool() {
     
     console.log("📦 Extracted identifiers:", {
       qr_codes: qrCodes,
+      qr_codes_type: typeof qrCodes,
+      qr_codes_is_array: Array.isArray(qrCodes),
+      qr_codes_length: qrCodes.length,
+      qr_codes_sample: qrCodes.slice(0, 3),
       box_ids: boxIds,
       object_id: quickObjectId
     });
@@ -248,23 +259,40 @@ export default function BoxPool() {
       return;
     }
     
-    console.log("📦 Final payload:", JSON.stringify(payload));
+    console.log("📦 Final payload (stringified):", JSON.stringify(payload));
+    console.log("📦 Final payload (raw object):", payload);
+    console.log("📦 Payload validation:", {
+      has_qr_codes: 'qr_codes' in payload,
+      qr_codes_is_array: Array.isArray(payload.qr_codes),
+      qr_codes_length: payload.qr_codes?.length || 0,
+      has_box_ids: 'box_ids' in payload,
+      box_ids_is_array: Array.isArray(payload.box_ids),
+      box_ids_length: payload.box_ids?.length || 0,
+      has_object_id: 'object_id' in payload,
+      object_id_type: typeof payload.object_id,
+      object_id_value: payload.object_id
+    });
 
     setAssigning(true);
     setAssignMessage({ type: "info", text: `Weise ${payload.qr_codes?.length || payload.box_ids?.length} Boxen zu...` });
 
     try {
+      const bodyString = JSON.stringify(payload);
+      console.log("📦 Request body string:", bodyString);
+      console.log("📦 Request body length:", bodyString.length);
+      
       const res = await fetch(`${API}/boxes/bulk-assign`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify(payload)
+        body: bodyString
       });
 
       const responseData = await res.json();
-      console.log("📦 API Response:", responseData);
+      console.log("📦 API Response status:", res.status);
+      console.log("📦 API Response data:", responseData);
 
       if (res.ok) {
         const objName = objects.find(o => o.id == quickObjectId)?.name || "Objekt";

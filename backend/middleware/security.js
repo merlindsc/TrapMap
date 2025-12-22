@@ -106,6 +106,21 @@ const sanitizeInput = (input) => {
 
 const sanitizeObject = (obj) => {
   if (!obj || typeof obj !== 'object') return obj;
+  
+  // KRITISCH: Arrays müssen als Arrays erhalten bleiben!
+  if (Array.isArray(obj)) {
+    return obj.map(item => {
+      if (typeof item === 'string') {
+        return sanitizeInput(item);
+      } else if (typeof item === 'object' && item !== null) {
+        return sanitizeObject(item);
+      } else {
+        return item;
+      }
+    });
+  }
+  
+  // Objekte normal verarbeiten
   const sanitized = {};
   for (const [key, value] of Object.entries(obj)) {
     if (typeof value === 'string') {
