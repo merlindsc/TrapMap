@@ -189,29 +189,24 @@ const FUNCTIONS = [
   },
   {
     name: "generate_report",
-    description: "Generiert einen PDF-Report für ein Objekt. Gibt einen Download-Link zurück.",
+    description: "Generiert einen PDF-Report für ein Objekt. Kann entweder object_id ODER object_number (1, 2, 3...) verwenden. Bei object_number=1 wird das erste Objekt des Users genommen.",
     parameters: {
       type: "object",
       properties: {
         object_id: {
           type: "integer",
-          description: "Die ID des Objekts für den Report"
+          description: "Die direkte ID des Objekts (falls bekannt)"
+        },
+        object_number: {
+          type: "integer", 
+          description: "Die Nummer des Objekts (1 = erstes Objekt, 2 = zweites, etc.). Verwende dies wenn User 'Objekt 1' sagt."
         },
         report_type: {
           type: "string",
           enum: ["standard", "detailed", "summary"],
           description: "Art des Reports (default: standard)"
-        },
-        date_from: {
-          type: "string",
-          description: "Startdatum für Report (YYYY-MM-DD, optional)"
-        },
-        date_to: {
-          type: "string",
-          description: "Enddatum für Report (YYYY-MM-DD, optional)"
         }
-      },
-      required: ["object_id"]
+      }
     }
   },
   {
@@ -485,35 +480,59 @@ async function executeFunction(name, args, organisationId, userId) {
     }
 
     case "generate_report": {
+      let objectId = args.object_id;
+      
+      // Wenn object_number gegeben, erst das Objekt finden
+      if (!objectId && args.object_number) {
+        const { data: objects } = await supabase
+          .from('objects')
+          .select('id, name')
+          .eq('organisation_id', organisationId)
+          .order('name');
+        
+        if (objects && objects.length >= args.object_number) {
+          objectId = objects[args.object_number - 1].id;
+        } else {
+          return {
+            success: false,
+            error: `Objekt ${args.object_number} nicht gefunden. Du hast nur ${objects?.length || 0} Objekte.`
+          };
+        }
+      }
+      
+      if (!objectId) {
+        return {
+          success: false,
+          error: 'Bitte gib eine Objekt-ID oder Objekt-Nummer an.'
+        };
+      }
+      
       // Prüfe ob Objekt existiert und dem User gehört
       const { data: obj, error: objError } = await supabase
         .from('objects')
         .select('id, name')
-        .eq('id', args.object_id)
+        .eq('id', objectId)
         .eq('organisation_id', organisationId)
         .single();
       
       if (objError || !obj) {
         return { 
           success: false, 
-          error: `Objekt mit ID ${args.object_id} nicht gefunden oder kein Zugriff.` 
+          error: `Objekt mit ID ${objectId} nicht gefunden oder kein Zugriff.` 
         };
       }
       
-      // Generiere Report-URL (der Frontend kann diese öffnen)
-      const baseUrl = process.env.FRONTEND_URL || 'https://trap-map.de';
+      // Generiere Report-URL
       const apiUrl = process.env.API_URL || 'https://trapmap-backend.onrender.com';
-      
-      // Report-Link erstellen
-      const reportUrl = `${apiUrl}/api/audit-reports/${args.object_id}`;
+      const reportUrl = `${apiUrl}/api/audit-reports/${objectId}`;
       
       return {
         success: true,
-        message: `PDF-Report für "${obj.name}" wurde generiert!`,
+        message: `PDF-Report für "${obj.name}" ist bereit!`,
         objekt_name: obj.name,
         objekt_id: obj.id,
         download_url: reportUrl,
-        hinweis: `Klicke auf den Link um den Report herunterzuladen: ${reportUrl}`
+        hinweis: `Hier ist dein Report: ${reportUrl}`
       };
     }
 
@@ -824,7 +843,7 @@ async function executeFunction(name, args, organisationId, userId) {
   }
 }
 
-// Haupt-Chat-Funktion
+// Haupt-Chat-Funktion mit Multi-Function-Call Support
 async function chat(messages, organisationId, userId) {
   try {
     // GPT-4o mini mit Function Calling
@@ -840,48 +859,55 @@ async function chat(messages, organisationId, userId) {
       temperature: 0.7
     });
 
-    const message = response.choices[0].message;
+    let message = response.choices[0].message;
+    let totalTokens = response.usage.total_tokens;
+    let allFunctionsCalled = [];
+    let conversationMessages = [
+      { role: "system", content: SYSTEM_PROMPT },
+      ...messages
+    ];
 
-    // Wenn GPT eine Funktion aufrufen will
-    if (message.function_call) {
+    // Loop für mehrere Function Calls (max 5)
+    let iterations = 0;
+    while (message.function_call && iterations < 5) {
+      iterations++;
+      
       const functionName = message.function_call.name;
       const functionArgs = JSON.parse(message.function_call.arguments || '{}');
       
-      console.log(`[Chatbot] Calling function: ${functionName}`, functionArgs);
+      console.log(`[Chatbot] Calling function ${iterations}: ${functionName}`, functionArgs);
       
       // Funktion ausführen
       const functionResult = await executeFunction(functionName, functionArgs, organisationId, userId);
+      allFunctionsCalled.push({ name: functionName, args: functionArgs, result: functionResult });
       
-      // Ergebnis zurück an GPT geben
-      const secondResponse = await openai.chat.completions.create({
+      // Conversation erweitern
+      conversationMessages.push(message);
+      conversationMessages.push({
+        role: "function",
+        name: functionName,
+        content: JSON.stringify(functionResult)
+      });
+      
+      // Nächste Antwort holen (kann wieder ein Function Call sein)
+      const nextResponse = await openai.chat.completions.create({
         model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          ...messages,
-          message,
-          {
-            role: "function",
-            name: functionName,
-            content: JSON.stringify(functionResult)
-          }
-        ],
+        messages: conversationMessages,
+        functions: FUNCTIONS,
+        function_call: "auto",
         max_tokens: 1500,
         temperature: 0.7
       });
-
-      return {
-        response: secondResponse.choices[0].message.content,
-        function_called: functionName,
-        function_result: functionResult,
-        tokens_used: response.usage.total_tokens + secondResponse.usage.total_tokens
-      };
+      
+      message = nextResponse.choices[0].message;
+      totalTokens += nextResponse.usage.total_tokens;
     }
 
-    // Direkte Antwort ohne Funktionsaufruf
     return {
       response: message.content,
-      function_called: null,
-      tokens_used: response.usage.total_tokens
+      function_called: allFunctionsCalled.length > 0 ? allFunctionsCalled.map(f => f.name).join(', ') : null,
+      function_result: allFunctionsCalled.length > 0 ? allFunctionsCalled[allFunctionsCalled.length - 1].result : null,
+      tokens_used: totalTokens
     };
 
   } catch (error) {
