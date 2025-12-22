@@ -1,0 +1,38 @@
+# robots.txt for TrapMap
+# https://trap-map.de
+
+User-agent: *
+Allow: /
+
+# Block internal app routes from indexing
+Disallow: /dashboard
+Disallow: /objects
+Disallow: /maps
+Disallow: /boxes
+Disallow: /reports
+Disallow: /settings
+Disallow: /admin
+Disallow: /qr/
+Disallow: /s/
+Disallow: /partner/dashboard
+
+# Allow public pages
+Allow: /login
+Allow: /impressum
+Allow: /datenschutz
+Allow: /agb
+Allow: /partner/login
+
+# Block API endpoints
+Disallow: /api/
+
+# Block asset files that don't need indexing
+Disallow: /*.js$
+Disallow: /*.css$
+Disallow: /*.json$
+
+# Sitemap location
+Sitemap: https://trap-map.de/sitemap.xml
+
+# Crawl-delay (optional, be nice to the server)
+Crawl-delay: 1
