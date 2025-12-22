@@ -14,6 +14,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useMapControls } from "../../context/MapControlsContext";
 import Modal from "../ui/ThemeModal";
 import "./DashboardLayout.css";
+import ChatWidget from "../ChatWidget";
 import trapMapLogo from "../../assets/trapmap-logo-200.png";
 
 // ============================================================
@@ -535,6 +536,8 @@ export default function DashboardLayout({ children }) {
           </div>
         </div>
       </Modal>
+      {/* AI Support Chat */}
+      <ChatWidget />
     </div>
   );
 }

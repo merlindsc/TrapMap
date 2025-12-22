@@ -94,6 +94,15 @@ try {
   console.log('⚠️ Push routes failed to load:', e.message);
 }
 
+// Chatbot Routes (GPT-4o mini)
+let chatbotRoutes = null;
+try {
+  chatbotRoutes = require('./routes/chatbot.routes');
+  console.log('✅ Chatbot routes loaded');
+} catch (e) {
+  console.log('⚠️ Chatbot routes failed to load:', e.message);
+}
+
 // ============================================
 // AUDIT REPORT ROUTES (PDF Generator)
 // ============================================
@@ -258,6 +267,7 @@ if (adminRoutes) app.use('/api/admin', adminRoutes);
 if (demoRoutes) app.use('/api/demo', demoRoutes);
 if (feedbackRoutes) app.use('/api/feedback', feedbackRoutes);
 if (pushRoutes) app.use('/api/push', pushRoutes);
+if (chatbotRoutes) app.use('/api/chat', chatbotRoutes);
 
 // ============================================
 // AUDIT REPORT ROUTES (PDF Generator)

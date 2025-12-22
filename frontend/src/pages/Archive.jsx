@@ -4,7 +4,7 @@
    ============================================================ */
 
 import { useState, useEffect } from 'react';
-import { Archive, RotateCcw, Building2, Calendar, User, Search, AlertTriangle, FileText } from 'lucide-react';
+import { Archive, RotateCcw, Building2, Calendar, User, Search, AlertTriangle, FileText, Trash2 } from 'lucide-react';
 import axios from 'axios';
 
 const API = import.meta.env.VITE_API_URL;
@@ -13,6 +13,7 @@ export default function ArchivePage() {
   const [archivedObjects, setArchivedObjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [restoring, setRestoring] = useState(null);
+  const [deleting, setDeleting] = useState(null);
   const [downloadingPdf, setDownloadingPdf] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [toast, setToast] = useState(null);
@@ -94,6 +95,28 @@ export default function ArchivePage() {
     }
   };
 
+  const handleDelete = async (id, name) => {
+    if (!confirm(`⚠️ ACHTUNG: Objekt "${name}" endgültig löschen?\n\nDieses Objekt und ALLE zugehörigen Daten (Scans, Fotos, etc.) werden PERMANENT gelöscht!\n\nDiese Aktion kann NICHT rückgängig gemacht werden!\n\nFortfahren?`)) {
+      return;
+    }
+    
+    setDeleting(id);
+    
+    try {
+      await axios.delete(`${API}/objects/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setToast({ type: 'success', msg: `"${name}" endgültig gelöscht` });
+      loadArchived();
+    } catch (err) {
+      console.error('Fehler beim Löschen:', err);
+      setToast({ type: 'error', msg: 'Fehler beim Löschen' });
+    } finally {
+      setDeleting(null);
+    }
+  };
+
   // Filtern nach Suchbegriff
   const filteredObjects = archivedObjects.filter(obj => 
     obj.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -121,13 +144,13 @@ export default function ArchivePage() {
         {/* Suche */}
         {archivedObjects.length > 0 && (
           <div className="md:ml-auto relative">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Suchen..."
-              className="w-full md:w-64 pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-indigo-500"
+              className="w-full md:w-64 pl-10 pr-4 py-2 bg-gray-700/50 border border-gray-600 text-white placeholder:text-gray-400 rounded-lg focus:outline-none focus:border-indigo-500 focus:bg-gray-700/70"
             />
           </div>
         )}
@@ -158,7 +181,7 @@ export default function ArchivePage() {
           {filteredObjects.map(obj => (
             <div 
               key={obj.id} 
-              className="bg-gray-800 rounded-xl p-4 border border-gray-700 hover:border-gray-600 transition-colors"
+              className="bg-gray-700/40 rounded-xl p-4 border border-gray-600 hover:bg-gray-700/70 hover:border-gray-500 transition-all duration-200"
             >
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                 {/* Objekt Info */}
@@ -167,14 +190,14 @@ export default function ArchivePage() {
                     <Building2 size={24} className="text-gray-400" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-lg truncate">{obj.name}</h3>
-                    <p className="text-sm text-gray-400 truncate">
+                    <h3 className="font-semibold text-lg truncate text-white">{obj.name}</h3>
+                    <p className="text-sm text-gray-200 truncate">
                       {obj.address && `${obj.address}, `}{obj.zip} {obj.city}
                     </p>
                     
                     {/* Archivierungs-Details */}
-                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
-                      <span className="flex items-center gap-1">
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                      <span className="flex items-center gap-1 text-gray-200">
                         <Calendar size={14} />
                         {new Date(obj.archived_at).toLocaleDateString('de-DE', {
                           day: '2-digit',
@@ -185,7 +208,7 @@ export default function ArchivePage() {
                         })}
                       </span>
                       {obj.archive_reason && (
-                        <span className="text-orange-400">
+                        <span className="text-orange-300">
                           Grund: {obj.archive_reason}
                         </span>
                       )}
@@ -230,6 +253,26 @@ export default function ArchivePage() {
                       <>
                         <RotateCcw size={16} />
                         <span className="hidden sm:inline">Wiederherstellen</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Delete Button */}
+                  <button
+                    onClick={() => handleDelete(obj.id, obj.name)}
+                    disabled={deleting === obj.id}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors whitespace-nowrap"
+                    title="Objekt endgültig löschen"
+                  >
+                    {deleting === obj.id ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Lädt...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 size={16} />
+                        <span className="hidden sm:inline">Löschen</span>
                       </>
                     )}
                   </button>

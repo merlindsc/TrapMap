@@ -156,13 +156,28 @@ exports.remove = async (id, organisationId) => {
     console.log(`⚠️ WARNUNG: Alle Scans, Grundrisse und Zonen werden UNWIDERRUFLICH gelöscht!`);
     console.log(`📦 Boxen werden zurück ins Lager verschoben...`);
 
-    // 1. BOXEN ZURÜCK INS LAGER (vor dem Löschen!)
+    // 1. Hole alle Boxen des Objekts (auch unplatzierte)
+    const { data: boxesCheck, error: checkError } = await supabase
+      .from("boxes")
+      .select("id, qr_code, object_id, position_type")
+      .eq("object_id", id)
+      .eq("organisation_id", organisationId);
+    
+    if (checkError) {
+      console.error("❌ Error checking boxes:", checkError);
+    }
+    
+    console.log(`📦 Found ${boxesCheck?.length || 0} boxes with object_id=${id}:`, 
+      boxesCheck?.map(b => ({ id: b.id, qr: b.qr_code, pos_type: b.position_type }))
+    );
+
+    // 2. BOXEN ZURÜCK INS LAGER - Reset ALLE Boxen dieses Objekts
     const { data: returnedBoxes, error: boxResetError } = await supabase
       .from("boxes")
       .update({
         object_id: null,
         box_type_id: null,
-        optional_name: null,
+        box_name: null,
         lat: null,
         lng: null,
         floor_plan_id: null,
@@ -173,14 +188,17 @@ exports.remove = async (id, organisationId) => {
         layout_id: null
       })
       .eq("object_id", id)
+      .eq("organisation_id", organisationId)
       .select("id, qr_code");
 
     if (boxResetError) {
-      console.warn("⚠️ Fehler beim Zurücksetzen der Boxen:", boxResetError);
-    } else {
-      const boxCount = returnedBoxes?.length || 0;
-      console.log(`✅ ${boxCount} Boxen zurück ins Lager verschoben`);
+      console.error("❌ Box reset error:", boxResetError);
+      return { success: false, message: `Box reset failed: ${boxResetError.message}` };
     }
+
+    const boxCount = returnedBoxes?.length || 0;
+    console.log(`✅ RESET COMPLETE: ${boxCount} Boxen zurück ins Lager`);
+    console.log(`   QR-Codes: ${returnedBoxes?.map(b => b.qr_code).join(', ') || 'none'}`);
 
     // 2. Get all floor plans for this object to find images
     const { data: floorPlans, error: fpError } = await supabase
@@ -224,7 +242,7 @@ exports.remove = async (id, organisationId) => {
       }
     }
 
-    // 4. Delete the object (cascade will handle layouts, scans, zones - Boxen wurden bereits zurück ins Lager verschoben!)
+    // 3. Delete the object (cascade will handle layouts, scans, zones - Boxen wurden bereits zurück ins Lager verschoben!)
     const { error } = await supabase
       .from("objects")
       .delete()
@@ -233,7 +251,6 @@ exports.remove = async (id, organisationId) => {
 
     if (error) return { success: false, message: error.message };
 
-    const boxCount = returnedBoxes?.length || 0;
     console.log(`✅ Objekt ${id} gelöscht. ${boxCount} Boxen sind jetzt im Lager verfügbar.`);
     return { success: true, boxesReturned: boxCount };
 
@@ -294,6 +311,76 @@ exports.getArchived = async (organisationId) => {
 };
 
 // ============================================
+// RELEASE UNPLACED BOXES
+// Gibt nur Boxen zurück die position_type = null oder 'none' haben
+// ============================================
+exports.releaseUnplacedBoxes = async (id, organisationId) => {
+  try {
+    console.log(`📦 Releasing unplaced boxes for object ${id}...`);
+
+    // Hole alle unplatzierten Boxen (position_type = null oder 'none')
+    const { data: unplacedBoxes, error: checkError } = await supabase
+      .from("boxes")
+      .select("id, qr_code, position_type")
+      .eq("object_id", id)
+      .eq("organisation_id", organisationId)
+      .or("position_type.is.null,position_type.eq.none");
+    
+    if (checkError) {
+      console.error("❌ Error checking unplaced boxes:", checkError);
+      return { success: false, message: checkError.message };
+    }
+
+    const count = unplacedBoxes?.length || 0;
+    
+    if (count === 0) {
+      console.log("ℹ️ No unplaced boxes found");
+      return { success: true, count: 0, message: "Keine unplatzierten Boxen gefunden" };
+    }
+
+    console.log(`📦 Found ${count} unplaced boxes:`, 
+      unplacedBoxes.map(b => ({ id: b.id, qr: b.qr_code, pos_type: b.position_type }))
+    );
+
+    const boxIds = unplacedBoxes.map(b => b.id);
+
+    // Reset unplatzierte Boxen zurück ins Lager
+    const { data: resetBoxes, error: resetError } = await supabase
+      .from("boxes")
+      .update({
+        object_id: null,
+        box_type_id: null,
+        box_name: null,
+        lat: null,
+        lng: null,
+        floor_plan_id: null,
+        pos_x: null,
+        pos_y: null,
+        grid_position: null,
+        position_type: null,
+        layout_id: null
+      })
+      .in("id", boxIds)
+      .eq("organisation_id", organisationId)
+      .select("id, qr_code");
+
+    if (resetError) {
+      console.error("❌ Error releasing boxes:", resetError);
+      return { success: false, message: resetError.message };
+    }
+
+    const releasedCount = resetBoxes?.length || 0;
+    console.log(`✅ Released ${releasedCount} unplaced boxes`);
+    console.log(`   QR-Codes: ${resetBoxes?.map(b => b.qr_code).join(', ') || 'none'}`);
+
+    return { success: true, count: releasedCount };
+  } catch (err) {
+    console.error("❌ releaseUnplacedBoxes error:", err);
+    return { success: false, message: err.message };
+  }
+};
+
+// ============================================
 // ARCHIVE OBJECT
 // Boxen zurück ins Lager (Pool), Objekt als archiviert markieren
 // ============================================
@@ -324,21 +411,30 @@ exports.archive = async (id, organisationId, userId, reason = null) => {
     }
 
     // 2. Alle Boxen des Objekts zurück in Pool (Position + Typ reset)
-    // Hole erstmal alle Boxen des Objekts (auch unplatzierte)
-    const { data: boxesCheck } = await supabase
+    console.log(`📦 Starting box reset for object ${id}...`);
+    
+    // Hole alle Boxen des Objekts (auch unplatzierte)
+    const { data: boxesCheck, error: checkError } = await supabase
       .from("boxes")
       .select("id, qr_code, object_id, position_type")
       .eq("object_id", id)
       .eq("organisation_id", organisationId);
     
-    console.log(`📦 Found ${boxesCheck?.length || 0} boxes for object ${id}:`, boxesCheck);
+    if (checkError) {
+      console.error("❌ Error checking boxes:", checkError);
+    }
     
-    const { data: boxes, error: boxError } = await supabase
+    console.log(`📦 Found ${boxesCheck?.length || 0} boxes with object_id=${id}:`, 
+      boxesCheck?.map(b => ({ id: b.id, qr: b.qr_code, pos_type: b.position_type }))
+    );
+    
+    // Reset ALLE Boxen dieses Objekts
+    const { data: resetBoxes, error: resetError } = await supabase
       .from("boxes")
       .update({
         object_id: null,
         box_type_id: null,
-        optional_name: null,
+        box_name: null,
         lat: null,
         lng: null,
         floor_plan_id: null,
@@ -350,16 +446,16 @@ exports.archive = async (id, organisationId, userId, reason = null) => {
       })
       .eq("object_id", id)
       .eq("organisation_id", organisationId)
-      .select("id");
+      .select("id, qr_code");
 
-    const boxesReturned = boxes?.length || 0;
-
-    if (boxError) {
-      console.warn("⚠️ Box reset error:", boxError);
-      // Weiter machen, Archivierung war erfolgreich
-    } else {
-      console.log(`✅ ${boxesReturned} Boxen zurück ins Lager`);
+    if (resetError) {
+      console.error("❌ Box reset error:", resetError);
+      return { success: false, message: `Box reset failed: ${resetError.message}` };
     }
+
+    const boxesReturned = resetBoxes?.length || 0;
+    console.log(`✅ RESET COMPLETE: ${boxesReturned} Boxen zurück ins Lager`);
+    console.log(`   QR-Codes: ${resetBoxes?.map(b => b.qr_code).join(', ') || 'none'}`);
 
     // 3. Audit-Log (falls Tabelle existiert)
     try {

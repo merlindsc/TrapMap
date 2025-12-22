@@ -163,6 +163,23 @@ exports.restore = async (req, res) => {
 };
 
 // ============================================
+// RELEASE UNPLACED BOXES
+// ============================================
+exports.releaseUnplacedBoxes = async (req, res) => {
+  const { id } = req.params;
+  const organisationId = req.user.organisation_id;
+
+  const result = await objectsService.releaseUnplacedBoxes(id, organisationId);
+  if (!result.success) return res.status(500).json({ error: result.message });
+
+  return res.json({ 
+    success: true, 
+    message: `${result.count} unplatzierte Boxen freigegeben`,
+    count: result.count 
+  });
+};
+
+// ============================================
 // GPS EDIT TOGGLE
 // ============================================
 exports.toggleGPSEdit = async (req, res) => {

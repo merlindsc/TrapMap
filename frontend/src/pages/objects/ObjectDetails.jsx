@@ -86,6 +86,39 @@ export default function ObjectDetails() {
     setEditDialogOpen(true);
   };
 
+  const handleReleaseUnplacedBoxes = async () => {
+    const unplacedCount = boxes.filter(b => !b.position_type || b.position_type === 'none').length;
+    
+    if (!confirm(`${unplacedCount} unplatzierte Boxen zurück ins Lager verschieben?`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API}/objects/${id}/release-unplaced-boxes`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Fehler beim Freigeben der Boxen');
+      }
+
+      // Reload boxes
+      await loadBoxes();
+      
+      // Show success message
+      alert(`${data.count} Boxen wurden ins Lager zurückgeschoben`);
+    } catch (err) {
+      console.error('Error releasing boxes:', err);
+      alert(err.message || 'Fehler beim Freigeben der Boxen');
+    }
+  };
+
   // ============================================
   // Render
   // ============================================
@@ -108,6 +141,7 @@ export default function ObjectDetails() {
   // Separate boxes by location type
   const floorPlanBoxes = boxes.filter(b => b.layout_id || (b.pos_x !== null && b.pos_y !== null));
   const gpsBoxes = boxes.filter(b => b.lat && b.lng);
+  const unplacedBoxes = boxes.filter(b => !b.position_type || b.position_type === 'none');
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
@@ -305,6 +339,15 @@ export default function ObjectDetails() {
               <h2 className="text-xl font-semibold text-white">
                 Alle Boxen ({boxes.length})
               </h2>
+              {boxes.filter(b => !b.position_type || b.position_type === 'none').length > 0 && (
+                <button
+                  onClick={handleReleaseUnplacedBoxes}
+                  className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition text-sm"
+                >
+                  <Package className="w-4 h-4" />
+                  {boxes.filter(b => !b.position_type || b.position_type === 'none').length} Unplatzierte freigeben
+                </button>
+              )}
             </div>
 
             {boxes.length === 0 ? (
@@ -315,6 +358,26 @@ export default function ObjectDetails() {
               </div>
             ) : (
               <div className="space-y-6">
+                {/* Unplatzierte Boxen */}
+                {unplacedBoxes.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-orange-400 uppercase mb-3 flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      Noch nicht platziert ({unplacedBoxes.length})
+                    </h3>
+                    <div className="bg-orange-900/10 border border-orange-600/30 rounded-lg p-4 mb-3">
+                      <p className="text-orange-200/70 text-sm">
+                        Diese Boxen wurden dem Objekt zugewiesen, aber noch nicht auf einem Lageplan oder per GPS platziert.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {unplacedBoxes.map(box => (
+                        <BoxCard key={box.id} box={box} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Lageplan Boxen */}
                 {floorPlanBoxes.length > 0 && (
                   <div>

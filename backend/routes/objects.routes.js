@@ -55,6 +55,9 @@ router.get("/:id/archive-report", authenticate, asyncHandler(objectsController.g
 // RESTORE archived object
 router.post("/:id/restore", authenticate, requireEditor, asyncHandler(objectsController.restore));
 
+// RELEASE unplaced boxes (zurück ins Lager)
+router.post("/:id/release-unplaced-boxes", authenticate, requireEditor, asyncHandler(objectsController.releaseUnplacedBoxes));
+
 // ============================================
 // DELETE
 // ============================================
