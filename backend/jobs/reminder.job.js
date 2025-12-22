@@ -11,12 +11,11 @@ const CHECK_INTERVAL = 60 * 60 * 1000; // Stündlich prüfen
 const REMINDER_THRESHOLDS = [1, 1.5, 0.5]; // Tage vor Fälligkeit
 
 /**
- * Berechnet fällige Boxen pro Objekt für einen Partner
+ * Berechnet fällige Boxen pro Objekt für eine Organisation
  */
-async function getUpcomingControls(partnerId, daysAhead = 2) {
+async function getUpcomingControls(organisationId, daysAhead = 2) {
   try {
     const now = new Date();
-    const futureDate = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
 
     // Alle Boxen mit letztem Scan und Kontrollintervall holen
     const { data: boxes, error } = await supabase
@@ -28,16 +27,14 @@ async function getUpcomingControls(partnerId, daysAhead = 2) {
         last_scan,
         control_interval_days,
         object_id,
-        objects!inner (
+        objects (
           id,
-          name,
-          partner_id,
-          control_interval
+          name
         )
       `)
-      .eq('objects.partner_id', partnerId)
-      .not('object_id', 'is', null)
-      .eq('status', 'active');
+      .eq('organisation_id', organisationId)
+      .eq('active', true)
+      .not('object_id', 'is', null);
 
     if (error) throw error;
     if (!boxes || boxes.length === 0) return [];
@@ -46,10 +43,8 @@ async function getUpcomingControls(partnerId, daysAhead = 2) {
     const upcomingByObject = {};
 
     for (const box of boxes) {
-      // Kontrollintervall: Box > Objekt > Default 30 Tage
-      const intervalDays = box.control_interval_days || 
-                          box.objects?.control_interval || 
-                          30;
+      // Kontrollintervall: Box > Default 30 Tage
+      const intervalDays = box.control_interval_days || 30;
 
       // Nächste Kontrolle berechnen
       const lastScan = box.last_scan ? new Date(box.last_scan) : null;
@@ -201,13 +196,13 @@ async function wasReminderSentToday(userId) {
 /**
  * Reminder-Log eintragen
  */
-async function logReminderSent(userId, partnerId, boxCount) {
+async function logReminderSent(userId, organisationId, boxCount) {
   try {
     await supabase
       .from('push_reminder_log')
       .insert({
         user_id: userId,
-        partner_id: partnerId,
+        organisation_id: organisationId,
         boxes_count: boxCount,
         sent_at: new Date().toISOString()
       });
@@ -255,7 +250,7 @@ async function sendReminders() {
       if (!userSubscriptions[userId]) {
         userSubscriptions[userId] = {
           userId,
-          partnerId: sub.partner_id,
+          organisationId: sub.organisation_id,
           reminderDaysBefore: sub.reminder_days_before || 1,
           subscriptions: []
         };
@@ -272,9 +267,9 @@ async function sendReminders() {
           continue;
         }
 
-        // Fällige Kontrollen für diesen Partner holen
+        // Fällige Kontrollen für diese Organisation holen
         const upcomingControls = await getUpcomingControls(
-          userData.partnerId, 
+          userData.organisationId, 
           userData.reminderDaysBefore
         );
 
@@ -315,7 +310,7 @@ async function sendReminders() {
         const sent = results.filter(r => r.status === 'fulfilled').length;
         if (sent > 0) {
           console.log(`✅ Sent reminder to user ${userData.userId}: ${message.totalBoxes} boxes`);
-          await logReminderSent(userData.userId, userData.partnerId, message.totalBoxes);
+          await logReminderSent(userData.userId, userData.organisationId, message.totalBoxes);
         }
       } catch (userError) {
         console.error(`Error sending reminder to user ${userData.userId}:`, userError);
@@ -348,9 +343,9 @@ function startReminderJob() {
 /**
  * Manuelle Erinnerung für einen User triggern
  */
-async function triggerReminderForUser(userId, partnerId) {
+async function triggerReminderForUser(userId, organisationId) {
   try {
-    const upcomingControls = await getUpcomingControls(partnerId, 2);
+    const upcomingControls = await getUpcomingControls(organisationId, 2);
     
     if (upcomingControls.length === 0) {
       return { success: true, message: 'Keine fälligen Kontrollen' };
