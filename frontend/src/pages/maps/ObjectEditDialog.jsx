@@ -107,8 +107,7 @@ export default function ObjectEditDialog({ object, onClose, onSave, onDelete, bo
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ 
-          reason: archiveReason || null,
-          generate_pdf: true  // PDF-Bericht erstellen
+          reason: archiveReason || null
         }),
       });
 
@@ -120,37 +119,14 @@ export default function ObjectEditDialog({ object, onClose, onSave, onDelete, bo
       const result = await res.json();
       console.log(`✅ Objekt archiviert, ${result.boxesReturned || 0} Boxen zurück ins Lager`);
       
-      // 2. PDF-Archivbericht herunterladen
-      if (result.pdfUrl || result.reportGenerated) {
-        setToast({ type: "success", msg: "Erstelle Archiv-Bericht..." });
-        
-        // PDF herunterladen
-        const pdfRes = await fetch(`${API}/objects/${object.id}/archive-report`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        if (pdfRes.ok) {
-          const blob = await pdfRes.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `Archiv_${object.name.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          window.URL.revokeObjectURL(url);
-          
-          setToast({ type: "success", msg: `Objekt archiviert, PDF-Bericht heruntergeladen` });
-        } else {
-          setToast({ type: "success", msg: `Objekt archiviert${result.boxesReturned > 0 ? `, ${result.boxesReturned} Boxen im Lager` : ''}` });
-        }
-      } else {
-        setToast({ type: "success", msg: `Objekt archiviert${result.boxesReturned > 0 ? `, ${result.boxesReturned} Boxen im Lager` : ''}` });
-      }
+      setToast({ 
+        type: "success", 
+        msg: `Objekt archiviert${result.boxesReturned > 0 ? `, ${result.boxesReturned} Boxen im Lager` : ''}. PDF-Bericht im Archiv verfügbar.` 
+      });
       
       setTimeout(() => {
         if (onDelete) onDelete(object.id);
-      }, 1000);
+      }, 1500);
       
     } catch (e) {
       console.error("Error archiving object:", e);

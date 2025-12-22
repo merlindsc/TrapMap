@@ -114,22 +114,59 @@ async function loadData(objectId, orgId, options = {}) {
 
   if (!obj) throw new Error("Objekt nicht gefunden");
 
-  const { data: boxes } = await supabase
-    .from("boxes")
-    .select("*, box_types:box_type_id(id, name, category, bait_type, bait_substance)")
-    .eq("object_id", objectId)
-    .eq("organisation_id", orgId)
-    .eq("active", true)
-    .order("number");
-
-  const boxIds = (boxes || []).map(b => b.id);
+  // Für archivierte Objekte: Hole ALLE Scans die jemals zu diesem Objekt gehörten
+  // und leite daraus die Boxen ab (da Boxen bei Archivierung object_id = null gesetzt bekommen)
+  let boxes = [];
+  let boxIds = [];
+  
+  if (obj.archived_at) {
+    // Archiviertes Objekt: Hole alle Scans für dieses Objekt
+    const { data: allScans } = await supabase
+      .from("scans")
+      .select("box_id")
+      .eq("object_id", objectId)
+      .eq("organisation_id", orgId);
+    
+    if (allScans && allScans.length > 0) {
+      // Eindeutige Box-IDs aus Scans
+      boxIds = [...new Set(allScans.map(s => s.box_id))];
+      
+      // Hole diese Boxen (auch wenn sie jetzt object_id = null haben)
+      const { data: foundBoxes } = await supabase
+        .from("boxes")
+        .select("*, box_types:box_type_id(id, name, category, bait_type, bait_substance)")
+        .in("id", boxIds)
+        .eq("organisation_id", orgId)
+        .order("number");
+      
+      boxes = foundBoxes || [];
+    }
+  } else {
+    // Aktives Objekt: Normale Query
+    const { data: foundBoxes } = await supabase
+      .from("boxes")
+      .select("*, box_types:box_type_id(id, name, category, bait_type, bait_substance)")
+      .eq("object_id", objectId)
+      .eq("organisation_id", orgId)
+      .eq("active", true)
+      .order("number");
+    
+    boxes = foundBoxes || [];
+    boxIds = boxes.map(b => b.id);
+  }
+  
+  // Scans laden
   let scansQuery = supabase
     .from("scans")
     .select("*, users:user_id(id, first_name, last_name), boxes:box_id(number)")
     .eq("organisation_id", orgId)
     .order("scanned_at", { ascending: false });
 
-  if (boxIds.length > 0) {
+  // Für archivierte Objekte: Lade Scans direkt über object_id
+  // Für aktive Objekte: Lade Scans über box_id Liste
+  if (obj.archived_at) {
+    scansQuery = scansQuery.eq("object_id", objectId);
+  } else if (boxIds.length > 0) {
     scansQuery = scansQuery.in("box_id", boxIds);
   }
 

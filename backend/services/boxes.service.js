@@ -573,6 +573,7 @@ exports.returnToPool = async (boxId, organisationId, userId) => {
       .update({
         object_id: null,
         position_type: null,
+        optional_name: null,
         lat: null,
         lng: null,
         floor_plan_id: null,
@@ -639,6 +640,7 @@ exports.bulkReturnToPool = async (boxIds, organisationId, userId) => {
       .update({
         object_id: null,
         position_type: null,
+        optional_name: null,
         lat: null,
         lng: null,
         floor_plan_id: null,
@@ -706,6 +708,7 @@ exports.archiveObjectBoxes = async (objectId, organisationId, userId) => {
       .update({
         object_id: null,
         position_type: null,
+        optional_name: null,
         lat: null,
         lng: null,
         floor_plan_id: null,
