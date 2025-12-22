@@ -324,6 +324,15 @@ exports.archive = async (id, organisationId, userId, reason = null) => {
     }
 
     // 2. Alle Boxen des Objekts zurück in Pool (Position + Typ reset)
+    // Hole erstmal alle Boxen des Objekts (auch unplatzierte)
+    const { data: boxesCheck } = await supabase
+      .from("boxes")
+      .select("id, qr_code, object_id, position_type")
+      .eq("object_id", id)
+      .eq("organisation_id", organisationId);
+    
+    console.log(`📦 Found ${boxesCheck?.length || 0} boxes for object ${id}:`, boxesCheck);
+    
     const { data: boxes, error: boxError } = await supabase
       .from("boxes")
       .update({
@@ -340,6 +349,7 @@ exports.archive = async (id, organisationId, userId, reason = null) => {
         layout_id: null
       })
       .eq("object_id", id)
+      .eq("organisation_id", organisationId)
       .select("id");
 
     const boxesReturned = boxes?.length || 0;
