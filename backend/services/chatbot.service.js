@@ -274,6 +274,23 @@ const FUNCTIONS = [
       type: "object",
       properties: {}
     }
+  },
+  {
+    name: "list_reports",
+    description: "Listet alle gespeicherten PDF-Reports für ein Objekt auf",
+    parameters: {
+      type: "object",
+      properties: {
+        object_id: {
+          type: "integer",
+          description: "Die ID des Objekts"
+        },
+        object_number: {
+          type: "integer",
+          description: "Die Nummer des Objekts (1 = erstes Objekt)"
+        }
+      }
+    }
   }
 ];
 
@@ -522,18 +539,66 @@ async function executeFunction(name, args, organisationId, userId) {
         };
       }
       
-      // Generiere Report-URL
-      const apiUrl = process.env.API_URL || 'https://trapmap-backend.onrender.com';
-      const reportUrl = `${apiUrl}/api/audit-reports/${objectId}`;
-      
-      return {
-        success: true,
-        message: `PDF-Report für "${obj.name}" ist bereit!`,
-        objekt_name: obj.name,
-        objekt_id: obj.id,
-        download_url: reportUrl,
-        hinweis: `Hier ist dein Report: ${reportUrl}`
-      };
+      try {
+        // Report wirklich generieren
+        const auditReportService = require('./audit-report-generator.service');
+        const fs = require('fs');
+        const path = require('path');
+        
+        console.log(`[Chatbot] Generating report for object ${objectId}: ${obj.name}`);
+        
+        // PDF generieren
+        const pdfBuffer = await auditReportService.generateAuditReport(
+          objectId,
+          organisationId,
+          { maxScans: 100 }
+        );
+        
+        // Ordner erstellen
+        const safeName = obj.name
+          .replace(/[^a-zA-Z0-9äöüÄÖÜß\-_\s]/g, "")
+          .replace(/\s+/g, "_")
+          .substring(0, 50);
+        
+        const reportsDir = path.join(__dirname, '../reports');
+        const objectDir = path.join(reportsDir, `${objectId}_${safeName}`);
+        
+        if (!fs.existsSync(reportsDir)) {
+          fs.mkdirSync(reportsDir, { recursive: true });
+        }
+        if (!fs.existsSync(objectDir)) {
+          fs.mkdirSync(objectDir, { recursive: true });
+        }
+        
+        // Dateiname mit Timestamp
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-").split("T");
+        const dateStr = timestamp[0];
+        const timeStr = timestamp[1].substring(0, 8);
+        const filename = `Audit-Report_${dateStr}_${timeStr}.pdf`;
+        
+        // Speichern
+        const filePath = path.join(objectDir, filename);
+        fs.writeFileSync(filePath, pdfBuffer);
+        
+        console.log(`[Chatbot] Report saved: ${filePath} (${pdfBuffer.length} bytes)`);
+        
+        return {
+          success: true,
+          message: `✅ Der PDF-Report für "${obj.name}" wurde erstellt!`,
+          objekt_name: obj.name,
+          dateiname: filename,
+          ordner: `${objectId}_${safeName}`,
+          groesse: `${Math.round(pdfBuffer.length / 1024)} KB`,
+          hinweis: `Der Bericht ist abholbereit im Reports-Ordner.`
+        };
+        
+      } catch (reportError) {
+        console.error('[Chatbot] Report generation error:', reportError);
+        return {
+          success: false,
+          error: 'Fehler beim Erstellen des Reports: ' + reportError.message
+        };
+      }
     }
 
     case "create_object": {
@@ -836,6 +901,80 @@ async function executeFunction(name, args, organisationId, userId) {
           error: 'Fehler beim Kaufvorgang: ' + purchaseError.message
         };
       }
+    }
+
+    case "list_reports": {
+      let objectId = args.object_id;
+      
+      // Wenn object_number gegeben, erst das Objekt finden
+      if (!objectId && args.object_number) {
+        const { data: objects } = await supabase
+          .from('objects')
+          .select('id, name')
+          .eq('organisation_id', organisationId)
+          .order('name');
+        
+        if (objects && objects.length >= args.object_number) {
+          objectId = objects[args.object_number - 1].id;
+        } else {
+          return {
+            success: false,
+            error: `Objekt ${args.object_number} nicht gefunden.`
+          };
+        }
+      }
+      
+      // Objekt-Info holen
+      const { data: obj } = await supabase
+        .from('objects')
+        .select('id, name')
+        .eq('id', objectId)
+        .eq('organisation_id', organisationId)
+        .single();
+      
+      if (!obj) {
+        return { success: false, error: 'Objekt nicht gefunden' };
+      }
+      
+      // Reports auflisten (via API call simulieren)
+      const fs = require('fs');
+      const path = require('path');
+      const reportsDir = path.join(__dirname, '../reports');
+      
+      let reports = [];
+      if (fs.existsSync(reportsDir)) {
+        const dirs = fs.readdirSync(reportsDir);
+        const objectDir = dirs.find(d => d.startsWith(`${objectId}_`));
+        
+        if (objectDir) {
+          const fullPath = path.join(reportsDir, objectDir);
+          reports = fs.readdirSync(fullPath)
+            .filter(f => f.endsWith('.pdf'))
+            .map(f => {
+              const stats = fs.statSync(path.join(fullPath, f));
+              return {
+                dateiname: f,
+                erstellt: new Date(stats.birthtime).toLocaleDateString('de-DE'),
+                groesse: `${Math.round(stats.size / 1024)} KB`
+              };
+            })
+            .sort((a, b) => new Date(b.erstellt) - new Date(a.erstellt))
+            .slice(0, 10); // Max 10 zeigen
+        }
+      }
+      
+      const apiUrl = process.env.API_URL || 'https://trapmap-backend.onrender.com';
+      
+      return {
+        success: true,
+        objekt: obj.name,
+        anzahl_reports: reports.length,
+        reports: reports,
+        neuer_report_url: `${apiUrl}/api/audit-reports/${objectId}`,
+        hinweis: reports.length === 0 
+          ? 'Noch keine Reports für dieses Objekt. Sage "erstelle report für objekt X" um einen zu generieren.'
+          : `${reports.length} Reports gefunden. Neuester: ${reports[0]?.dateiname}`
+      };
     }
 
     default:
