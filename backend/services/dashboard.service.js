@@ -171,7 +171,7 @@ exports.getRecentScans = async (organisation_id) => {
   const { data, error } = await supabase
     .from("scans")
     .select(`
-      id, status, notes, scanned_at, box_id,
+      id, status, notes, scanned_at, box_id, bait, box_type_id, box_type_name,
       boxes!inner (
         id, number, notes, active, qr_code,
         box_types (name, category),
@@ -189,34 +189,21 @@ exports.getRecentScans = async (organisation_id) => {
 
   return (data || [])
     .map(scan => {
-      // Köder aus notes extrahieren (Format: "... | Köder: XYZ" oder "Köder: XYZ")
-      let baitFromNotes = null;
-      if (scan.notes) {
-        const baitMatch = scan.notes.match(/Köder:\s*([^|]+)/);
-        if (baitMatch) {
-          baitFromNotes = baitMatch[1].trim();
-        }
-      }
-      
-      // Message ohne Köder-Info (für saubere Anzeige)
-      let cleanMessage = scan.notes || `Status: ${scan.status}`;
-      if (baitFromNotes) {
-        cleanMessage = cleanMessage.replace(/\s*\|\s*Köder:[^|]+/, '').replace(/^Köder:[^|]+\s*\|\s*/, '').trim();
-        if (!cleanMessage || cleanMessage === `Köder: ${baitFromNotes}`) {
-          cleanMessage = `Status: ${scan.status}`;
-        }
-      }
+      // Köder aus Scan (zum Zeitpunkt des Scans) oder Fallback auf aktuelle Box
+      const baitAtScanTime = scan.bait || null;
+      // Box-Typ aus Scan (zum Zeitpunkt des Scans) oder Fallback auf aktuelle Box
+      const boxTypeAtScanTime = scan.box_type_name || scan.boxes?.box_types?.name || null;
       
       return {
         id: scan.id,
         box_name: scan.boxes?.notes || `Box ${scan.boxes?.number || "?"}`,
         box_qr_code: scan.boxes?.qr_code || null,
-        box_type: scan.boxes?.box_types?.name || null,
+        box_type: boxTypeAtScanTime,
         box_category: scan.boxes?.box_types?.category || null,
-        bait: baitFromNotes,  // Köder zum Scan-Zeitpunkt
+        bait: baitAtScanTime,
         object_id: scan.boxes?.objects?.id || null,
         object_name: scan.boxes?.objects?.name || "Unbekannt",
-        message: cleanMessage,
+        message: scan.notes || `Status: ${scan.status}`,
         status: scan.status,
         created_at: scan.scanned_at,
         technician_name: scan.users?.first_name

@@ -171,13 +171,24 @@ exports.update = async (boxId, organisationId, updateData, userId = null) => {
       const scanNote = changes.join(" | ");
       const scanStatus = statusChanged ? "green" : (data.current_status || "gray");
       
+      // Hole aktuelle Box-Daten nach Update für korrekte Werte im Scan
+      const { data: updatedBox } = await supabase
+        .from("boxes")
+        .select("bait, box_type_id, box_types(name)")
+        .eq("id", boxId)
+        .single();
+      
       await supabase.from("scans").insert({
         box_id: boxId,
         organisation_id: organisationId,
         user_id: userId,
         status: scanStatus,
         notes: scanNote,
-        scanned_at: new Date().toISOString()
+        scanned_at: new Date().toISOString(),
+        // Wichtig für Audit: Köder und Box-Typ zum Zeitpunkt der Änderung
+        bait: updatedBox?.bait || null,
+        box_type_id: updatedBox?.box_type_id || null,
+        box_type_name: updatedBox?.box_types?.name || null
       });
       
       // last_scan_at aktualisieren

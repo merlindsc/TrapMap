@@ -155,10 +155,10 @@ async function loadData(objectId, orgId, options = {}) {
     boxIds = boxes.map(b => b.id);
   }
   
-  // Scans laden
+  // Scans laden - inkl. bait und box_type_name für Audit-Nachverfolgung
   let scansQuery = supabase
     .from("scans")
-    .select("*, users:user_id(id, first_name, last_name), boxes:box_id(number)")
+    .select("*, users:user_id(id, first_name, last_name), boxes:box_id(number, qr_code), bait, box_type_id, box_type_name")
     .eq("organisation_id", orgId)
     .order("scanned_at", { ascending: false });
 

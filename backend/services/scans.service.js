@@ -121,7 +121,7 @@ exports.create = async (payload, orgId) => {
     // Hole aktuelle Box-Daten für Köder und Box-Typ
     const { data: currentBoxData } = await supabase
       .from("boxes")
-      .select("bait, box_types(name)")
+      .select("bait, box_type_id, box_types(name)")
       .eq("id", payload.box_id)
       .single();
 
@@ -143,28 +143,27 @@ exports.create = async (payload, orgId) => {
       }
     }
 
-    // Notes mit Köder-Info erweitern (wenn Box einen Köder hat)
-    let finalNotes = payload.notes || null;
-    const currentBait = currentBoxData?.bait;
-    if (currentBait && !payload.notes?.includes("Köder")) {
-      // Nur hinzufügen wenn notes nicht bereits Köder-Info enthält (z.B. bei Wechsel-Scans)
-      finalNotes = payload.notes 
-        ? `${payload.notes} | Köder: ${currentBait}`
-        : `Köder: ${currentBait}`;
-    }
+    // Köder und Box-Typ aus aktuellen Box-Daten für Audit-Nachverfolgung
+    const currentBait = currentBoxData?.bait || null;
+    const currentBoxTypeId = currentBoxData?.box_type_id || null;
+    const currentBoxTypeName = currentBoxData?.box_types?.name || null;
 
     const scan = {
       organisation_id: orgId,
       box_id: parseInt(payload.box_id),
       user_id: payload.user_id || null,
       status: payload.status,
-      notes: finalNotes,
+      notes: payload.notes || null,
       findings: payload.findings || null,
       consumption: consumptionValue,
       quantity: quantityValue,
       trap_state: payload.trap_state || null,
       photo_url: payload.photo_url || null,
-      scanned_at: new Date().toISOString()
+      scanned_at: new Date().toISOString(),
+      // Wichtig für Audit: Köder und Box-Typ zum Zeitpunkt des Scans speichern
+      box_type_id: currentBoxTypeId,
+      bait: currentBait,
+      box_type_name: currentBoxTypeName
     };
 
     // GPS-Koordinaten zum Scan hinzufügen falls vorhanden
