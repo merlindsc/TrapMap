@@ -22,6 +22,9 @@ export default function ChatWidget() {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
+  // Konstanten
+  const CHAT_WINDOW_MARGIN = 80; // Margin für Chat-Fenster bei Tastatur
+
   // Token aus localStorage
   const getToken = () => {
     const token = localStorage.getItem('trapmap_token');
@@ -32,7 +35,7 @@ export default function ChatWidget() {
     return token;
   };
 
-  // Scroll zu neuen Nachrichten
+  // Scrollt zu neuen Nachrichten
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   };
@@ -51,11 +54,11 @@ export default function ChatWidget() {
     }
   }, [isOpen]);
 
-  // Keyboard visibility handling für mobile
+  // Tastatur-Sichtbarkeits-Behandlung für mobile Geräte
   useEffect(() => {
     if (!isOpen) return;
 
-    // Visual Viewport API für besseres Keyboard-Handling
+    // Visual Viewport API für bessere Tastatur-Behandlung
     if (window.visualViewport) {
       const handleResize = () => {
         const viewport = window.visualViewport;
@@ -68,7 +71,7 @@ export default function ChatWidget() {
           
           // Passe Chat-Fenster an, wenn Tastatur sichtbar ist
           if (window.innerHeight > viewportHeight) {
-            chatWindow.style.height = `${viewportHeight - 80}px`;
+            chatWindow.style.height = `${viewportHeight - CHAT_WINDOW_MARGIN}px`;
             chatWindow.style.transform = `translateY(${offsetTop}px)`;
           } else {
             chatWindow.style.height = '';
