@@ -32,9 +32,14 @@ export default function ChatWidget() {
     return token;
   };
 
+  // Scroll zu neuen Nachrichten
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  };
+
   // Auto-scroll zu neuen Nachrichten
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    scrollToBottom();
   }, [messages]);
 
   // Focus auf Input wenn geöffnet
@@ -43,6 +48,42 @@ export default function ChatWidget() {
       inputRef.current?.focus();
       loadStatus();
       loadHistory();
+    }
+  }, [isOpen]);
+
+  // Keyboard visibility handling für mobile
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Visual Viewport API für besseres Keyboard-Handling
+    if (window.visualViewport) {
+      const handleResize = () => {
+        const viewport = window.visualViewport;
+        const chatWindow = document.querySelector('.chat-window');
+        
+        if (chatWindow && viewport) {
+          // Berechne die Höhe unter Berücksichtigung der Tastatur
+          const viewportHeight = viewport.height;
+          const offsetTop = viewport.offsetTop;
+          
+          // Passe Chat-Fenster an, wenn Tastatur sichtbar ist
+          if (window.innerHeight > viewportHeight) {
+            chatWindow.style.height = `${viewportHeight - 80}px`;
+            chatWindow.style.transform = `translateY(${offsetTop}px)`;
+          } else {
+            chatWindow.style.height = '';
+            chatWindow.style.transform = '';
+          }
+        }
+      };
+
+      window.visualViewport.addEventListener('resize', handleResize);
+      window.visualViewport.addEventListener('scroll', handleResize);
+      
+      return () => {
+        window.visualViewport.removeEventListener('resize', handleResize);
+        window.visualViewport.removeEventListener('scroll', handleResize);
+      };
     }
   }, [isOpen]);
 
