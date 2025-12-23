@@ -18,7 +18,7 @@ import {
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { getBoxShortLabel, getBoxLabel, extractQrCodesFromPoolBoxes } from "../../utils/boxUtils";
+import { getBoxShortLabel, getBoxLabel } from "../../utils/boxUtils";
 
 // 🆕 Offline API Imports
 import { 
@@ -700,30 +700,32 @@ export default function Maps() {
 
   /* ============================================================
      REQUEST BOXES FROM POOL
+     Nutzt bulk-assign-count: Backend wählt automatisch die 
+     kleinsten verfügbaren Boxen aus dem Pool
      ============================================================ */
   const handleRequestBoxes = async () => {
     const count = parseInt(requestCount, 10);
     
     if (isNaN(count) || count < 1) {
-      hapticError(); // Haptic feedback on error
+      hapticError();
       setRequestMessage({ type: "error", text: "Bitte gültige Anzahl eingeben" });
       return;
     }
     
     if (count > 100) {
-      hapticError(); // Haptic feedback on error
+      hapticError();
       setRequestMessage({ type: "error", text: "Maximal 100 Boxen auf einmal" });
       return;
     }
     
     if (!selectedObject) {
-      hapticError(); // Haptic feedback on error
+      hapticError();
       setRequestMessage({ type: "error", text: "Kein Objekt ausgewählt" });
       return;
     }
 
     if (poolBoxes.length < count) {
-      hapticError(); // Haptic feedback on error
+      hapticError();
       setRequestMessage({ 
         type: "error", 
         text: `Nicht genug Boxen! Verfügbar: ${poolBoxes.length}` 
@@ -731,32 +733,19 @@ export default function Maps() {
       return;
     }
 
-    // ✅ QR-Codes extrahieren - verschiedene Datenstrukturen unterstützen
-    const qrCodes = extractQrCodesFromPoolBoxes(poolBoxes, count);
-
-    if (qrCodes.length === 0) {
-      hapticError();
-      setRequestMessage({ type: "error", text: "Keine gültigen Boxen im Pool" });
-      return;
-    }
-
-    if (qrCodes.length < count) {
-      console.warn(`⚠️ Nur ${qrCodes.length} von ${count} Boxen haben gültige QR-Codes`);
-    }
-
     setRequesting(true);
-    setRequestMessage({ type: "info", text: `Weise ${qrCodes.length} Boxen zu...` });
+    setRequestMessage({ type: "info", text: `Weise ${count} Boxen zu...` });
 
     try {
-      // ✅ Bulk-Assign mit QR-Codes
-      const res = await fetch(`${API}/boxes/bulk-assign`, {
+      // ✅ Backend wählt automatisch die kleinsten verfügbaren Boxen
+      const res = await fetch(`${API}/boxes/bulk-assign-count`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          qr_codes: qrCodes,
+          count: count,
           object_id: selectedObject.id
         })
       });
