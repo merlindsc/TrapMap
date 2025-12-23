@@ -523,7 +523,7 @@ function BoxCard({ box, showGps = false }) {
       {box.last_scan_at && (
         <div className="flex items-center gap-1 text-xs text-gray-500 mt-2">
           <Clock className="w-3 h-3" />
-          Letzte Kontrolle: {new Date(box.last_scan_at).toLocaleDateString("de-DE")}
+          Letzte Kontrolle: {new Date(box.last_scan_at).toLocaleDateString("de-DE")} {new Date(box.last_scan_at).toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' })}
         </div>
       )}
       

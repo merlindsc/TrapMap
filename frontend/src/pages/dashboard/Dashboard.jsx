@@ -595,23 +595,28 @@ function ScansList({ scans, objects }) {
 
   return (
     <div className="scans-list-detail">
-      {scans.map((scan, index) => (
-        <div key={scan.id || index} className="scan-detail-item">
-          <div className="scan-number">{index + 1}</div>
-          <div className={`scan-status-dot status-${scan.status || 'gray'}`} />
-          <div className="scan-info">
-            <div className="scan-box-name">
-              {scan.box_name || 'Box'} {scan.box_qr_code ? scan.box_qr_code : ''}
+      {scans.map((scan, index) => {
+        const scanDate = scan.created_at ? new Date(scan.created_at) : null;
+        const dateStr = scanDate ? scanDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+        const timeStr = scanDate ? scanDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+        return (
+          <div key={scan.id || index} className="scan-detail-item">
+            <div className="scan-number">{index + 1}</div>
+            <div className={`scan-status-dot status-${scan.status || 'gray'}`} />
+            <div className="scan-info">
+              <div className="scan-box-name">
+                {scan.box_qr_code || scan.qr_code || 'Unbekannt'}
+              </div>
+              <div className="scan-object">{scan.object_name || getObjectName(scan.object_id)}</div>
+              <div className="scan-message">{scan.message || `Status: ${scan.status}`}</div>
             </div>
-            <div className="scan-object">{scan.object_name || getObjectName(scan.object_id)}</div>
-            <div className="scan-message">{scan.message || `Status: ${scan.status}`}</div>
+            <div className="scan-meta">
+              <div className="scan-date">{dateStr}</div>
+              <div className="scan-time">{timeStr}</div>
+            </div>
           </div>
-          <div className="scan-meta">
-            <div className="scan-time">{formatDate(scan.created_at)}</div>
-            <div className="scan-tech">{scan.technician_name || 'Unbekannt'}</div>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -662,23 +667,28 @@ function RecentScansSection({ scans, objects, onViewAll }) {
               <span className="group-count">{objScans.length} Scans</span>
             </div>
             <div className="scan-items">
-              {objScans.slice(0, 3).map(scan => (
-                <div key={scan.id} className="scan-item">
-                  <div className="scan-left">
-                    <div className={`scan-dot status-${scan.status || 'gray'}`} />
-                    <div className="scan-info">
-                      <div className="scan-box">
-                        {scan.box_name || 'Box'} {scan.box_qr_code ? scan.box_qr_code : ''}
+              {objScans.slice(0, 3).map(scan => {
+                const scanDate = scan.created_at ? new Date(scan.created_at) : null;
+                const dateStr = scanDate ? scanDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+                const timeStr = scanDate ? scanDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+                return (
+                  <div key={scan.id} className="scan-item">
+                    <div className="scan-left">
+                      <div className={`scan-dot status-${scan.status || 'gray'}`} />
+                      <div className="scan-info">
+                        <div className="scan-box">
+                          {scan.box_qr_code || scan.qr_code || 'Unbekannt'}
+                        </div>
+                        <div className="scan-message">{scan.message || `Status: ${scan.status}`}</div>
                       </div>
-                      <div className="scan-message">{scan.message || `Status: ${scan.status}`}</div>
+                    </div>
+                    <div className="scan-right">
+                      <div className="scan-date">{dateStr}</div>
+                      <div className="scan-time">{timeStr}</div>
                     </div>
                   </div>
-                  <div className="scan-right">
-                    <div className="scan-time">{timeAgo(scan.created_at)}</div>
-                    <div className="scan-tech">{scan.technician_name || 'Unbekannt'}</div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))}

@@ -518,7 +518,7 @@ export default function PartnerDashboard() {
                 {box.last_scan && (
                   <p style={styles.boxLastScan}>
                     <Clock size={12} />
-                    Letzter Scan: {new Date(box.last_scan).toLocaleDateString("de-DE")}
+                    Letzter Scan: {new Date(box.last_scan).toLocaleDateString("de-DE")} {new Date(box.last_scan).toLocaleTimeString("de-DE", { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 )}
               </div>
