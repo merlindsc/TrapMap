@@ -205,10 +205,11 @@ export default function ChatWidget() {
 
   // Historie löschen
   const clearHistory = async () => {
-    if (!confirm('Chat-Verlauf wirklich löschen?')) return;
-
     const token = getToken();
-    if (!token) return;
+    if (!token) {
+      setMessages([]);
+      return;
+    }
 
     try {
       await fetch(`${API_URL}/chat/history`, {
@@ -218,14 +219,39 @@ export default function ChatWidget() {
       setMessages([]);
     } catch (e) {
       console.error('Clear error:', e);
+      setMessages([]); // Trotzdem lokal leeren
     }
   };
 
-  // Quick Actions
+  // Chat zurücksetzen (ohne Bestätigung)
+  const resetChat = () => {
+    setMessages([]);
+    setError(null);
+  };
+
+  // Markdown-ähnliche Formatierung parsen
+  const parseMarkdown = (text) => {
+    if (!text) return '';
+    
+    return text
+      // **bold** -> <strong>
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      // *italic* -> <em>
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      // `code` -> <code>
+      .replace(/`([^`]+)`/g, '<code>$1</code>');
+  };
+
+  // Quick Actions - Kundenrelevant
   const quickActions = [
-    { label: '📊 Übersicht', message: 'Zeig mir eine Übersicht meiner Boxen' },
-    { label: '⚠️ Überfällig', message: 'Welche Boxen sind überfällig?' },
-    { label: '📋 Letzte Scans', message: 'Was waren meine letzten Kontrollen?' },
+    { label: '📊 Meine Übersicht', message: 'Zeig mir eine Übersicht meiner Standorte und Boxen' },
+    { label: '🕐 Letzte Kontrollen', message: 'Was waren meine letzten Kontrollen?' },
+    { label: '⚠️ Handlungsbedarf', message: 'Gibt es Boxen mit Auffälligkeiten oder kritischem Befall?' },
+    { label: '📅 Überfällige Boxen', message: 'Welche Boxen sind überfällig und müssen kontrolliert werden?' },
+    { label: '📦 Mehr Boxen bestellen', message: 'Ich möchte zusätzliche Boxen bestellen' },
+    { label: '📄 Report erstellen', message: 'Erstelle einen PDF-Report für mein erstes Objekt' },
+    { label: '❓ Wie funktioniert TrapMap?', message: 'Erkläre mir kurz wie TrapMap funktioniert und welche Funktionen es gibt' },
+    { label: '💬 Feedback geben', message: 'Ich möchte Feedback zu TrapMap geben' },
   ];
 
   return (
@@ -255,10 +281,20 @@ export default function ChatWidget() {
               </div>
             </div>
             <div className="chat-header-actions">
+              {messages.length > 0 && (
+                <button 
+                  onClick={resetChat} 
+                  title="Neuer Chat"
+                  className="reset-btn"
+                >
+                  <ChevronDown size={16} />
+                  <span>Neu</span>
+                </button>
+              )}
               <button onClick={clearHistory} title="Verlauf löschen">
                 <Trash2 size={16} />
               </button>
-              <button onClick={() => setIsOpen(false)} title="Schließen">
+              <button onClick={() => setIsOpen(false)} title="Schließen" className="close-btn">
                 <X size={18} />
               </button>
             </div>
@@ -270,14 +306,16 @@ export default function ChatWidget() {
               <div className="chat-welcome">
                 <Sparkles size={32} />
                 <h3>Hallo! 👋</h3>
-                <p>Ich bin dein TrapMap-Assistent. Frag mich nach deinen Boxen, Kontrollen oder wie TrapMap funktioniert.</p>
+                <p>Ich bin dein TrapMap-Assistent. Wie kann ich dir helfen?</p>
                 <div className="quick-actions">
                   {quickActions.map((action, i) => (
                     <button 
                       key={i} 
                       onClick={() => {
                         setInput(action.message);
-                        sendMessage({ preventDefault: () => {} });
+                        setTimeout(() => {
+                          sendMessage({ preventDefault: () => {} });
+                        }, 50);
                       }}
                     >
                       {action.label}
@@ -294,7 +332,10 @@ export default function ChatWidget() {
                 </div>
                 <div className="message-content">
                   {msg.content.split('\n').map((line, j) => (
-                    <p key={j}>{line}</p>
+                    <p 
+                      key={j} 
+                      dangerouslySetInnerHTML={{ __html: parseMarkdown(line) || '&nbsp;' }}
+                    />
                   ))}
                 </div>
               </div>
