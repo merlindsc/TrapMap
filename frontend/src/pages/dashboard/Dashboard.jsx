@@ -599,7 +599,9 @@ function ScansList({ scans, objects }) {
         const scanDate = scan.created_at ? new Date(scan.created_at) : null;
         const dateStr = scanDate ? scanDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
         const timeStr = scanDate ? scanDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
-        const messageWithBait = scan.bait 
+        // Köder nur anzeigen wenn nicht bereits in der Message (z.B. "Köder Wechsel")
+        const messageContainsBait = scan.message?.includes('Köder') || false;
+        const messageWithBait = (scan.bait && !messageContainsBait)
           ? `${scan.message || `Status: ${scan.status}`} • Köder: ${scan.bait}`
           : scan.message || `Status: ${scan.status}`;
         return (
@@ -674,7 +676,9 @@ function RecentScansSection({ scans, objects, onViewAll }) {
                 const scanDate = scan.created_at ? new Date(scan.created_at) : null;
                 const dateStr = scanDate ? scanDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
                 const timeStr = scanDate ? scanDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
-                const messageWithBait = scan.bait 
+                // Köder nur anzeigen wenn nicht bereits in der Message (z.B. "Köder Wechsel")
+                const messageContainsBait = scan.message?.includes('Köder') || false;
+                const messageWithBait = (scan.bait && !messageContainsBait)
                   ? `${scan.message || `Status: ${scan.status}`} • Köder: ${scan.bait}`
                   : scan.message || `Status: ${scan.status}`;
                 return (
