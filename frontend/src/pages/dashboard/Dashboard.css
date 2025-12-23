@@ -796,13 +796,24 @@
     font-size: 26px;
   }
 
+  /* Fix: Stack KPI cards vertically on mobile to prevent horizontal scroll */
   .kpi-grid {
-    grid-template-columns: repeat(2, 1fr);
+    display: flex;
+    flex-direction: column;
     gap: 12px;
   }
 
   .kpi-card {
     padding: 16px;
+    width: 100%;
+    /* Ensure icons are fully visible */
+    min-height: 80px;
+  }
+
+  .kpi-icon-wrapper {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
   }
 
   .kpi-value {
@@ -822,8 +833,11 @@
 }
 
 @media (max-width: 480px) {
+  /* Keep single column layout for very small screens */
   .kpi-grid {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
 
   .status-grid {
