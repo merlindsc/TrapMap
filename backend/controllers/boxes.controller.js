@@ -50,7 +50,8 @@ exports.update = async (req, res) => {
     const result = await boxesService.update(
       req.params.id,
       req.user.organisation_id,
-      req.body
+      req.body,
+      req.user.id  // userId für Änderungs-Protokoll
     );
     
     if (!result.success) {

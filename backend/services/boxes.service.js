@@ -99,7 +99,7 @@ exports.getOne = async (boxId, organisationId) => {
 // ============================================
 // UPDATE BOX
 // ============================================
-exports.update = async (boxId, organisationId, updateData) => {
+exports.update = async (boxId, organisationId, updateData, userId = null) => {
   try {
     const allowedFields = [
       "name", "number", "display_number", "notes", "bait", "box_name",
@@ -114,6 +114,46 @@ exports.update = async (boxId, organisationId, updateData) => {
       }
     }
 
+    // Hole aktuelle Box-Daten für Vergleich
+    const { data: currentBox } = await supabase
+      .from("boxes")
+      .select("box_type_id, bait, box_types(name)")
+      .eq("id", boxId)
+      .eq("organisation_id", organisationId)
+      .single();
+
+    const changes = [];
+    let statusChanged = false;
+
+    // Box-Typ Wechsel prüfen
+    if (cleanData.box_type_id !== undefined && currentBox && currentBox.box_type_id !== cleanData.box_type_id) {
+      // Hole neuen Box-Typ Namen
+      const { data: newBoxType } = await supabase
+        .from("box_types")
+        .select("name")
+        .eq("id", cleanData.box_type_id)
+        .single();
+      
+      const oldTypeName = currentBox.box_types?.name || "Kein Typ";
+      const newTypeName = newBoxType?.name || "Unbekannt";
+      
+      changes.push(`Box-Typ Wechsel: ${oldTypeName} → ${newTypeName}`);
+      cleanData.current_status = "green";
+      statusChanged = true;
+      console.log(`Box ${boxId}: Box-Typ geändert von ${oldTypeName} auf ${newTypeName}, Status auf green`);
+    }
+
+    // Köder Wechsel prüfen
+    if (cleanData.bait !== undefined && currentBox && currentBox.bait !== cleanData.bait) {
+      const oldBait = currentBox.bait || "Kein Köder";
+      const newBait = cleanData.bait || "Kein Köder";
+      
+      if (oldBait !== newBait) {
+        changes.push(`Köder Wechsel: ${oldBait} → ${newBait}`);
+        console.log(`Box ${boxId}: Köder geändert von ${oldBait} auf ${newBait}`);
+      }
+    }
+
     cleanData.updated_at = new Date().toISOString();
 
     const { data, error } = await supabase
@@ -125,6 +165,29 @@ exports.update = async (boxId, organisationId, updateData) => {
       .single();
 
     if (error) throw error;
+
+    // Änderungs-Scan erstellen wenn es Änderungen gab
+    if (changes.length > 0 && userId) {
+      const scanNote = changes.join(" | ");
+      const scanStatus = statusChanged ? "green" : (data.current_status || "gray");
+      
+      await supabase.from("scans").insert({
+        box_id: boxId,
+        organisation_id: organisationId,
+        user_id: userId,
+        status: scanStatus,
+        notes: scanNote,
+        scanned_at: new Date().toISOString()
+      });
+      
+      // last_scan_at aktualisieren
+      await supabase
+        .from("boxes")
+        .update({ last_scan_at: new Date().toISOString() })
+        .eq("id", boxId);
+      
+      console.log(`Box ${boxId}: Änderungs-Scan erstellt: ${scanNote}`);
+    }
 
     return { success: true, data };
   } catch (err) {

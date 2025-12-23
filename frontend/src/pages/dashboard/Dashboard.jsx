@@ -599,6 +599,9 @@ function ScansList({ scans, objects }) {
         const scanDate = scan.created_at ? new Date(scan.created_at) : null;
         const dateStr = scanDate ? scanDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
         const timeStr = scanDate ? scanDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+        const messageWithBait = scan.bait 
+          ? `${scan.message || `Status: ${scan.status}`} • Köder: ${scan.bait}`
+          : scan.message || `Status: ${scan.status}`;
         return (
           <div key={scan.id || index} className="scan-detail-item">
             <div className="scan-number">{index + 1}</div>
@@ -608,7 +611,7 @@ function ScansList({ scans, objects }) {
                 {scan.box_qr_code || scan.qr_code || 'Unbekannt'}
               </div>
               <div className="scan-object">{scan.object_name || getObjectName(scan.object_id)}</div>
-              <div className="scan-message">{scan.message || `Status: ${scan.status}`}</div>
+              <div className="scan-message">{messageWithBait}</div>
             </div>
             <div className="scan-meta">
               <div className="scan-date">{dateStr} {timeStr}</div>
@@ -671,6 +674,9 @@ function RecentScansSection({ scans, objects, onViewAll }) {
                 const scanDate = scan.created_at ? new Date(scan.created_at) : null;
                 const dateStr = scanDate ? scanDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
                 const timeStr = scanDate ? scanDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+                const messageWithBait = scan.bait 
+                  ? `${scan.message || `Status: ${scan.status}`} • Köder: ${scan.bait}`
+                  : scan.message || `Status: ${scan.status}`;
                 return (
                   <div key={scan.id} className="scan-item">
                     <div className="scan-left">
@@ -679,7 +685,7 @@ function RecentScansSection({ scans, objects, onViewAll }) {
                         <div className="scan-box">
                           {scan.box_qr_code || scan.qr_code || 'Unbekannt'}
                         </div>
-                        <div className="scan-message">{scan.message || `Status: ${scan.status}`}</div>
+                        <div className="scan-message">{messageWithBait}</div>
                       </div>
                     </div>
                     <div className="scan-right">
