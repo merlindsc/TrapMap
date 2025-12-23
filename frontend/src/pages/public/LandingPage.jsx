@@ -122,7 +122,7 @@ export default function LandingPage() {
       <nav className="landing-nav">
         <div className="nav-container">
           <div className="nav-brand">
-            <img src={trapMapLogo} alt="TrapMap Logo" className="brand-logo" />
+            <img src={trapMapLogo} alt="TrapMap Logo" className="brand-logo" width="84" height="84" loading="eager" fetchpriority="high" />
           </div>
 
           <div className="nav-links">
@@ -141,8 +141,10 @@ export default function LandingPage() {
           <button 
             className="mobile-menu-btn"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label={mobileMenuOpen ? "Menü schließen" : "Menü öffnen"}
+            aria-expanded={mobileMenuOpen}
           >
-            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            {mobileMenuOpen ? <X size={24} aria-hidden="true" /> : <Menu size={24} aria-hidden="true" />}
           </button>
         </div>
 
@@ -240,7 +242,8 @@ export default function LandingPage() {
       {/* ============================================
           PROBLEM / SOLUTION
           ============================================ */}
-      <section className="problem-section">
+      <section className="problem-section" aria-labelledby="comparison-heading">
+        <h2 id="comparison-heading" className="visually-hidden">Vergleich: Mit und ohne TrapMap</h2>
         <div className="section-container">
           <div className="problem-grid">
             <div className="problem-card">
@@ -530,11 +533,11 @@ export default function LandingPage() {
                     <div className="dialog-box-info">
                       <span className="box-number">1</span>
                       <div className="box-details">
-                        <span className="box-title">Box #1 <button className="edit-btn">✏️ Bearbeiten</button></span>
+                        <span className="box-title">Box #1 <button className="edit-btn" aria-label="Box bearbeiten">✏️ Bearbeiten</button></span>
                         <span className="box-type">Rattenköderstation · <span className="qr-badge"># QR 32</span> · <span className="nr-badge">(Nr. 1)</span></span>
                       </div>
                     </div>
-                    <button className="close-btn">×</button>
+                    <button className="close-btn" aria-label="Dialog schließen">×</button>
                   </div>
 
                   <div className="dialog-tabs">
@@ -1302,7 +1305,7 @@ export default function LandingPage() {
       <footer id="kontakt" className="footer">
         <div className="footer-container">
           <div className="footer-brand">
-            <img src={trapMapLogo} alt="TrapMap" className="footer-logo" />
+            <img src={trapMapLogo} alt="TrapMap" className="footer-logo" width="64" height="64" loading="lazy" />
             <p>Digitales Schädlingsmonitoring für Profis.</p>
             <p className="footer-tagline">Nie wieder Zettelwirtschaft.</p>
           </div>
