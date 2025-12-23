@@ -611,8 +611,8 @@ function ScansList({ scans, objects }) {
               <div className="scan-message">{scan.message || `Status: ${scan.status}`}</div>
             </div>
             <div className="scan-meta">
-              <div className="scan-date">{dateStr}</div>
-              <div className="scan-time">{timeStr}</div>
+              <div className="scan-date">{dateStr} {timeStr}</div>
+              <div className="scan-tech">{scan.technician_name || 'Unbekannt'}</div>
             </div>
           </div>
         );
@@ -683,8 +683,8 @@ function RecentScansSection({ scans, objects, onViewAll }) {
                       </div>
                     </div>
                     <div className="scan-right">
-                      <div className="scan-date">{dateStr}</div>
-                      <div className="scan-time">{timeStr}</div>
+                      <div className="scan-date">{dateStr} {timeStr}</div>
+                      <div className="scan-tech">{scan.technician_name || 'Unbekannt'}</div>
                     </div>
                   </div>
                 );

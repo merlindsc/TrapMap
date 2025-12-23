@@ -173,7 +173,7 @@ exports.getRecentScans = async (organisation_id) => {
     .select(`
       id, status, notes, scanned_at, box_id,
       boxes!inner (
-        id, number, notes, active,
+        id, number, notes, active, qr_code,
         objects!inner (id, name, active)
       ),
       users (first_name, last_name, email)
@@ -190,6 +190,8 @@ exports.getRecentScans = async (organisation_id) => {
     .map(scan => ({
       id: scan.id,
       box_name: scan.boxes?.notes || `Box ${scan.boxes?.number || "?"}`,
+      box_qr_code: scan.boxes?.qr_code || null,
+      object_id: scan.boxes?.objects?.id || null,
       object_name: scan.boxes?.objects?.name || "Unbekannt",
       message: scan.notes || `Status: ${scan.status}`,
       status: scan.status,
