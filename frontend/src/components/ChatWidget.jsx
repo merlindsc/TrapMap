@@ -71,20 +71,23 @@ export default function ChatWidget() {
           
           // Tastatur ist sichtbar (mehr als 150px Differenz)
           if (keyboardHeight > 150) {
-            // Chat auf max 40% reduzieren wenn Tastatur offen
-            const maxHeight = Math.min(viewportHeight * 0.4, 400);
+            // Chat auf max 50% der verfügbaren Viewport-Höhe reduzieren wenn Tastatur offen
+            const maxHeight = Math.min(viewportHeight * 0.5, 400);
             chatWindow.style.maxHeight = `${maxHeight}px`;
-            chatWindow.style.bottom = '10px';
+            chatWindow.style.height = `${maxHeight}px`;
           } else {
-            // Normal: 50% Höhe
-            chatWindow.style.maxHeight = '50vh';
-            chatWindow.style.bottom = '';
+            // Normal: volle Höhe
+            chatWindow.style.maxHeight = 'min(600px, 80vh)';
+            chatWindow.style.height = 'auto';
           }
         }
       };
 
       window.visualViewport.addEventListener('resize', handleResize);
       window.visualViewport.addEventListener('scroll', handleResize);
+      
+      // Initial call
+      handleResize();
       
       return () => {
         window.visualViewport.removeEventListener('resize', handleResize);
@@ -229,9 +232,14 @@ export default function ChatWidget() {
         {!isOpen && <span className="chat-badge">AI</span>}
       </button>
 
-      {/* Chat Window */}
+      {/* Chat Window with Backdrop */}
       {isOpen && (
-        <div className="chat-window">
+        <div className="chat-overlay" onClick={(e) => {
+          if (e.target.classList.contains('chat-overlay')) {
+            setIsOpen(false);
+          }
+        }}>
+          <div className="chat-window">
           {/* Header */}
           <div className="chat-header">
             <div className="chat-header-info">
@@ -326,6 +334,7 @@ export default function ChatWidget() {
               {loading ? <Loader2 size={18} className="spin" /> : <Send size={18} />}
             </button>
           </form>
+        </div>
         </div>
       )}
     </>

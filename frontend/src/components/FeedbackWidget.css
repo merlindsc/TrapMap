@@ -23,6 +23,14 @@
   font-size: 15px;
 }
 
+/* Hide feedback button when chat overlay is visible */
+.chat-overlay ~ div .feedback-trigger,
+body:has(.chat-overlay) .feedback-trigger {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
 .feedback-trigger:hover {
   transform: translateY(-3px);
   box-shadow: 0 6px 25px rgba(16, 185, 129, 0.6);
@@ -40,7 +48,7 @@
   bottom: 0;
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(8px);
-  z-index: 1002;
+  z-index: 1003;
   display: flex;
   align-items: center;
   justify-content: center;
