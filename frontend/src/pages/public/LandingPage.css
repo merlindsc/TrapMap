@@ -860,7 +860,8 @@
   margin-bottom: 24px;
 }
 
-.demo-header h2 {
+.demo-header h2,
+.demo-header .demo-title {
   font-size: 28px;
   font-weight: 700;
   margin: 0 0 4px;
@@ -2791,7 +2792,7 @@
 
 .demo-form input::placeholder,
 .demo-form textarea::placeholder {
-  color: #64748b;
+  color: #9ca3af; /* Improved contrast for WCAG AA */
 }
 
 .demo-form input:focus,

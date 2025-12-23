@@ -10,6 +10,13 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
+    <!-- Preconnect EARLY for faster API/resource loading -->
+    <link rel="preconnect" href="https://trapmap.onrender.com" crossorigin />
+    <link rel="preconnect" href="https://api.mapbox.com" crossorigin />
+    <link rel="preconnect" href="https://api.maptiler.com" crossorigin />
+    <link rel="dns-prefetch" href="https://unpkg.com" />
+    <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
+
     <!-- Primary Meta Tags -->
     <title>TrapMap - Digitales Schädlingsmonitoring | HACCP & IFS konform</title>
     <meta name="title" content="TrapMap - Digitales Schädlingsmonitoring | HACCP & IFS konform" />
@@ -179,15 +186,6 @@
 
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
-
-    <!-- Preconnect for performance (with crossorigin for CORS) -->
-    <link rel="preconnect" href="https://trapmap.onrender.com" crossorigin />
-    <link rel="preconnect" href="https://api.mapbox.com" crossorigin />
-    <link rel="preconnect" href="https://api.maptiler.com" crossorigin />
-    <link rel="dns-prefetch" href="https://unpkg.com" />
-    <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
-    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
-    <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
 
     <!-- Preload critical fonts -->
     <link rel="preload" href="/assets/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin />

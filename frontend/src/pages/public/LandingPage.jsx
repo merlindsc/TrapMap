@@ -352,7 +352,7 @@ export default function LandingPage() {
                   
                   <div className="demo-header">
                     <div>
-                      <h2>Dashboard</h2>
+                      <div className="demo-title" role="heading" aria-level="3">Dashboard</div>
                       <p>Übersicht über alle Aktivitäten</p>
                     </div>
                     <div className="header-actions">
