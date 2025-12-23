@@ -18,7 +18,7 @@
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.2s, box-shadow 0.2s, opacity 0.3s, bottom 0.3s;
   z-index: 9999;
 }
 
@@ -28,7 +28,9 @@
 }
 
 .chat-toggle.open {
-  background: #374151;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.8);
 }
 
 .chat-badge {
@@ -46,7 +48,7 @@
 /* Chat Window */
 .chat-window {
   position: fixed;
-  bottom: 96px;
+  bottom: 90px;
   right: 24px;
   width: 380px;
   max-width: calc(100vw - 48px);
@@ -83,6 +85,7 @@
   padding: 16px;
   background: #1f2937;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
 }
 
 .chat-header-info {
@@ -130,7 +133,9 @@
 /* Messages Container */
 .chat-messages {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -280,6 +285,7 @@
   padding-bottom: calc(16px + env(safe-area-inset-bottom));
   background: #1f2937;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
 }
 
 .chat-input input {
@@ -341,13 +347,15 @@
 @media (max-width: 480px) {
   .chat-window {
     bottom: 0;
+    top: 0;
     right: 0;
     left: 0;
     width: 100%;
     max-width: 100%;
-    height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    height: 100vh; /* Fallback for older browsers */
+    height: 100dvh; /* Dynamic viewport height for modern browsers */
     max-height: none;
-    border-radius: 16px 16px 0 0;
+    border-radius: 0;
   }
 
   .chat-toggle {
@@ -355,17 +363,32 @@
     right: calc(16px + env(safe-area-inset-right));
   }
 
+  /* Header nimmt nur nötigen Platz */
+  .chat-header {
+    flex-shrink: 0;
+    padding: 12px;
+  }
+
+  /* Input nimmt nur nötigen Platz */
+  .chat-input {
+    flex-shrink: 0;
+    padding: 12px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    gap: 12px;
+  }
+
+  /* Messages nutzen verfügbaren Raum */
+  .chat-messages {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 12px;
+    gap: 10px;
+  }
+
   /* Größere Touch-Targets für mobile */
   .chat-input button {
     width: 48px;
     height: 48px;
-  }
-
-  /* Mehr Padding für bessere Touch-Bedienung */
-  .chat-input {
-    padding: 12px;
-    padding-bottom: calc(12px + env(safe-area-inset-bottom));
-    gap: 12px;
   }
 
   .chat-input input {
@@ -384,12 +407,6 @@
   .quick-actions button {
     padding: 10px 16px;
     min-height: 44px;
-  }
-
-  /* Besseres Spacing für Messages */
-  .chat-messages {
-    padding: 12px;
-    gap: 10px;
   }
 
   /* Message Avatars etwas größer */
