@@ -28,10 +28,17 @@ const CONFIG = {
   META_STORE: 'tile_meta',
   
   // Tile-Konfiguration
-  RADIUS_METERS: 100,        // Radius um Objekt-Standort (100m = 200m Durchmesser)
-  MIN_ZOOM: 14,              // Minimum Zoom Level
-  MAX_ZOOM: 18,              // Maximum Zoom Level (danach digital)
-  MAX_TILES: 6000,           // Mapbox Limit pro Gerät
+  DEFAULT_RADIUS_METERS: 25,   // Standard: 25m Radius = 50m Durchmesser
+  MIN_ZOOM: 14,                // Minimum Zoom Level
+  MAX_ZOOM: 17,                // Maximum Zoom Level (17 statt 18 - weniger schwarze Tiles)
+  MAX_TILES: 6000,             // Mapbox Limit pro Gerät
+  
+  // Verfügbare Radius-Optionen (für UI)
+  RADIUS_OPTIONS: [
+    { value: 25, label: '50 x 50 m', tiles: '~22 Tiles' },
+    { value: 50, label: '100 x 100 m', tiles: '~40 Tiles' },
+    { value: 100, label: '200 x 200 m', tiles: '~85 Tiles' }
+  ],
   
   // Download-Konfiguration  
   BATCH_SIZE: 10,            // Tiles pro Batch
@@ -42,6 +49,12 @@ const CONFIG = {
   // Speicher
   MAX_AGE_DAYS: 30,          // Tiles älter als X Tage werden gelöscht
   CLEANUP_INTERVAL: 86400000 // Cleanup alle 24h
+};
+
+// Export für UI
+export const OFFLINE_MAP_CONFIG = {
+  RADIUS_OPTIONS: CONFIG.RADIUS_OPTIONS,
+  DEFAULT_RADIUS: CONFIG.DEFAULT_RADIUS_METERS
 };
 
 // ============================================
@@ -357,6 +370,7 @@ class OfflineMapService {
   
   /**
    * Cached Tiles für ein einzelnes Objekt
+   * @param {Object} object - Objekt mit latitude, longitude, offline_radius (optional)
    */
   async cacheObjectArea(object, onProgress = null) {
     if (!object?.latitude || !object?.longitude) {
@@ -371,15 +385,18 @@ class OfflineMapService {
       return { success: true, cached: true };
     }
     
+    // Radius aus Objekt oder Default
+    const radius = object.offline_radius || CONFIG.DEFAULT_RADIUS_METERS;
+    
     const tiles = getTilesForArea(
       object.latitude,
       object.longitude,
-      CONFIG.RADIUS_METERS,
+      radius,
       CONFIG.MIN_ZOOM,
       CONFIG.MAX_ZOOM
     );
     
-    console.log(`🗺️ Cache ${tiles.length} Tiles für Objekt ${object.id} (${object.name})`);
+    console.log(`🗺️ Cache ${tiles.length} Tiles für Objekt ${object.id} (${object.name}) - Radius: ${radius}m`);
     
     let downloaded = 0;
     let errors = 0;
@@ -437,6 +454,7 @@ class OfflineMapService {
       objectName: object.name,
       lat: object.latitude,
       lng: object.longitude,
+      radius: radius,  // radius ist bereits oben definiert
       tileCount: downloaded,
       cachedAt: new Date().toISOString()
     });

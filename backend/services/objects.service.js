@@ -113,7 +113,8 @@ exports.create = async (organisationId, obj) => {
     contact_person: obj.contact_person || null,
     phone: obj.phone || null,
     notes: obj.notes || null,
-    gps_edit_enabled: false
+    gps_edit_enabled: false,
+    offline_radius: obj.offline_radius || 25  // Standard: 25m (50x50m)
   };
 
   const { data, error } = await supabase

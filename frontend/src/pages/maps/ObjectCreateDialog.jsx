@@ -7,10 +7,19 @@
    - Objekt erstellen mit Position
    - Boxen aus Pool auswählen (sortiert nach QR, klein→groß)
    - QR-Nummern ohne führende Nullen
+   - Offline-Karten Radius auswählen
    ============================================================ */
 
 import { useState, useEffect, useMemo } from "react";
-import { X, Save, MapPin, Building2, Package, Check, ChevronDown, ChevronUp, Plus, Minus } from "lucide-react";
+import { X, Save, MapPin, Building2, Package, Check, ChevronDown, ChevronUp, Plus, Minus, Map, Wifi } from "lucide-react";
+
+// Offline-Karten Radius Optionen (direkt definiert für Stabilität)
+const RADIUS_OPTIONS = [
+  { value: 25, label: '50 x 50 m', tiles: '~22 Tiles' },
+  { value: 50, label: '100 x 100 m', tiles: '~40 Tiles' },
+  { value: 100, label: '200 x 200 m', tiles: '~85 Tiles' }
+];
+const DEFAULT_RADIUS = 25;
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -48,6 +57,9 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
   const [poolLoading, setPoolLoading] = useState(false);
   const [selectedQrCodes, setSelectedQrCodes] = useState(new Set());
   const [boxCount, setBoxCount] = useState(0); // Schnellauswahl: Anzahl Boxen
+
+  // Offline Map Radius (Standard: 25m = 50x50m)
+  const [offlineRadius, setOfflineRadius] = useState(DEFAULT_RADIUS);
 
   // Load pool boxes
   useEffect(() => {
@@ -184,6 +196,7 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
         notes,
         lat: latLng.lat,
         lng: latLng.lng,
+        offline_radius: offlineRadius, // Für Offline-Karten Caching
       };
 
       const res = await fetch(`${API}/objects`, {
@@ -571,6 +584,70 @@ export default function ObjectCreateDialog({ latLng, onClose, onSave }) {
               onFocus={(e) => (e.target.style.borderColor = "#6366f1")}
               onBlur={(e) => (e.target.style.borderColor = "rgba(255, 255, 255, 0.1)")}
             />
+          </div>
+
+          {/* ============================================
+              OFFLINE MAP RADIUS SECTION
+              ============================================ */}
+          <div style={{
+            marginTop: 20, padding: 16, background: "#0d1117",
+            borderRadius: 12, border: "1px solid rgba(255, 255, 255, 0.1)"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <Map size={18} color="#8b5cf6" />
+              <div>
+                <div style={{ color: "#e5e7eb", fontSize: 14, fontWeight: 500 }}>
+                  Offline-Karten
+                </div>
+                <div style={{ color: "#6b7280", fontSize: 12 }}>
+                  Kartenbereich für Offline-Nutzung
+                </div>
+              </div>
+            </div>
+            
+            <div style={{ display: "flex", gap: 8 }}>
+              {RADIUS_OPTIONS.map(option => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setOfflineRadius(option.value)}
+                  style={{
+                    flex: 1,
+                    padding: "10px 8px",
+                    background: offlineRadius === option.value ? "rgba(139, 92, 246, 0.2)" : "#161b22",
+                    border: offlineRadius === option.value 
+                      ? "2px solid #8b5cf6" 
+                      : "1px solid rgba(255, 255, 255, 0.1)",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    transition: "all 0.2s"
+                  }}
+                >
+                  <div style={{ 
+                    color: offlineRadius === option.value ? "#a78bfa" : "#e5e7eb",
+                    fontSize: 13, 
+                    fontWeight: 600 
+                  }}>
+                    {option.label}
+                  </div>
+                  <div style={{ 
+                    color: offlineRadius === option.value ? "#7c3aed" : "#6b7280",
+                    fontSize: 10, 
+                    marginTop: 2 
+                  }}>
+                    {option.tiles}
+                  </div>
+                </button>
+              ))}
+            </div>
+            
+            <div style={{ 
+              display: "flex", alignItems: "center", gap: 6, 
+              marginTop: 10, color: "#6b7280", fontSize: 11 
+            }}>
+              <Wifi size={12} />
+              <span>Wird bei WLAN automatisch heruntergeladen</span>
+            </div>
           </div>
 
           {/* ============================================
