@@ -180,17 +180,25 @@
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
 
-    <!-- Preconnect for performance -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preconnect" href="https://unpkg.com" />
-    <link rel="preconnect" href="https://api.maptiler.com" />
-    <link rel="dns-prefetch" href="https://api.mapbox.com" />
+    <!-- Preconnect for performance (with crossorigin for CORS) -->
+    <link rel="preconnect" href="https://api.mapbox.com" crossorigin />
+    <link rel="preconnect" href="https://api.maptiler.com" crossorigin />
+    <link rel="dns-prefetch" href="https://unpkg.com" />
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
 
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <!-- Preload critical fonts -->
+    <link rel="preload" href="/assets/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin />
 
-    <!-- Critical CSS -->
+    <!-- Leaflet CSS - async loading via media trick -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+          crossorigin="" 
+          media="print" 
+          onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" /></noscript>
+
+    <!-- Critical CSS - Inline für schnellen First Paint -->
     <style>
       *,*::before,*::after{box-sizing:border-box}
       body{margin:0;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0b1120;color:#fff}
@@ -267,5 +275,8 @@
     </noscript>
 
     <script type="module" src="/src/main.jsx"></script>
+    
+    <!-- Prefetch wichtige Routes für schnellere Navigation -->
+    <link rel="prefetch" href="/dashboard" as="document" />
   </body>
 </html>

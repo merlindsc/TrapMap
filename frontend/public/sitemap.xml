@@ -7,7 +7,7 @@
   <!-- Homepage - Highest Priority -->
   <url>
     <loc>https://trap-map.de/</loc>
-    <lastmod>2024-12-22</lastmod>
+    <lastmod>2024-12-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
@@ -15,29 +15,37 @@
   <!-- Login Page -->
   <url>
     <loc>https://trap-map.de/login</loc>
-    <lastmod>2024-12-22</lastmod>
+    <lastmod>2024-12-23</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
+  </url>
+  
+  <!-- Partner Login -->
+  <url>
+    <loc>https://trap-map.de/partner/login</loc>
+    <lastmod>2024-12-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
   
   <!-- Legal Pages -->
   <url>
     <loc>https://trap-map.de/impressum</loc>
-    <lastmod>2024-12-22</lastmod>
+    <lastmod>2024-12-23</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   
   <url>
     <loc>https://trap-map.de/datenschutz</loc>
-    <lastmod>2024-12-22</lastmod>
+    <lastmod>2024-12-23</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   
   <url>
     <loc>https://trap-map.de/agb</loc>
-    <lastmod>2024-12-22</lastmod>
+    <lastmod>2024-12-23</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>

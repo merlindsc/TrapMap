@@ -1,6 +1,7 @@
 /* ============================================================
    TRAPMAP - APP.JSX
    Mit ThemeProvider, Landing Page, Legal Pages & Cookie Consent
+   PERFORMANCE OPTIMIERT: Lazy Loading für alle schweren Komponenten
    ============================================================ */
 
 import React, { lazy, Suspense } from "react";
@@ -9,46 +10,51 @@ import { useAuth } from "./hooks/useAuth";
 import { ThemeProvider } from "./components/layout/DashboardLayout";
 import { MapControlsProvider } from "./context/MapControlsContext";
 
-// Public Pages
+// Public Pages - Kritisch, nicht lazy
 import LandingPage from "./pages/public/LandingPage";
-import VerifyDemo from "./pages/public/VerifyDemo";
 import Login from "./pages/Login";
 
-// Legal Pages
-import Impressum from "./pages/legal/Impressum";
-import Datenschutz from "./pages/legal/Datenschutz";
-import AGB from "./pages/legal/AGB";
-
-// Cookie Consent
+// Cookie Consent & Update Widget - Klein, nicht lazy
 import CookieConsent from "./components/CookieConsent";
 import UpdateWidget from "./components/UpdateWidget";
-import FeedbackWidget from "./components/FeedbackWidget";
 import PushPermissionDialog from "./components/PushPermissionDialog";
 
-// Partner Components (lazy loaded)
+// ============================================
+// LAZY LOADED COMPONENTS - Alle schweren Pages
+// ============================================
+
+// Legal Pages (selten besucht)
+const Impressum = lazy(() => import("./pages/legal/Impressum"));
+const Datenschutz = lazy(() => import("./pages/legal/Datenschutz"));
+const AGB = lazy(() => import("./pages/legal/AGB"));
+const VerifyDemo = lazy(() => import("./pages/public/VerifyDemo"));
+
+// Partner Components
 const PartnerLogin = lazy(() => import("./pages/PartnerLogin").catch(() => ({ default: () => <div className="min-h-screen flex items-center justify-center bg-gray-900 text-red-400">PartnerLogin.jsx nicht gefunden</div> })));
 const PartnerDashboard = lazy(() => import("./pages/PartnerDashboard").catch(() => ({ default: () => <div className="min-h-screen flex items-center justify-center bg-gray-900 text-red-400">PartnerDashboard.jsx nicht gefunden</div> })));
 
-// Layout & Pages
-import DashboardLayout from "./components/layout/DashboardLayout";
-import Dashboard from "./pages/dashboard/Dashboard";
-import TechnicianHome from "./pages/technician/TechnicianHome";
-import ObjectList from "./pages/objects/ObjectList";
-import ObjectDetails from "./pages/objects/ObjectDetails";
-import ObjectCreate from "./pages/objects/ObjectCreate";
-import LayoutEditor from "./pages/layouts/LayoutEditor";
-import LayoutList from "./pages/layouts/LayoutList";
-import LayoutCreate from "./pages/layouts/LayoutCreate";
-import Maps from "./pages/maps/Maps";
-import Scanner from "./pages/qr/Scanner";
-import AssignCode from "./pages/qr/AssignCode";
-import AssignObject from "./pages/qr/AssignObject";
-import QRRedirect from "./pages/qr/QRRedirect";
-import Settings from "./pages/settings/Settings";
-import Reports from "./pages/reports/Reports";
-import Admin from "./pages/admin/Admin";
-import BoxPool from "./pages/boxes/BoxPool";
-import ArchivePage from "./pages/Archive";
+// Dashboard Layout
+const DashboardLayout = lazy(() => import("./components/layout/DashboardLayout"));
+
+// Main Pages - Lazy loaded für schnelleren Initial Load
+const Dashboard = lazy(() => import("./pages/dashboard/Dashboard"));
+const TechnicianHome = lazy(() => import("./pages/technician/TechnicianHome"));
+const ObjectList = lazy(() => import("./pages/objects/ObjectList"));
+const ObjectDetails = lazy(() => import("./pages/objects/ObjectDetails"));
+const ObjectCreate = lazy(() => import("./pages/objects/ObjectCreate"));
+const LayoutEditor = lazy(() => import("./pages/layouts/LayoutEditor"));
+const LayoutList = lazy(() => import("./pages/layouts/LayoutList"));
+const LayoutCreate = lazy(() => import("./pages/layouts/LayoutCreate"));
+const Maps = lazy(() => import("./pages/maps/Maps"));
+const Scanner = lazy(() => import("./pages/qr/Scanner"));
+const AssignCode = lazy(() => import("./pages/qr/AssignCode"));
+const AssignObject = lazy(() => import("./pages/qr/AssignObject"));
+const QRRedirect = lazy(() => import("./pages/qr/QRRedirect"));
+const Settings = lazy(() => import("./pages/settings/Settings"));
+const Reports = lazy(() => import("./pages/reports/Reports"));
+const Admin = lazy(() => import("./pages/admin/Admin"));
+const BoxPool = lazy(() => import("./pages/boxes/BoxPool"));
+const ArchivePage = lazy(() => import("./pages/Archive"));
 
 // Super-Admin E-Mails
 const SUPER_ADMINS = ["admin@demo.trapmap.de", "merlin@trapmap.de", "hilfe@die-schaedlingsexperten.de"];
@@ -212,6 +218,7 @@ function MainApp() {
     {/* Push Permission Dialog - nur für eingeloggte User */}
     <PushPermissionDialog />
     
+    <Suspense fallback={<LoadingFallback />}>
     <Routes>
       {/* Public Pages auch wenn eingeloggt erreichbar */}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -220,11 +227,7 @@ function MainApp() {
       <Route path="/agb" element={<AGB />} />
       
       {/* Partner-Login auch wenn eingeloggt erreichbar */}
-      <Route path="/partner/login" element={
-        <Suspense fallback={<LoadingFallback />}>
-          <PartnerLogin />
-        </Suspense>
-      } />
+      <Route path="/partner/login" element={<PartnerLogin />} />
 
       {/* Login redirect wenn schon eingeloggt */}
       <Route path="/login" element={<Navigate to="/dashboard" replace />} />
@@ -250,16 +253,16 @@ function MainApp() {
           ======================================== */}
       {["admin", "supervisor"].includes(user.role) && (
         <>
-          <Route path="/dashboard" element={<DashboardLayout><Dashboard /><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
-          <Route path="/objects" element={<DashboardLayout><ObjectList /><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
-          <Route path="/objects/new" element={<DashboardLayout><ObjectCreate /><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
-          <Route path="/objects/:id" element={<DashboardLayout><ObjectDetails /><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
-          <Route path="/layouts" element={<DashboardLayout><LayoutList /><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
-          <Route path="/layouts/new" element={<DashboardLayout><LayoutCreate /><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
-          <Route path="/layouts/:id" element={<DashboardLayout><LayoutEditor /><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
-          <Route path="/maps" element={<DashboardLayout><Maps /><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
-          <Route path="/archive" element={<DashboardLayout><ArchivePage /><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
-          <Route path="/technicians" element={<DashboardLayout><div className="p-8 text-white">Techniker-Verwaltung (coming soon)</div><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
+          <Route path="/dashboard" element={<DashboardLayout><Dashboard /><UpdateWidget /></DashboardLayout>} />
+          <Route path="/objects" element={<DashboardLayout><ObjectList /><UpdateWidget /></DashboardLayout>} />
+          <Route path="/objects/new" element={<DashboardLayout><ObjectCreate /><UpdateWidget /></DashboardLayout>} />
+          <Route path="/objects/:id" element={<DashboardLayout><ObjectDetails /><UpdateWidget /></DashboardLayout>} />
+          <Route path="/layouts" element={<DashboardLayout><LayoutList /><UpdateWidget /></DashboardLayout>} />
+          <Route path="/layouts/new" element={<DashboardLayout><LayoutCreate /><UpdateWidget /></DashboardLayout>} />
+          <Route path="/layouts/:id" element={<DashboardLayout><LayoutEditor /><UpdateWidget /></DashboardLayout>} />
+          <Route path="/maps" element={<DashboardLayout><Maps /><UpdateWidget /></DashboardLayout>} />
+          <Route path="/archive" element={<DashboardLayout><ArchivePage /><UpdateWidget /></DashboardLayout>} />
+          <Route path="/technicians" element={<DashboardLayout><div className="p-8 text-white">Techniker-Verwaltung (coming soon)</div><UpdateWidget /></DashboardLayout>} />
         </>
       )}
 
@@ -268,8 +271,8 @@ function MainApp() {
           ======================================== */}
       {user.role === "technician" && (
         <>
-          <Route path="/dashboard" element={<DashboardLayout><TechnicianHome /><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
-          <Route path="/maps" element={<DashboardLayout><Maps /><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
+          <Route path="/dashboard" element={<DashboardLayout><TechnicianHome /><UpdateWidget /></DashboardLayout>} />
+          <Route path="/maps" element={<DashboardLayout><Maps /><UpdateWidget /></DashboardLayout>} />
         </>
       )}
 
@@ -278,15 +281,16 @@ function MainApp() {
           ======================================== */}
       {["auditor", "viewer", "partner"].includes(user.role) && (
         <>
-          <Route path="/dashboard" element={<DashboardLayout><Dashboard /><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
-          <Route path="/objects" element={<DashboardLayout><ObjectList /><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
-          <Route path="/maps" element={<DashboardLayout><Maps /><UpdateWidget /><FeedbackWidget /></DashboardLayout>} />
+          <Route path="/dashboard" element={<DashboardLayout><Dashboard /><UpdateWidget /></DashboardLayout>} />
+          <Route path="/objects" element={<DashboardLayout><ObjectList /><UpdateWidget /></DashboardLayout>} />
+          <Route path="/maps" element={<DashboardLayout><Maps /><UpdateWidget /></DashboardLayout>} />
         </>
       )}
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
+    </Suspense>
     </>
   );
 }

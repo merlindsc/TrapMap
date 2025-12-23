@@ -19,10 +19,10 @@ export default defineConfig({
       workbox: {
         // Cache-Strategien
         runtimeCaching: [
-          // App Shell - Network First (schnell bei Verbindung, Fallback auf Cache)
+          // App Shell - StaleWhileRevalidate (schneller Start, dann Update)
           {
             urlPattern: /^https:\/\/.*\.(js|css|html)$/,
-            handler: 'NetworkFirst',
+            handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'app-shell',
               expiration: {
@@ -167,9 +167,52 @@ export default defineConfig({
     minify: 'terser',
     terserOptions: {
       compress: {
-        drop_console: false, // Console logs behalten für Debugging
-        drop_debugger: true
+        drop_console: true, // Console logs entfernen für Production
+        drop_debugger: true,
+        pure_funcs: ['console.log', 'console.info', 'console.debug']
+      },
+      mangle: true,
+      format: {
+        comments: false
       }
-    }
+    },
+    
+    // Chunk Splitting für besseres Caching
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Vendor chunks
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-leaflet': ['leaflet', 'react-leaflet'],
+          'vendor-icons': ['lucide-react', '@heroicons/react'],
+          'vendor-utils': ['axios']
+        },
+        // Asset Naming für besseres Caching
+        chunkFileNames: 'assets/js/[name]-[hash].js',
+        entryFileNames: 'assets/js/[name]-[hash].js',
+        assetFileNames: (assetInfo) => {
+          const ext = assetInfo.name.split('.').pop();
+          if (/png|jpe?g|svg|gif|webp|ico/i.test(ext)) {
+            return 'assets/images/[name]-[hash][extname]';
+          }
+          if (/woff2?|eot|ttf|otf/i.test(ext)) {
+            return 'assets/fonts/[name]-[hash][extname]';
+          }
+          if (ext === 'css') {
+            return 'assets/css/[name]-[hash][extname]';
+          }
+          return 'assets/[name]-[hash][extname]';
+        }
+      }
+    },
+    
+    // Chunk Size Warnung
+    chunkSizeWarningLimit: 500,
+    
+    // CSS Code Splitting
+    cssCodeSplit: true,
+    
+    // Target für moderne Browser
+    target: 'es2020'
   }
 });
