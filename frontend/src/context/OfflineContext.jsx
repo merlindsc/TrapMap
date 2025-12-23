@@ -31,6 +31,9 @@ import {
   getLayouts
 } from '../utils/offlineAPI';
 
+// 🆕 Map-Sync Import
+import { offlineMapService } from '../services/OfflineMapService';
+
 // ============================================
 // CONTEXT
 // ============================================
@@ -61,6 +64,14 @@ export const OfflineProvider = ({ children }) => {
     boxTypes: 0,
     layouts: 0,
     lastRefresh: null
+  });
+  
+  // 🆕 Map Sync Status
+  const [mapSyncStatus, setMapSyncStatus] = useState({
+    isDownloading: false,
+    progress: null,
+    cachedObjects: 0,
+    totalSizeMB: 0
   });
   
   // Sync Results
@@ -210,6 +221,56 @@ export const OfflineProvider = ({ children }) => {
         // 6. Stammdaten laden wenn online
         if (navigator.onLine) {
           await refreshStammdaten();
+          
+          // 🆕 7. Map-Tiles für Objekte cachen (im Hintergrund)
+          try {
+            const objectsResult = await getObjects();
+            if (objectsResult?.data?.length > 0) {
+              console.log('🗺️ Starte Map-Sync im Hintergrund...');
+              
+              // Map-Sync Listener
+              const mapUnsubscribe = offlineMapService.addListener((event) => {
+                switch (event.type) {
+                  case 'start':
+                    setMapSyncStatus(prev => ({ ...prev, isDownloading: true }));
+                    break;
+                  case 'progress':
+                    setMapSyncStatus(prev => ({ 
+                      ...prev, 
+                      progress: event 
+                    }));
+                    break;
+                  case 'complete':
+                    setMapSyncStatus(prev => ({ 
+                      ...prev, 
+                      isDownloading: false,
+                      progress: null
+                    }));
+                    // Stats aktualisieren
+                    offlineMapService.getStats().then(stats => {
+                      setMapSyncStatus(prev => ({
+                        ...prev,
+                        cachedObjects: stats.cachedObjects,
+                        totalSizeMB: parseFloat(stats.totalSizeMB)
+                      }));
+                    });
+                    break;
+                }
+              });
+              
+              // Sync starten (nur bei WLAN, max 20 Objekte)
+              offlineMapService.syncAllObjects(objectsResult.data, {
+                onlyOnWifi: true,
+                maxObjects: 20
+              }).then(result => {
+                console.log('🗺️ Map-Sync abgeschlossen:', result);
+              }).catch(err => {
+                console.warn('⚠️ Map-Sync Fehler:', err);
+              });
+            }
+          } catch (mapError) {
+            console.warn('⚠️ Map-Sync konnte nicht gestartet werden:', mapError);
+          }
         }
         
         setIsInitialized(true);
@@ -369,6 +430,9 @@ export const OfflineProvider = ({ children }) => {
     // Cache Status
     cacheStatus,
     
+    // 🆕 Map Sync Status
+    mapSyncStatus,
+    
     // Sync Info
     lastSyncResult,
     lastSyncTime,
@@ -378,6 +442,16 @@ export const OfflineProvider = ({ children }) => {
     updatePendingCount,
     forceRefreshCache,
     refreshStammdaten,
+    
+    // 🆕 Map Actions
+    syncMapTiles: async (objects) => {
+      return offlineMapService.syncAllObjects(objects, {
+        onlyOnWifi: false,
+        maxObjects: 50
+      });
+    },
+    getMapStats: () => offlineMapService.getStats(),
+    clearMapCache: () => offlineMapService.clearAllCache(),
     
     // Legacy Support (für bestehenden Code)
     syncQueue: [], // Deprecated, use pendingCount
