@@ -65,17 +65,17 @@ export default function ChatWidget() {
         const chatWindow = document.querySelector('.chat-window');
         
         if (chatWindow && viewport) {
-          // Berechne die Höhe unter Berücksichtigung der Tastatur
           const viewportHeight = viewport.height;
-          const offsetTop = viewport.offsetTop;
+          const windowHeight = window.innerHeight;
+          const keyboardHeight = windowHeight - viewportHeight;
           
-          // Passe Chat-Fenster an, wenn Tastatur sichtbar ist
-          if (window.innerHeight > viewportHeight) {
-            chatWindow.style.height = `${viewportHeight - CHAT_WINDOW_MARGIN}px`;
-            chatWindow.style.transform = `translateY(${offsetTop}px)`;
+          // Tastatur ist sichtbar wenn Differenz > 100px
+          if (keyboardHeight > 100) {
+            chatWindow.style.height = `${viewportHeight}px`;
+            chatWindow.style.maxHeight = `${viewportHeight}px`;
           } else {
             chatWindow.style.height = '';
-            chatWindow.style.transform = '';
+            chatWindow.style.maxHeight = '';
           }
         }
       };
