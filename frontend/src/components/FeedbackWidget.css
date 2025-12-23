@@ -23,6 +23,11 @@
   font-size: 15px;
 }
 
+/* Hide feedback button when chat is open */
+body[data-chat-open="true"] .feedback-trigger {
+  display: none;
+}
+
 .feedback-trigger:hover {
   transform: translateY(-3px);
   box-shadow: 0 6px 25px rgba(16, 185, 129, 0.6);
@@ -45,6 +50,11 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
+}
+
+/* Ensure feedback doesn't appear over chat */
+body[data-chat-open="true"] .feedback-overlay {
+  z-index: 999;
 }
 
 .feedback-panel {

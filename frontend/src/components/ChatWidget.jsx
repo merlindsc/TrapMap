@@ -51,7 +51,16 @@ export default function ChatWidget() {
       inputRef.current?.focus();
       loadStatus();
       loadHistory();
+      // Add data attribute to body to notify other components
+      document.body.setAttribute('data-chat-open', 'true');
+    } else {
+      // Remove data attribute when chat is closed
+      document.body.removeAttribute('data-chat-open');
     }
+    
+    return () => {
+      document.body.removeAttribute('data-chat-open');
+    };
   }, [isOpen]);
 
   // Tastatur-Sichtbarkeits-Behandlung für mobile Geräte
@@ -71,20 +80,22 @@ export default function ChatWidget() {
           
           // Tastatur ist sichtbar (mehr als 150px Differenz)
           if (keyboardHeight > 150) {
-            // Chat auf max 40% reduzieren wenn Tastatur offen
-            const maxHeight = Math.min(viewportHeight * 0.4, 400);
-            chatWindow.style.maxHeight = `${maxHeight}px`;
-            chatWindow.style.bottom = '10px';
+            // Auf Mobile: Nutze die gesamte verfügbare Höhe
+            chatWindow.style.height = `${viewportHeight}px`;
+            chatWindow.style.maxHeight = `${viewportHeight}px`;
           } else {
-            // Normal: 50% Höhe
-            chatWindow.style.maxHeight = '50vh';
-            chatWindow.style.bottom = '';
+            // Normal: Volle Höhe
+            chatWindow.style.height = '100dvh';
+            chatWindow.style.maxHeight = '100dvh';
           }
         }
       };
 
       window.visualViewport.addEventListener('resize', handleResize);
       window.visualViewport.addEventListener('scroll', handleResize);
+      
+      // Initial resize
+      handleResize();
       
       return () => {
         window.visualViewport.removeEventListener('resize', handleResize);
