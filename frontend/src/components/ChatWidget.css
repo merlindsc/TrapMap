@@ -19,7 +19,7 @@
   justify-content: center;
   box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
   transition: transform 0.2s, box-shadow 0.2s, opacity 0.3s, bottom 0.3s;
-  z-index: 9999;
+  z-index: 10001;
 }
 
 .chat-toggle:hover {
@@ -46,15 +46,37 @@
   border-radius: 10px;
 }
 
+/* Chat Overlay - Full screen backdrop */
+.chat-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* Chat Window */
 .chat-window {
-  position: fixed;
-  bottom: 90px;
-  right: 24px;
-  width: 380px;
-  max-width: calc(100vw - 48px);
-  height: 480px;
-  max-height: 50vh;
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  height: auto;
+  max-height: min(600px, 80vh);
   background: #111827;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -62,9 +84,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  z-index: 9998;
   animation: slideUp 0.2s ease-out;
-  transition: height 0.2s ease, transform 0.2s ease;
 }
 
 @keyframes slideUp {
@@ -346,16 +366,16 @@
 
 /* Mobile Responsive */
 @media (max-width: 480px) {
+  .chat-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
   .chat-window {
-    bottom: 80px;
-    right: 12px;
-    left: 12px;
-    width: auto;
-    max-width: calc(100vw - 24px);
-    height: 400px;
-    max-height: 50vh;
-    border-radius: 16px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    max-width: 100%;
+    max-height: min(600px, 100dvh);
+    border-radius: 16px 16px 0 0;
+    width: 100%;
   }
 
   .chat-toggle {
