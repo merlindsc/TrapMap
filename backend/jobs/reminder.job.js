@@ -196,13 +196,12 @@ async function wasReminderSentToday(userId) {
 /**
  * Reminder-Log eintragen
  */
-async function logReminderSent(userId, organisationId, boxCount) {
+async function logReminderSent(userId, boxCount) {
   try {
     await supabase
       .from('push_reminder_log')
       .insert({
         user_id: userId,
-        organisation_id: organisationId,
         boxes_count: boxCount,
         sent_at: new Date().toISOString()
       });
@@ -222,9 +221,16 @@ async function sendReminders() {
   
   try {
     // Alle aktiven Subscriptions mit aktivierten Reminders holen
+    // JOIN mit users um organisation_id zu bekommen (existiert nicht in push_subscriptions)
     const { data: subscriptions, error } = await supabase
       .from('push_subscriptions')
-      .select('*')
+      .select(`
+        *,
+        users (
+          id,
+          organisation_id
+        )
+      `)
       .eq('reminder_enabled', true);
 
     if (error) {
@@ -247,10 +253,18 @@ async function sendReminders() {
     const userSubscriptions = {};
     for (const sub of subscriptions) {
       const userId = sub.user_id;
+      const organisationId = sub.users?.organisation_id;
+      
+      // Skip wenn keine organisation_id (sollte nicht passieren)
+      if (!organisationId) {
+        console.warn(`⚠️ Skipping user ${userId}: no organisation_id found`);
+        continue;
+      }
+      
       if (!userSubscriptions[userId]) {
         userSubscriptions[userId] = {
           userId,
-          organisationId: sub.organisation_id,
+          organisationId,
           reminderDaysBefore: sub.reminder_days_before || 1,
           subscriptions: []
         };
@@ -310,7 +324,7 @@ async function sendReminders() {
         const sent = results.filter(r => r.status === 'fulfilled').length;
         if (sent > 0) {
           console.log(`✅ Sent reminder to user ${userData.userId}: ${message.totalBoxes} boxes`);
-          await logReminderSent(userData.userId, userData.organisationId, message.totalBoxes);
+          await logReminderSent(userData.userId, message.totalBoxes);
         }
       } catch (userError) {
         console.error(`Error sending reminder to user ${userData.userId}:`, userError);
