@@ -69,13 +69,16 @@ export default function ChatWidget() {
           const windowHeight = window.innerHeight;
           const keyboardHeight = windowHeight - viewportHeight;
           
-          // Tastatur ist sichtbar wenn Differenz > 100px
-          if (keyboardHeight > 100) {
-            chatWindow.style.height = `${viewportHeight}px`;
-            chatWindow.style.maxHeight = `${viewportHeight}px`;
+          // Tastatur ist sichtbar (mehr als 150px Differenz)
+          if (keyboardHeight > 150) {
+            // Chat auf max 40% reduzieren wenn Tastatur offen
+            const maxHeight = Math.min(viewportHeight * 0.4, 400);
+            chatWindow.style.maxHeight = `${maxHeight}px`;
+            chatWindow.style.bottom = '10px';
           } else {
-            chatWindow.style.height = '';
-            chatWindow.style.maxHeight = '';
+            // Normal: 50% Höhe
+            chatWindow.style.maxHeight = '50vh';
+            chatWindow.style.bottom = '';
           }
         }
       };
