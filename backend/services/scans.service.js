@@ -118,6 +118,13 @@ exports.create = async (payload, orgId) => {
       return { success: false, message: "status ist erforderlich" };
     }
 
+    // Hole aktuelle Box-Daten für Köder und Box-Typ
+    const { data: currentBoxData } = await supabase
+      .from("boxes")
+      .select("bait, box_types(name)")
+      .eq("id", payload.box_id)
+      .single();
+
     // Parse quantity - extract first number from range strings like "10-20" or "20+"
     let quantityValue = null;
     if (payload.quantity) {
@@ -136,12 +143,22 @@ exports.create = async (payload, orgId) => {
       }
     }
 
+    // Notes mit Köder-Info erweitern (wenn Box einen Köder hat)
+    let finalNotes = payload.notes || null;
+    const currentBait = currentBoxData?.bait;
+    if (currentBait && !payload.notes?.includes("Köder")) {
+      // Nur hinzufügen wenn notes nicht bereits Köder-Info enthält (z.B. bei Wechsel-Scans)
+      finalNotes = payload.notes 
+        ? `${payload.notes} | Köder: ${currentBait}`
+        : `Köder: ${currentBait}`;
+    }
+
     const scan = {
       organisation_id: orgId,
       box_id: parseInt(payload.box_id),
       user_id: payload.user_id || null,
       status: payload.status,
-      notes: payload.notes || null,
+      notes: finalNotes,
       findings: payload.findings || null,
       consumption: consumptionValue,
       quantity: quantityValue,

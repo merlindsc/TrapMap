@@ -173,7 +173,7 @@ exports.getRecentScans = async (organisation_id) => {
     .select(`
       id, status, notes, scanned_at, box_id,
       boxes!inner (
-        id, number, notes, active, qr_code, bait,
+        id, number, notes, active, qr_code,
         box_types (name, category),
         objects!inner (id, name, active)
       ),
@@ -188,22 +188,42 @@ exports.getRecentScans = async (organisation_id) => {
   if (error) throw new Error(error.message);
 
   return (data || [])
-    .map(scan => ({
-      id: scan.id,
-      box_name: scan.boxes?.notes || `Box ${scan.boxes?.number || "?"}`,
-      box_qr_code: scan.boxes?.qr_code || null,
-      box_type: scan.boxes?.box_types?.name || null,
-      box_category: scan.boxes?.box_types?.category || null,
-      bait: scan.boxes?.bait || null,
-      object_id: scan.boxes?.objects?.id || null,
-      object_name: scan.boxes?.objects?.name || "Unbekannt",
-      message: scan.notes || `Status: ${scan.status}`,
-      status: scan.status,
-      created_at: scan.scanned_at,
-      technician_name: scan.users?.first_name
-        ? `${scan.users.first_name} ${scan.users.last_name}`
-        : scan.users?.email || "Unbekannt"
-    }))
+    .map(scan => {
+      // Köder aus notes extrahieren (Format: "... | Köder: XYZ" oder "Köder: XYZ")
+      let baitFromNotes = null;
+      if (scan.notes) {
+        const baitMatch = scan.notes.match(/Köder:\s*([^|]+)/);
+        if (baitMatch) {
+          baitFromNotes = baitMatch[1].trim();
+        }
+      }
+      
+      // Message ohne Köder-Info (für saubere Anzeige)
+      let cleanMessage = scan.notes || `Status: ${scan.status}`;
+      if (baitFromNotes) {
+        cleanMessage = cleanMessage.replace(/\s*\|\s*Köder:[^|]+/, '').replace(/^Köder:[^|]+\s*\|\s*/, '').trim();
+        if (!cleanMessage || cleanMessage === `Köder: ${baitFromNotes}`) {
+          cleanMessage = `Status: ${scan.status}`;
+        }
+      }
+      
+      return {
+        id: scan.id,
+        box_name: scan.boxes?.notes || `Box ${scan.boxes?.number || "?"}`,
+        box_qr_code: scan.boxes?.qr_code || null,
+        box_type: scan.boxes?.box_types?.name || null,
+        box_category: scan.boxes?.box_types?.category || null,
+        bait: baitFromNotes,  // Köder zum Scan-Zeitpunkt
+        object_id: scan.boxes?.objects?.id || null,
+        object_name: scan.boxes?.objects?.name || "Unbekannt",
+        message: cleanMessage,
+        status: scan.status,
+        created_at: scan.scanned_at,
+        technician_name: scan.users?.first_name
+          ? `${scan.users.first_name} ${scan.users.last_name}`
+          : scan.users?.email || "Unbekannt"
+      };
+    })
     .sort((a, b) => {
       const objCompare = a.object_name.localeCompare(b.object_name, 'de');
       if (objCompare !== 0) return objCompare;
