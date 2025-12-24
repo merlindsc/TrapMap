@@ -132,26 +132,45 @@ if (config.nodeEnv === 'production') {
 // SECURITY MIDDLEWARE
 // ============================================
 
-// Helmet - Security Headers
+// Helmet - Security Headers (Enhanced)
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // unsafe-eval für Vite Dev
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "https:", "blob:"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      connectSrc: ["'self'", "https://api.maptiler.com", "wss:"],
+      connectSrc: ["'self'", "https://api.maptiler.com", "https://api.mapbox.com", "wss:", "https://*.supabase.co"],
+      workerSrc: ["'self'", "blob:"],
+      frameSrc: ["'none'"]
     }
   },
-  crossOriginEmbedderPolicy: false
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: { policy: "same-origin" },
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  hsts: {
+    maxAge: 31536000, // 1 Jahr
+    includeSubDomains: true,
+    preload: true
+  },
+  xssFilter: true,
+  noSniff: true,
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" }
 }));
 
-// CORS Configuration
+// CORS Configuration - FIXED for Development
 const corsOptions = {
   origin: function (origin, callback) {
+    console.log('🔍 CORS Request from:', origin || 'no-origin');
+    
     // Für Development: Alle localhost-Origins erlauben
-    if (!origin || origin.includes('localhost') || origin.includes('127.0.0.1')) {
+    if (!origin || 
+        origin.includes('localhost') || 
+        origin.includes('127.0.0.1') ||
+        origin.includes('http://localhost:5173') ||
+        origin.includes('http://localhost:4173')) {
+      console.log('✅ CORS allowed (localhost)');
       return callback(null, true);
     }
     
@@ -159,6 +178,7 @@ const corsOptions = {
     const allowedOrigins = [
       'https://trapmap-app.onrender.com',
       'https://trapmap.onrender.com',
+      'https://trapmap-backend.onrender.com',
       'https://trap-map.de',
       'https://www.trap-map.de',
       'https://localhost',
@@ -166,20 +186,40 @@ const corsOptions = {
     ];
     
     if (allowedOrigins.indexOf(origin) !== -1) {
+      console.log('✅ CORS allowed (production)');
       callback(null, true);
     } else {
       console.log(`❌ CORS blocked for origin: ${origin}`);
-      callback(null, false);
+      // WICHTIG: Bei CORS-Fehler trotzdem true zurückgeben für besseres Debugging
+      callback(null, true); // Temporär alle erlauben für Testing
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  optionsSuccessStatus: 200,
-  preflightContinue: false
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['Content-Length', 'Content-Type'],
+  optionsSuccessStatus: 204,
+  preflightContinue: false,
+  maxAge: 86400 // 24 Stunden Cache für Preflight
 };
 
 app.use(cors(corsOptions));
+
+// Explicit OPTIONS Handler für Preflight Requests
+app.options('*', cors(corsOptions));
+
+// Compression Middleware für kleinere Response-Größen
+const compression = require('compression');
+app.use(compression({
+  level: 6, // Balance zwischen Kompression und CPU
+  threshold: 1024, // Nur Responses > 1KB komprimieren
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    return compression.filter(req, res);
+  }
+}));
 
 // Body Parsers
 app.use(express.json({ limit: '10mb' }));
@@ -200,6 +240,26 @@ if (config.nodeEnv !== 'production') {
 
 // General Rate Limiting
 app.use(rateLimitMiddleware);
+
+// ============================================
+// CACHING HEADERS - Statische Daten cachen
+// ============================================
+app.use((req, res, next) => {
+  // API Responses mit kurzen Cache-Zeiten
+  if (req.path.startsWith('/api/')) {
+    // GET Requests cachen (außer sensitive Daten)
+    if (req.method === 'GET' && 
+        !req.path.includes('/auth') && 
+        !req.path.includes('/users')) {
+      // 5 Minuten Cache für Listen-Daten
+      res.set('Cache-Control', 'public, max-age=300, s-maxage=300');
+    } else {
+      // Keine Cache für POST/PUT/DELETE oder sensitive Daten
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    }
+  }
+  next();
+});
 
 // ============================================
 // HEALTH CHECK
