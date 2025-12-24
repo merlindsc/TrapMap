@@ -17,13 +17,9 @@
     <link rel="dns-prefetch" href="https://unpkg.com" />
     <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
     
-    <!-- Preload kritische Assets -->
-    <link rel="modulepreload" href="/src/main.jsx" crossorigin />
-    <link rel="modulepreload" href="/src/App.jsx" crossorigin />
-    
     <!-- Performance Hints -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="manifest" href="/manifest.json" />
 
     <!-- Primary Meta Tags -->
     <title>TrapMap - Digitales Schädlingsmonitoring | HACCP & IFS konform</title>
@@ -197,7 +193,7 @@
     <link rel="manifest" href="/manifest.json" />
 
     <!-- Preload critical fonts -->
-    <link rel="preload" href="/assets/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- Removed inter-var.woff2 preload - font file does not exist -->
 
     <!-- Leaflet CSS - async loading via media trick -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 

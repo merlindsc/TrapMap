@@ -111,7 +111,11 @@ Du MUSST die Funktion aufrufen, nicht nur davon reden!
 Wenn User nach "Objekt 1" fragt, meint er das erste Objekt in der Liste, nicht ID=1!
 
 ## Feedback:
-Wenn User Feedback geben will, bedanke dich und sage dass das Feedback an das Entwicklerteam weitergeleitet wird. Frage nach Details.`;
+Wenn User Feedback geben will, rufe SOFORT die send_feedback Funktion auf! 
+- Frage ggf. nach: Ist es ein Feature-Wunsch, Bug-Meldung oder allgemeines Feedback?
+- Wenn User "gut gemacht" oder ähnliches sagt, verwende type="praise"
+- Nach erfolgreichem Senden: "Vielen Dank! Dein Feedback wurde an das Entwicklerteam weitergeleitet (info@trap-map.de)."
+Du MUSST die send_feedback Funktion aufrufen, nicht nur davon reden!`;
 
 // Function Definitions für GPT - ERWEITERT
 const FUNCTIONS = [
@@ -313,6 +317,31 @@ const FUNCTIONS = [
           description: "Die Nummer des Objekts (1 = erstes Objekt)"
         }
       }
+    }
+  },
+  {
+    name: "send_feedback",
+    description: "Sendet Feedback oder Verbesserungsvorschläge vom User per E-Mail an das Entwicklerteam. Verwende dies wenn User Feedback geben will.",
+    parameters: {
+      type: "object",
+      properties: {
+        message: {
+          type: "string",
+          description: "Die Feedback-Nachricht des Users"
+        },
+        type: {
+          type: "string",
+          enum: ["general", "feature", "bug", "praise"],
+          description: "Art des Feedbacks (general=allgemein, feature=Feature-Wunsch, bug=Bug-Meldung, praise=Lob)"
+        },
+        rating: {
+          type: "integer",
+          description: "Optionale Bewertung 1-5 Sterne",
+          minimum: 1,
+          maximum: 5
+        }
+      },
+      required: ["message", "type"]
     }
   }
 ];
@@ -998,6 +1027,62 @@ async function executeFunction(name, args, organisationId, userId) {
           ? 'Noch keine Reports für dieses Objekt. Sage "erstelle report für objekt X" um einen zu generieren.'
           : `${reports.length} Reports gefunden. Neuester: ${reports[0]?.dateiname}`
       };
+    }
+
+    case "send_feedback": {
+      try {
+        // User-Daten holen für E-Mail
+        const { data: user, error: userError } = await supabase
+          .from('users')
+          .select('first_name, last_name, email, role, organisation_id, organisations(name)')
+          .eq('id', userId)
+          .single();
+        
+        if (userError || !user) {
+          console.error('[Chatbot] User fetch error:', userError);
+          return {
+            success: false,
+            error: 'Konnte User-Daten nicht laden'
+          };
+        }
+
+        // Feedback-Service aufrufen
+        const feedbackService = require('./feedback.service');
+        
+        const result = await feedbackService.sendFeedbackEmail({
+          type: args.type,
+          rating: args.rating,
+          message: args.message,
+          contactEmail: user.email,
+          user: {
+            first_name: user.first_name,
+            last_name: user.last_name,
+            email: user.email,
+            role: user.role,
+            organisation_name: user.organisations?.name || 'Unbekannt'
+          }
+        });
+
+        if (result.success) {
+          return {
+            success: true,
+            message: 'Feedback erfolgreich versendet!',
+            details: 'Das Entwicklerteam wurde per E-Mail (info@trap-map.de) benachrichtigt.'
+          };
+        } else {
+          return {
+            success: false,
+            error: 'Fehler beim Versenden: ' + (result.error?.message || 'Unbekannter Fehler')
+          };
+        }
+
+      } catch (feedbackError) {
+        console.error('[Chatbot] Feedback error:', feedbackError);
+        return {
+          success: false,
+          error: 'Technischer Fehler beim Feedback-Versand'
+        };
+      }
     }
 
     default:

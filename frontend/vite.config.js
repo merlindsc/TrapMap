@@ -130,17 +130,17 @@ export default defineConfig({
         start_url: '/',
         icons: [
           {
-            src: '/icon-192.png',
+            src: '/icon-192x192.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: '/icon-512.png',
+            src: '/icon-512x512.png',
             sizes: '512x512',
             type: 'image/png'
           },
           {
-            src: '/icon-512.png',
+            src: '/icon-512x512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable'
@@ -205,6 +205,10 @@ export default defineConfig({
         entryFileNames: 'assets/js/[name]-[hash].js',
         assetFileNames: (assetInfo) => {
           const ext = assetInfo.name.split('.').pop();
+          // Force .js extension for all JavaScript files
+          if (/jsx?$/i.test(ext)) {
+            return 'assets/js/[name]-[hash].js';
+          }
           if (/png|jpe?g|svg|gif|webp|ico/i.test(ext)) {
             return 'assets/images/[name]-[hash][extname]';
           }
