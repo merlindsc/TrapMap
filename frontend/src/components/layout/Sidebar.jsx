@@ -6,9 +6,11 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from './DashboardLayout';
 import './Sidebar.css';
 import trapMapLogo from '../../assets/trapmap-logo-200.png';
+
+// Theme Hook direkt importieren statt über DashboardLayout
+import { useTheme } from '../../hooks/useTheme';
 
 import {
   HomeIcon,

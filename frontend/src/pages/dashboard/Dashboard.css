@@ -798,6 +798,51 @@
     right: 0;
   }
 
+  /* Scan Items responsive auf Mobile */
+  .scan-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .scan-left {
+    width: 100%;
+  }
+
+  .scan-info {
+    overflow: hidden;
+  }
+
+  .scan-box {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .scan-message {
+    white-space: normal;
+    word-wrap: break-word;
+    line-height: 1.4;
+  }
+
+  .scan-right {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-align: left;
+    margin-left: 22px;
+  }
+
+  .scan-date {
+    font-size: 12px;
+  }
+
+  .scan-tech {
+    font-size: 11px;
+  }
+
   .dashboard-title {
     font-size: 26px;
   }

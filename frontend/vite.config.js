@@ -17,6 +17,9 @@ export default defineConfig({
       
       // Service Worker Konfiguration
       workbox: {
+        // Mehr Dateien im Service Worker Cache
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,webp,woff,woff2}'],
+        
         // Cache-Strategien
         runtimeCaching: [
           // App Shell - StaleWhileRevalidate (schneller Start, dann Update)
@@ -102,11 +105,6 @@ export default defineConfig({
           }
         ],
         
-        // Dateien die sofort gecached werden sollen
-        globPatterns: [
-          '**/*.{js,css,html,ico,png,svg,woff,woff2}'
-        ],
-        
         // Navigation Fallback für SPA
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//]
@@ -164,6 +162,7 @@ export default defineConfig({
   build: {
     // Optimierungen für Production
     sourcemap: false,
+    chunkSizeWarningLimit: 1000,
     minify: 'terser',
     terserOptions: {
       compress: {
@@ -177,14 +176,21 @@ export default defineConfig({
       }
     },
     
+    // CSS Code Splitting
+    cssCodeSplit: true,
+    
+    // Target für moderne Browser
+    target: 'es2020',
+    
     // Chunk Splitting für besseres Caching
     rollupOptions: {
       output: {
         manualChunks: {
           // Vendor chunks
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-leaflet': ['leaflet', 'react-leaflet'],
-          'vendor-icons': ['lucide-react', '@heroicons/react'],
+          'vendor-qr': ['@zxing/browser'],
+          'vendor-leaflet': ['leaflet', 'react-leaflet', 'leaflet.markercluster'],
+          'vendor-icons': ['lucide-react', '@heroicons/react', 'react-icons'],
           'vendor-utils': ['axios']
         },
         // Asset Naming für besseres Caching
@@ -204,15 +210,6 @@ export default defineConfig({
           return 'assets/[name]-[hash][extname]';
         }
       }
-    },
-    
-    // Chunk Size Warnung
-    chunkSizeWarningLimit: 500,
-    
-    // CSS Code Splitting
-    cssCodeSplit: true,
-    
-    // Target für moderne Browser
-    target: 'es2020'
+    }
   }
 });

@@ -16,6 +16,14 @@
     <link rel="preconnect" href="https://api.maptiler.com" crossorigin />
     <link rel="dns-prefetch" href="https://unpkg.com" />
     <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
+    
+    <!-- Preload kritische Assets -->
+    <link rel="preload" href="/src/main.jsx" as="script" />
+    <link rel="modulepreload" href="/src/App.jsx" />
+    
+    <!-- Performance Hints -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <link rel="manifest" href="/manifest.webmanifest" />
 
     <!-- Primary Meta Tags -->
     <title>TrapMap - Digitales Schädlingsmonitoring | HACCP & IFS konform</title>
@@ -23,7 +31,8 @@
     <meta name="description" content="TrapMap digitalisiert Ihr Schädlingsmonitoring. QR-Code scannen, dokumentieren, Report generieren – audit-sicher in 2 Minuten. HACCP, IFS, DSGVO konform." />
     <meta name="keywords" content="Schädlingsmonitoring, Schädlingsbekämpfung, HACCP, IFS, Pest Control, QR-Code, digitale Dokumentation, Audit, Monitoring Software, Deutschland" />
     <meta name="author" content="TrapMap" />
-    <meta name="robots" content="index, follow" />
+    <!-- Robots: In Production auf 'index, follow' setzen -->
+    <meta name="robots" content="noindex, nofollow" />
     <meta name="theme-color" content="#6366f1" />
     <meta name="color-scheme" content="dark light" />
 

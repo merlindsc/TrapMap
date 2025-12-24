@@ -7,8 +7,10 @@
 import React, { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
-import { ThemeProvider } from "./components/layout/DashboardLayout";
 import { MapControlsProvider } from "./context/MapControlsContext";
+
+// Theme Provider separat importieren
+import { ThemeProvider } from "./context/ThemeContext";
 
 // Public Pages - Kritisch, nicht lazy
 import LandingPage from "./pages/public/LandingPage";
