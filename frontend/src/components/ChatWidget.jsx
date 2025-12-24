@@ -6,14 +6,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   MessageCircle, X, Send, Loader2, Bot, User, 
-  Trash2, AlertCircle, Sparkles, ChevronDown
+  Trash2, AlertCircle, Sparkles, ChevronDown, Maximize2, Minimize2
 } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
 import './ChatWidget.css';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 export default function ChatWidget() {
+  const { theme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(true); // Fullscreen als Default
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -80,13 +83,20 @@ export default function ChatWidget() {
           
           // Tastatur ist sichtbar (mehr als 150px Differenz)
           if (keyboardHeight > 150) {
-            // Auf Mobile: Nutze die gesamte verfügbare Höhe
+            // Auf Mobile: Passe Höhe an Viewport an (ohne Tastatur)
             chatWindow.style.height = `${viewportHeight}px`;
             chatWindow.style.maxHeight = `${viewportHeight}px`;
+            chatWindow.style.transform = `translateY(0)`;
           } else {
-            // Normal: Volle Höhe
-            chatWindow.style.height = '100dvh';
-            chatWindow.style.maxHeight = '100dvh';
+            // Normal: Respektiere Fullscreen/Half-Screen Modus
+            if (isFullscreen) {
+              chatWindow.style.height = '100dvh';
+              chatWindow.style.maxHeight = '100dvh';
+            } else {
+              chatWindow.style.height = '50dvh';
+              chatWindow.style.maxHeight = '50dvh';
+            }
+            chatWindow.style.transform = '';
           }
         }
       };
@@ -102,7 +112,7 @@ export default function ChatWidget() {
         window.visualViewport.removeEventListener('scroll', handleResize);
       };
     }
-  }, [isOpen]);
+  }, [isOpen, isFullscreen]);
 
   // Status laden
   const loadStatus = async () => {
@@ -268,7 +278,7 @@ export default function ChatWidget() {
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="chat-window">
+        <div className={`chat-window ${isFullscreen ? 'fullscreen' : 'halfscreen'}`}>
           {/* Header */}
           <div className="chat-header">
             <div className="chat-header-info">
@@ -281,6 +291,15 @@ export default function ChatWidget() {
               </div>
             </div>
             <div className="chat-header-actions">
+              {/* Fullscreen/Half Toggle Button (nur Mobile) */}
+              <button 
+                onClick={() => setIsFullscreen(!isFullscreen)} 
+                title={isFullscreen ? "Halbes Display" : "Ganzes Display"}
+                className="screen-toggle-btn mobile-only"
+              >
+                {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              </button>
+              
               {messages.length > 0 && (
                 <button 
                   onClick={resetChat} 

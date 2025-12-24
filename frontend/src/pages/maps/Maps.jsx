@@ -52,6 +52,7 @@ import BoxScanDialog from "../../components/BoxScanDialog";
 import BoxEditDialog from "./BoxEditDialog";
 import ObjectCreateDialog from "./ObjectCreateDialog";
 import ObjectEditDialog from "./ObjectEditDialog";
+import Toast from "../../components/ui/Toast";
 
 // Box Helpers - NEUE IMPORTS
 import { 
@@ -406,6 +407,9 @@ export default function Maps() {
   // Drag & Drop
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
+  // Toast Notifications
+  const [toast, setToast] = useState(null);
+
   const mapRef = useRef(null);
   const mapWrapperRef = useRef(null);
 
@@ -630,7 +634,7 @@ export default function Maps() {
             if (urlFlyTo && targetObject.lat && targetObject.lng) {
               setTimeout(() => {
                 if (mapRef.current) {
-                  mapRef.current.flyTo([targetObject.lat, targetObject.lng], 18, { duration: 1.5 });
+                  mapRef.current.flyTo([targetObject.lat, targetObject.lng], getSafeZoom(18), { duration: 1.5 });
                 }
               }, 500);
             }
@@ -638,13 +642,85 @@ export default function Maps() {
             if (urlOpenBox && boxesData.length > 0) {
               const targetBox = boxesData.find(box => String(box.id) === urlOpenBox);
               if (targetBox) {
-                setTimeout(() => {
+                // Prüfe ob Box bereits platziert ist (GPS ODER Lageplan)
+                const hasGpsPosition = targetBox.lat && targetBox.lng;
+                const hasFloorplanPosition = targetBox.floor_plan_id && (targetBox.pos_x !== null && targetBox.pos_x !== undefined);
+                const isBoxPlaced = hasGpsPosition || hasFloorplanPosition;
+                
+                setTimeout(async () => {
                   setSelectedBox(targetBox);
-                  if (urlFirstSetup) {
-                    setIsFirstSetup(true);
-                    setBoxEditDialogOpen(true);
+                  
+                  if (!isBoxPlaced) {
+                    // Box ist NICHT platziert
+                    if (urlFirstSetup) {
+                      // Ersteinrichtung nach QR-Scan: Zeige Platzierungsoptionen
+                      setIsFirstSetup(true);
+                      
+                      // Prüfe ob Objekt Lagepläne hat
+                      try {
+                        const token = localStorage.getItem('trapmap_token');
+                        const fpRes = await fetch(`${API}/floorplans/object/${targetObject.id}`, {
+                          headers: { Authorization: `Bearer ${token}` }
+                        });
+                        const floorplans = fpRes.ok ? await fpRes.json() : [];
+                        const objectHasFloorplans = floorplans.length > 0;
+                        
+                        if (objectHasFloorplans) {
+                          // Objekt hat Lagepläne: Zeige Dialog zur Auswahl (GPS oder Lageplan)
+                          setPendingFloorplanBox(targetBox);
+                          setFloorplanDialogOpen(true);
+                          setToast({ 
+                            type: "info", 
+                            msg: "📍 Wo soll die Box platziert werden?" 
+                          });
+                        } else {
+                          // Nur GPS verfügbar
+                          setBoxToPlace(targetBox);
+                          setToast({ 
+                            type: "info", 
+                            msg: "📍 Box platzieren: GPS-Button oder Karte antippen" 
+                          });
+                          
+                          if (isMobile) {
+                            setSheetState('peek');
+                          }
+                        }
+                      } catch (err) {
+                        console.error("Error checking floorplans:", err);
+                        // Fallback zu GPS-only
+                        setBoxToPlace(targetBox);
+                        setToast({ 
+                          type: "info", 
+                          msg: "📍 Box platzieren: GPS-Button oder Karte antippen" 
+                        });
+                        if (isMobile) {
+                          setSheetState('peek');
+                        }
+                      }
+                    } else {
+                      // Normale Box-Auswahl ohne firstSetup
+                      setBoxToPlace(targetBox);
+                      if (isMobile) {
+                        setSheetState('peek');
+                      }
+                    }
                   } else {
-                    setControlDialogOpen(true);
+                    // Box ist BEREITS platziert
+                    if (hasFloorplanPosition) {
+                      // Lageplan-Box → Navigation zum Lageplan
+                      setPendingFloorplanBox(targetBox);
+                      setFloorplanDialogOpen(true);
+                    } else if (hasGpsPosition) {
+                      // GPS-Box → Direkt zur Kontrolle
+                      const needsSetup = !targetBox.box_type_id;
+                      if (needsSetup || urlFirstSetup) {
+                        setIsFirstSetup(true);
+                        setBoxEditDialogOpen(true);
+                      } else {
+                        setIsFirstSetup(false);
+                        setControlDialogOpen(true);
+                      }
+                    }
                   }
                 }, 300);
               }
@@ -687,6 +763,12 @@ export default function Maps() {
   /* ============================================================
      FLYTO HANDLER
      ============================================================ */
+  // Helper: Get safe zoom level (max. 21 für digitalen Zoom)
+  const getSafeZoom = useCallback((requestedZoom) => {
+    const maxSafeZoom = 21; // Digitaler Zoom bis 21
+    return requestedZoom > maxSafeZoom ? maxSafeZoom : requestedZoom;
+  }, []);
+
   const handleFlyToBox = useCallback((box) => {
     if (!box.lat || !box.lng || !mapRef.current) return;
     
@@ -695,8 +777,8 @@ export default function Maps() {
       setSheetState('peek');
     }
     
-    mapRef.current.flyTo([box.lat, box.lng], 19, { duration: 1.2 });
-  }, [isMobile]);
+    mapRef.current.flyTo([box.lat, box.lng], getSafeZoom(19), { duration: 1.2 });
+  }, [isMobile, getSafeZoom]);
 
   /* ============================================================
      REQUEST BOXES FROM POOL
@@ -816,7 +898,7 @@ export default function Maps() {
   const handleAddressSelect = (result) => {
     if (result.center && mapRef.current) {
       const [lng, lat] = result.center;
-      mapRef.current.flyTo([lat, lng], 17, { duration: 1.2 });
+      mapRef.current.flyTo([lat, lng], getSafeZoom(17), { duration: 1.2 });
     }
     setAddressQuery(result.place_name);
     setAddressResults([]);
@@ -886,7 +968,7 @@ export default function Maps() {
   const handleCombinedAddressSelect = (result) => {
     if (result.center && mapRef.current) {
       const [lng, lat] = result.center;
-      mapRef.current.flyTo([lat, lng], 17, { duration: 1.2 });
+      mapRef.current.flyTo([lat, lng], getSafeZoom(17), { duration: 1.2 });
     }
     setCombinedSearchQuery("");
     setCombinedSearchResults({ objects: [], addresses: [] });
@@ -947,7 +1029,7 @@ export default function Maps() {
     }
     
     if (obj.lat && obj.lng && mapRef.current) {
-      mapRef.current.flyTo([obj.lat, obj.lng], 17, { duration: 1.0 });
+      mapRef.current.flyTo([obj.lat, obj.lng], getSafeZoom(17), { duration: 1.0 });
     }
   };
 
@@ -978,11 +1060,22 @@ export default function Maps() {
 
   const handleGoToFloorplan = () => {
     if (pendingFloorplanBox && selectedObject) {
-      // Navigation zur Objekt-Detailseite mit Lageplan-Tab und openBox Parameter
+      // Beim Navigieren zum Lageplan: Prüfe ob Box bereits platziert ist oder neu platziert werden soll
+      const hasFloorplanPosition = pendingFloorplanBox.floor_plan_id && (pendingFloorplanBox.pos_x !== null && pendingFloorplanBox.pos_x !== undefined);
+      
       const searchParams = new URLSearchParams({
-        tab: 'layouts',
-        openBox: pendingFloorplanBox.id
+        tab: 'layouts'
       });
+      
+      if (hasFloorplanPosition) {
+        // Box bereits auf Lageplan → nur öffnen
+        searchParams.set('openBox', pendingFloorplanBox.id);
+      } else {
+        // Box neu auf Lageplan platzieren
+        searchParams.set('placeBox', pendingFloorplanBox.id);
+        searchParams.set('place', 'true');
+      }
+      
       navigate(`/objects/${selectedObject.id}?${searchParams.toString()}`);
     }
     setFloorplanDialogOpen(false);
@@ -1156,6 +1249,8 @@ export default function Maps() {
 
   const handlePlaceBoxOnMap = async (box, latlng) => {
     try {
+      hapticMedium(); // Haptic feedback beim Platzieren
+      
       const res = await fetch(`${API}/boxes/${box.id}/place-map`, {
         method: 'POST',
         headers: {
@@ -1178,22 +1273,41 @@ export default function Maps() {
         };
 
         setSelectedBox(enrichedBox);
+        hapticSuccess(); // Erfolgs-Feedback
+        
+        // Prüfe ob Box-Typ bereits gesetzt ist
         const needsSetup = !placedBox.box_type_id;
-        if (needsSetup) {
+        
+        if (needsSetup || isFirstSetup) {
+          // Zeige Setup-Dialog
           setIsFirstSetup(true);
           setBoxEditDialogOpen(true);
+          setToast({ type: "success", msg: "✓ Box platziert - Jetzt konfigurieren" });
         } else {
+          // Box ist fertig konfiguriert, zeige Kontroll-Dialog
           setIsFirstSetup(false);
           setControlDialogOpen(true);
+          setToast({ type: "success", msg: "✓ Box erfolgreich platziert" });
         }
 
+        // Boxen neu laden
         if (selectedObject) loadBoxes(selectedObject.id);
+        
+        // Zur platzierten Box fliegen
+        if (mapRef.current) {
+          setTimeout(() => {
+            mapRef.current.flyTo([latlng.lat, latlng.lng], getSafeZoom(18), { duration: 1 });
+          }, 300);
+        }
       } else {
         const err = await res.json();
-        alert(err.error || 'Fehler beim Platzieren');
+        hapticError();
+        setToast({ type: "error", msg: err.error || 'Fehler beim Platzieren' });
       }
     } catch (err) {
       console.error("Place error:", err);
+      hapticError();
+      setToast({ type: "error", msg: "Fehler beim Platzieren der Box" });
     }
     setBoxToPlace(null);
   };
@@ -1324,18 +1438,108 @@ export default function Maps() {
       )}
 
       {boxToPlace && (
-        <div className="placing-hint box-placement" style={{ borderColor: "#10b981", color: "#10b981", background: "rgba(16, 185, 129, 0.95)" }}>
-          <MapPin size={18} />
-          <span>Tippe auf die Karte um Box {getBoxShortLabel(boxToPlace)} zu platzieren</span>
-          <button 
-            onClick={() => {
-              hapticLight(); // Haptic feedback on cancel
-              setBoxToPlace(null);
-            }} 
-            style={{ background: "rgba(255, 255, 255, 0.25)" }}
-          >
-            <X size={16} /> Abbrechen
-          </button>
+        <div className="placing-hint box-placement" style={{ 
+          borderColor: "#10b981", 
+          color: "#10b981", 
+          background: "rgba(16, 185, 129, 0.95)",
+          flexDirection: isMobile ? 'column' : 'row',
+          gap: isMobile ? '12px' : '16px',
+          padding: isMobile ? '16px' : '12px 20px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+            <MapPin size={18} />
+            <span style={{ fontWeight: 500 }}>
+              {isMobile 
+                ? `Box ${getBoxShortLabel(boxToPlace)} platzieren` 
+                : `Tippe auf die Karte um Box ${getBoxShortLabel(boxToPlace)} zu platzieren`}
+            </span>
+          </div>
+          
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: isMobile ? 'stretch' : 'flex-end' }}>
+            {/* GPS Position verwenden Button */}
+            <button
+              onClick={() => {
+                hapticMedium();
+                if (!navigator.geolocation) {
+                  alert("GPS nicht verfügbar");
+                  return;
+                }
+                
+                setToast({ type: "info", msg: "GPS-Position wird ermittelt..." });
+                
+                navigator.geolocation.getCurrentPosition(
+                  (position) => {
+                    const latlng = {
+                      lat: position.coords.latitude,
+                      lng: position.coords.longitude
+                    };
+                    handlePlaceBoxOnMap(boxToPlace, latlng);
+                    hapticSuccess();
+                    
+                    // Zur Box fliegen
+                    if (mapRef.current) {
+                      mapRef.current.flyTo([latlng.lat, latlng.lng], getSafeZoom(18), { duration: 1 });
+                    }
+                  },
+                  (error) => {
+                    console.error("GPS error:", error);
+                    hapticError();
+                    setToast({ type: "error", msg: "GPS-Position konnte nicht ermittelt werden" });
+                  },
+                  { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+              }}
+              style={{ 
+                background: "rgba(255, 255, 255, 0.95)",
+                color: "#10b981",
+                padding: isMobile ? '10px 16px' : '8px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                fontWeight: 600,
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+                flex: isMobile ? '1' : 'auto',
+                justifyContent: 'center',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => e.target.style.background = "rgba(255, 255, 255, 1)"}
+              onMouseLeave={(e) => e.target.style.background = "rgba(255, 255, 255, 0.95)"}
+            >
+              <Navigation size={16} />
+              GPS verwenden
+            </button>
+            
+            {/* Abbrechen Button */}
+            <button 
+              onClick={() => {
+                hapticLight();
+                setBoxToPlace(null);
+              }} 
+              style={{ 
+                background: "rgba(255, 255, 255, 0.25)",
+                padding: isMobile ? '10px 16px' : '8px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                color: '#ffffff',
+                fontWeight: 500,
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+                flex: isMobile ? '1' : 'auto',
+                justifyContent: 'center',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => e.target.style.background = "rgba(255, 255, 255, 0.35)"}
+              onMouseLeave={(e) => e.target.style.background = "rgba(255, 255, 255, 0.25)"}
+            >
+              <X size={16} /> Abbrechen
+            </button>
+          </div>
         </div>
       )}
 
@@ -1343,7 +1547,7 @@ export default function Maps() {
       {isOffline && (
         <div className="offline-map-notice">
           <WifiOff size={16} />
-          <span>Offline-Modus: Nur gecachte Kartenbereiche verfügbar</span>
+          <span>Offline-Modus: Nur gecachte Bereiche verfügbar (Zoom max. 21)</span>
         </div>
       )}
 
@@ -1368,7 +1572,7 @@ export default function Maps() {
           <MapContainer
             center={[51.1657, 10.4515]}
             zoom={6}
-            maxZoom={22}              // Erhöht für mehr Zoom (digital)
+            maxZoom={21}              // Digitaler Zoom bis 21 (skaliert Zoom 19 Tiles)
             zoomControl={false}
             scrollWheelZoom={true}
             preferCanvas={true}       // 🆕 Schnelleres Rendering
@@ -1382,8 +1586,8 @@ export default function Maps() {
               attribution='&copy; Mapbox'
               tileSize={512}
               zoomOffset={-1}
-              maxNativeZoom={22} // Mapbox liefert bis Zoom 22
-              maxZoom={24}      // Leaflet skaliert darüber hinaus
+              maxNativeZoom={19}       // Echte Tiles nur bis 19
+              maxZoom={21}             // Digitaler Zoom bis 21
             />
             {mapStyle === "hybrid" && (
               <TileLayer 
@@ -1392,8 +1596,8 @@ export default function Maps() {
                 tileSize={512}
                 zoomOffset={-1}
                 opacity={0.6} 
-                maxNativeZoom={22}
-                maxZoom={24}
+                maxNativeZoom={19}
+                maxZoom={21}
               />
             )}
 
@@ -1914,22 +2118,79 @@ export default function Maps() {
       )}
 
       {floorplanDialogOpen && (
-        <div className="dialog-overlay" onClick={() => setFloorplanDialogOpen(false)}>
+        <div className="dialog-overlay" onClick={() => { setFloorplanDialogOpen(false); setPendingFloorplanBox(null); }}>
           <div className="dialog-compact" onClick={(e) => e.stopPropagation()}>
             <div className="dialog-icon">
               <LayoutGrid size={32} />
             </div>
-            <h3>Zum Lageplan?</h3>
-            <p>Diese Box ist auf dem Lageplan von <strong>{selectedObject?.name}</strong>.</p>
-            <div className="dialog-buttons">
-              <button className="btn-secondary" onClick={() => setFloorplanDialogOpen(false)}>
-                Abbrechen
-              </button>
-              <button className="btn-primary" onClick={handleGoToFloorplan}>
-                <LayoutGrid size={16} />
-                Lageplan
-              </button>
-            </div>
+            
+            {/* Dynamischer Text basierend auf Box-Status */}
+            {pendingFloorplanBox?.lat || pendingFloorplanBox?.floor_plan_id ? (
+              // Box bereits platziert
+              <>
+                <h3>Zum Lageplan?</h3>
+                <p>Diese Box ist auf dem Lageplan von <strong>{selectedObject?.name}</strong>.</p>
+                <div className="dialog-buttons">
+                  <button className="btn-secondary" onClick={() => { setFloorplanDialogOpen(false); setPendingFloorplanBox(null); }}>
+                    Abbrechen
+                  </button>
+                  <button className="btn-primary" onClick={handleGoToFloorplan}>
+                    <LayoutGrid size={16} />
+                    Lageplan öffnen
+                  </button>
+                </div>
+              </>
+            ) : (
+              // Box noch nicht platziert - Auswahl GPS oder Lageplan
+              <>
+                <h3>Box platzieren</h3>
+                <p>Wo möchten Sie <strong>{pendingFloorplanBox?.qr_code}</strong> platzieren?</p>
+                <div className="dialog-buttons" style={{ flexDirection: 'column', gap: '12px' }}>
+                  <button 
+                    className="btn-primary" 
+                    onClick={() => {
+                      setFloorplanDialogOpen(false);
+                      setBoxToPlace(pendingFloorplanBox);
+                      setPendingFloorplanBox(null);
+                      setToast({ 
+                        type: "info", 
+                        msg: "📍 GPS-Button oder Karte antippen" 
+                      });
+                      if (isMobile) {
+                        setSheetState('peek');
+                      }
+                    }}
+                    style={{ 
+                      background: 'linear-gradient(135deg, #10b981, #059669)',
+                      width: '100%'
+                    }}
+                  >
+                    <Navigation size={16} />
+                    Auf GPS-Karte platzieren
+                  </button>
+                  
+                  <button 
+                    className="btn-primary" 
+                    onClick={handleGoToFloorplan}
+                    style={{ width: '100%' }}
+                  >
+                    <LayoutGrid size={16} />
+                    Auf Lageplan platzieren
+                  </button>
+                  
+                  <button 
+                    className="btn-secondary" 
+                    onClick={() => { 
+                      setFloorplanDialogOpen(false); 
+                      setPendingFloorplanBox(null);
+                    }}
+                    style={{ width: '100%' }}
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -2051,6 +2312,16 @@ export default function Maps() {
             setSelectedObject(null);
             setObjectEditDialogOpen(false);
           }}
+        />
+      )}
+
+      {/* Toast Notifications */}
+      {toast && (
+        <Toast
+          message={toast.msg}
+          type={toast.type}
+          onClose={() => setToast(null)}
+          duration={3000}
         />
       )}
     </div>

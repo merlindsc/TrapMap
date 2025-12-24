@@ -73,14 +73,21 @@ export default defineConfig({
           },
           
           // 🗺️ Mapbox Tiles (alle Tile-Varianten, inkl. digitaler Zoom)
+          // Cache-Strategie:
+          // - Bis 99 MB (kein Browser-Prompt)
+          // - ~900 Tiles = ~90 MB → 10-12 Objekte vollständig
+          // - Min. 7 Tage nach Objekt-Erstellung
+          // - Später: Smart Caching basierend auf Kontrollintervall + 3 Tage
+          //   (z.B. 7 Tage Kontrolle → 10 Tage Cache, 14 Tage → 17 Tage Cache)
+          // - Löschen nur bei: Objekt gelöscht/archiviert ODER Objekt ohne Boxen
           {
             urlPattern: /^https:\/\/api\.mapbox\.com\/styles\/v1\/mapbox\/.+\/tiles\//,
             handler: 'CacheFirst',
             options: {
               cacheName: 'mapbox-tiles',
               expiration: {
-                maxEntries: 2000, // 512px und 256px Tiles, digitaler Zoom
-                maxAgeSeconds: 30 * 24 * 60 * 60 // 30 Tage
+                maxEntries: 900, // ~90 MB, unter Browser-Limit (99 MB)
+                maxAgeSeconds: 14 * 24 * 60 * 60 // 14 Tage Basis (später: dynamisch per Objekt)
               },
               cacheableResponse: {
                 statuses: [200]

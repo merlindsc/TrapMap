@@ -58,9 +58,11 @@ export default function PushPermissionDialog() {
         reminderTime: '08:00'
       });
       setVisible(false);
+      // Erfolg! Dialog schließen
     } catch (error) {
-      console.error('Push subscribe error:', error);
-      // Bei Fehler schließen (z.B. wenn User in Browser ablehnt)
+      // Leise fehlschlagen - User hat Berechtigung verweigert
+      // Das ist normal und keine kritische Fehlermeldung
+      console.log('ℹ️ Push-Benachrichtigungen nicht aktiviert:', error.message);
       setVisible(false);
     } finally {
       setLoading(false);

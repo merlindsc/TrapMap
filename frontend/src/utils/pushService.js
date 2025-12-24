@@ -128,25 +128,65 @@ export async function subscribeToPush(settings = {}) {
     throw new Error('Nicht eingeloggt');
   }
   
+  console.log('[Push] Aktuelle Permission:', Notification.permission);
+  
   // 1. Berechtigung prüfen/anfragen
   if (Notification.permission === 'denied') {
     throw new Error('Push-Benachrichtigungen wurden blockiert. Bitte in den Browser-Einstellungen erlauben.');
   }
   
+  // Nur anfragen wenn noch nicht granted
   if (Notification.permission !== 'granted') {
+    console.log('[Push] Fordere Berechtigung an...');
     const permission = await requestPermission();
+    console.log('[Push] Berechtigung erhalten:', permission);
+    
     if (permission !== 'granted') {
       throw new Error('Push-Berechtigung nicht erteilt');
     }
+  } else {
+    console.log('[Push] Berechtigung bereits erteilt ✅');
   }
   
   // 2. Service Worker holen
   const registration = await getServiceWorkerRegistration();
+  if (!registration) {
+    throw new Error('Service Worker nicht verfügbar');
+  }
   
-  // 3. VAPID Key holen
+  // 3. Prüfe ob bereits eine Subscription existiert
+  const existingSubscription = await registration.pushManager.getSubscription();
+  if (existingSubscription) {
+    console.log('[Push] Existing subscription gefunden, verwende diese');
+    // Existierende Subscription am Server aktualisieren
+    const response = await fetch(`${API}/push/subscribe`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        subscription: existingSubscription.toJSON(),
+        settings: {
+          reminderEnabled: settings.reminderEnabled !== false,
+          reminderDaysBefore: settings.reminderDaysBefore || 1,
+          reminderTime: settings.reminderTime || '08:00'
+        }
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Fehler beim Aktualisieren der Subscription');
+    }
+    
+    console.log('[Push] ✅ Subscription aktualisiert');
+    return existingSubscription;
+  }
+  
+  // 4. VAPID Key holen
   const vapidKey = await getVapidKey();
   
-  // 4. Subscription erstellen
+  // 5. Neue Subscription erstellen
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(vapidKey)
@@ -154,7 +194,7 @@ export async function subscribeToPush(settings = {}) {
   
   console.log('[Push] Subscription erstellt:', subscription.endpoint.substring(0, 50));
   
-  // 5. Am Server registrieren
+  // 6. Am Server registrieren
   const response = await fetch(`${API}/push/subscribe`, {
     method: 'POST',
     headers: {

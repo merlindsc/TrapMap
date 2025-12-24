@@ -11,7 +11,12 @@ import { OfflineProvider } from './context/OfflineContext';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   // StrictMode entfernt, weil es your useEffect doppelt ausgeführt hat
-  <BrowserRouter>
+  <BrowserRouter
+    future={{
+      v7_startTransition: true,
+      v7_relativeSplatPath: true
+    }}
+  >
     <AuthProvider>
       <OfflineProvider>
         <App />
