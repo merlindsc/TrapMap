@@ -588,9 +588,9 @@ export default function Maps() {
     }
   }, []);
 
-  const loadBoxes = useCallback(async (objectId) => {
+  const loadBoxes = useCallback(async (objectId, forceRefresh = false) => {
     try {
-      const result = await getBoxesByObject(objectId);
+      const result = await getBoxesByObject(objectId, forceRefresh);
       
       if (result.success) {
         let boxesData = result.data || [];
@@ -991,8 +991,11 @@ export default function Maps() {
           text: `✓ ${data.count} Boxen zugewiesen` 
         });
         
-        // Reload data
-        await loadBoxes(selectedObject.id);
+        // Kleine Verzögerung bevor Reload, damit Backend Zeit hat zu committen
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // Reload data with force refresh to bypass cache
+        await loadBoxes(selectedObject.id, true);
         await loadPoolBoxes();
         setRequestCount("");
       } else {

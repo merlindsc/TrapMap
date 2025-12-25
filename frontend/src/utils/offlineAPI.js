@@ -704,10 +704,12 @@ export const getBoxes = async () => {
 /**
  * Lädt Boxen für ein bestimmtes Objekt - Online oder aus Cache
  */
-export const getBoxesByObject = async (objectId) => {
+export const getBoxesByObject = async (objectId, forceRefresh = false) => {
   if (isOnline()) {
     try {
-      const response = await authFetch(`${API}/boxes?object_id=${objectId}`);
+      // Cache-Buster bei forceRefresh
+      const cacheBuster = forceRefresh ? `&_t=${Date.now()}` : '';
+      const response = await authFetch(`${API}/boxes?object_id=${objectId}${cacheBuster}`);
 
       if (response.ok) {
         const data = await response.json();
