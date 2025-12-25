@@ -21,6 +21,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { getBoxLabel } from "../utils/boxUtils";
+import { useTheme } from "../context/ThemeContext";
 
 // 🆕 Offline API Imports
 import { 
@@ -130,34 +131,31 @@ function formatDistance(meters) {
   return `${Math.round(meters)}m`;
 }
 
-// Custom Marker Icons
+// Custom Marker Icons - KLEIN (1-2 Meter genau)
 const boxIcon = L.divIcon({
   className: 'custom-marker',
   html: `<div style="
-    width: 28px; height: 28px; 
+    width: 12px; height: 12px; 
     background: #ef4444; 
-    border: 3px solid white; 
+    border: 2px solid white; 
     border-radius: 50%; 
-    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-    display: flex; align-items: center; justify-content: center;
-  ">
-    <span style="color: white; font-size: 14px;">📍</span>
-  </div>`,
-  iconSize: [28, 28],
-  iconAnchor: [14, 14]
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  "></div>`,
+  iconSize: [12, 12],
+  iconAnchor: [6, 6]
 });
 
 const userIcon = L.divIcon({
   className: 'custom-marker',
   html: `<div style="
-    width: 18px; height: 18px; 
+    width: 10px; height: 10px; 
     background: #3b82f6; 
-    border: 3px solid white; 
+    border: 2px solid white; 
     border-radius: 50%; 
-    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5);
   "></div>`,
-  iconSize: [18, 18],
-  iconAnchor: [9, 9]
+  iconSize: [10, 10],
+  iconAnchor: [5, 5]
 });
 
 // Map Auto-Fit Component
@@ -169,7 +167,7 @@ function MapFitter({ boxPos, userPos }) {
       const bounds = L.latLngBounds([boxPos, userPos]);
       map.fitBounds(bounds, { padding: [30, 30], maxZoom: 18 });
     } else if (boxPos) {
-      map.setView(boxPos, 17);
+      map.setView(boxPos, 18);
     }
   }, [boxPos, userPos, map]);
   
@@ -482,6 +480,9 @@ export default function BoxScanDialog({
   onShowDetails,
   onReturnToStorage
 }) {
+  // Theme Context
+  const { theme } = useTheme();
+  
   // 🆕 Offline Context
   const { isOnline: contextIsOnline, pendingCount, updatePendingCount } = useOffline();
   const currentlyOffline = !isOnline();
@@ -982,7 +983,14 @@ export default function BoxScanDialog({
                         scrollWheelZoom={false}
                         doubleClickZoom={false}
                       >
-                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                        <TileLayer 
+                          url={theme === 'dark' 
+                            ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                            : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                          }
+                          maxNativeZoom={17}
+                          maxZoom={20}
+                        />
                         <Marker position={boxPosition} icon={boxIcon}>
                           <Popup>Box #{boxInfo.displayNumber}</Popup>
                         </Marker>

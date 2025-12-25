@@ -2248,7 +2248,22 @@ export default function Maps() {
           boxTypes={boxTypes}
           isFirstSetup={isFirstSetup}
           onClose={() => { setBoxEditDialogOpen(false); setSelectedBox(null); setIsFirstSetup(false); }}
-          onSave={() => { setBoxEditDialogOpen(false); setSelectedBox(null); setIsFirstSetup(false); if (selectedObject) loadBoxes(selectedObject.id); }}
+          onSave={(objectId) => { 
+            setBoxEditDialogOpen(false); 
+            setSelectedBox(null); 
+            setIsFirstSetup(false); 
+            if (selectedObject) loadBoxes(selectedObject.id);
+            // Fly to Object wenn Box einem Objekt zugewiesen ist
+            if (objectId && !selectedObject) {
+              const targetObj = objects.find(o => o.id === objectId);
+              if (targetObj?.lat && targetObj?.lng && mapRef.current) {
+                mapRef.current.flyTo([targetObj.lat, targetObj.lng], getSafeZoom(15), { duration: 1.5 });
+                // Objekt auch selektieren
+                setSelectedObject(targetObj);
+                loadBoxes(objectId);
+              }
+            }
+          }}
           onAdjustPosition={isFloorplanBox(selectedBox) ? undefined : () => { 
             setBoxEditDialogOpen(false); 
             setRepositionBox(selectedBox); 

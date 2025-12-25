@@ -18,6 +18,7 @@ import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { getBoxShortLabel } from "../../utils/boxUtils";
+import { useTheme } from "../../context/ThemeContext";
 
 // 🆕 Offline API Imports
 import { 
@@ -29,23 +30,18 @@ import {
 } from "../../utils/offlineAPI";
 import { useOffline } from "../../context/OfflineContext";
 
-// Mini-Karte Icon
+// Mini-Karte Icon - KLEIN (1-2 Meter genau)
 const gpsMarkerIcon = L.divIcon({
   className: 'custom-marker',
   html: `<div style="
-    width: 28px; height: 28px;
+    width: 12px; height: 12px;
     background: #22c55e;
-    border: 3px solid white;
+    border: 2px solid white;
     border-radius: 50%;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    display: flex; align-items: center; justify-content: center;
-  ">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-    </svg>
-  </div>`,
-  iconSize: [28, 28],
-  iconAnchor: [14, 14]
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  "></div>`,
+  iconSize: [12, 12],
+  iconAnchor: [6, 6]
 });
 
 // Map Centerer Component
@@ -53,7 +49,7 @@ function MapCenterer({ position }) {
   const map = useMap();
   useEffect(() => {
     if (position) {
-      map.setView(position, 17);
+      map.setView(position, 18);
     }
   }, [position, map]);
   return null;
@@ -77,6 +73,9 @@ export default function BoxEditDialog({
   onSetGPS,
   isFirstSetup = false
 }) {
+  // Theme Context
+  const { theme } = useTheme();
+  
   // 🆕 Offline Context
   const { isOnline: contextIsOnline, pendingCount, updatePendingCount } = useOffline();
   const currentlyOffline = !isOnline();
@@ -383,7 +382,8 @@ export default function BoxEditDialog({
 
       if (response.ok) {
         setShowTransferDialog(false);
-        onSave && onSave();
+        // Gebe die neue object_id zurück für Fly-To
+        onSave && onSave(selectedTargetObject);
         onClose();
       } else {
         const errorData = await response.json();
@@ -463,7 +463,9 @@ export default function BoxEditDialog({
         updatePendingCount();
       }
 
-      onSave && onSave();
+      // Gebe object_id zurück für Fly-To Funktion
+      const objectId = box.object_id || box.objects?.id;
+      onSave && onSave(objectId);
       onClose();
     } catch (err) {
       setError(err.message);
@@ -721,7 +723,7 @@ export default function BoxEditDialog({
               <div style={{ height: "140px", position: "relative" }}>
                 <MapContainer
                   center={[gpsPosition.lat, gpsPosition.lng]}
-                  zoom={17}
+                  zoom={18}
                   style={{ height: "100%", width: "100%" }}
                   zoomControl={false}
                   dragging={false}
@@ -730,7 +732,14 @@ export default function BoxEditDialog({
                   scrollWheelZoom={false}
                   attributionControl={false}
                 >
-                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  <TileLayer 
+                    url={theme === 'dark' 
+                      ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                      : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    }
+                    maxNativeZoom={17}
+                    maxZoom={20}
+                  />
                   <Marker position={[gpsPosition.lat, gpsPosition.lng]} icon={gpsMarkerIcon} />
                   <MapCenterer position={[gpsPosition.lat, gpsPosition.lng]} />
                 </MapContainer>
