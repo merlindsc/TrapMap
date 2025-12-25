@@ -207,6 +207,72 @@ function ObjectMarkerComponent({ object, isSelected, onSelect }) {
 }
 
 /* ============================================================
+   USER LOCATION MARKER - Mit Orientierungs-Pfeil
+   ============================================================ */
+function UserLocationMarker({ position, heading }) {
+  const createUserIcon = () => {
+    return L.divIcon({
+      className: 'user-location-marker',
+      html: `
+        <div style="position: relative; width: 40px; height: 40px;">
+          <!-- Genauigkeitskreis -->
+          <div style="
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 40px;
+            background: rgba(59, 130, 246, 0.15);
+            border: 2px solid rgba(59, 130, 246, 0.4);
+            border-radius: 50%;
+          "></div>
+          
+          <!-- Pfeil (Richtung) -->
+          <div style="
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(${heading}deg);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 20px solid #3b82f6;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+          "></div>
+          
+          <!-- Zentraler Punkt -->
+          <div style="
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 12px;
+            height: 12px;
+            background: #3b82f6;
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            z-index: 1000;
+          "></div>
+        </div>
+      `,
+      iconSize: [40, 40],
+      iconAnchor: [20, 20]
+    });
+  };
+
+  return (
+    <Marker
+      position={[position.lat, position.lng]}
+      icon={createUserIcon()}
+      zIndexOffset={10000}
+    />
+  );
+}
+
+/* ============================================================
    COLLAPSIBLE BOX SECTION
    ============================================================ */
 function CollapsibleBoxSection({ title, icon, count, variant = "default", defaultOpen = false, children }) {
@@ -410,6 +476,11 @@ export default function Maps() {
   // Toast Notifications
   const [toast, setToast] = useState(null);
 
+  // User Location Tracking
+  const [userLocation, setUserLocation] = useState(null);
+  const [userHeading, setUserHeading] = useState(0);
+  const [locationWatchId, setLocationWatchId] = useState(null);
+
   const mapRef = useRef(null);
   const mapWrapperRef = useRef(null);
 
@@ -607,6 +678,70 @@ export default function Maps() {
     loadPoolBoxes();
   }, [loadObjects, loadBoxTypes, loadPoolBoxes]);
 
+  /* ============================================================
+     USER LOCATION TRACKING & COMPASS
+     ============================================================ */
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    // GPS-Tracking starten
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        });
+      },
+      (error) => {
+        console.warn("GPS-Tracking Fehler:", error);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 5000
+      }
+    );
+
+    setLocationWatchId(watchId);
+
+    // Kompass/Orientierung
+    const handleOrientation = (event) => {
+      if (event.webkitCompassHeading) {
+        // iOS
+        setUserHeading(event.webkitCompassHeading);
+      } else if (event.alpha !== null) {
+        // Android
+        setUserHeading(360 - event.alpha);
+      }
+    };
+
+    // Permission für iOS 13+
+    if (typeof DeviceOrientationEvent !== 'undefined' && 
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      DeviceOrientationEvent.requestPermission()
+        .then(permissionState => {
+          if (permissionState === 'granted') {
+            window.addEventListener('deviceorientation', handleOrientation, true);
+          }
+        })
+        .catch(console.error);
+    } else {
+      // Direkt registrieren (Android, Desktop)
+      window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+      window.addEventListener('deviceorientation', handleOrientation, true);
+    }
+
+    // Cleanup
+    return () => {
+      if (watchId) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+      window.removeEventListener('deviceorientationabsolute', handleOrientation, true);
+      window.removeEventListener('deviceorientation', handleOrientation, true);
+    };
+  }, []);
+
   const [skipNextBoxLoad, setSkipNextBoxLoad] = useState(false);
 
   // URL Parameter handling
@@ -633,9 +768,7 @@ export default function Maps() {
             
             if (urlFlyTo && targetObject.lat && targetObject.lng) {
               setTimeout(() => {
-                if (mapRef.current) {
-                  mapRef.current.flyTo([targetObject.lat, targetObject.lng], getSafeZoom(18), { duration: 1.5 });
-                }
+                flyToWithOffset(targetObject.lat, targetObject.lng, 18, 1.5);
               }, 500);
             }
             
@@ -769,6 +902,24 @@ export default function Maps() {
     return requestedZoom > maxSafeZoom ? maxSafeZoom : requestedZoom;
   }, []);
 
+  // Helper: FlyTo mit Mobile-Offset (wegen Bottom Sheet)
+  const flyToWithOffset = useCallback((lat, lng, zoom, duration = 1.2) => {
+    if (!mapRef.current) return;
+    
+    if (isMobile) {
+      // Bottom Sheet ist ~40% der Höhe → Ziel nach oben verschieben
+      const map = mapRef.current;
+      const targetPoint = map.project([lat, lng], zoom);
+      const offsetY = window.innerHeight * 0.20; // 20% nach oben verschieben
+      const adjustedPoint = L.point(targetPoint.x, targetPoint.y - offsetY);
+      const adjustedLatLng = map.unproject(adjustedPoint, zoom);
+      
+      map.flyTo([adjustedLatLng.lat, adjustedLatLng.lng], getSafeZoom(zoom), { duration });
+    } else {
+      mapRef.current.flyTo([lat, lng], getSafeZoom(zoom), { duration });
+    }
+  }, [isMobile, getSafeZoom]);
+
   const handleFlyToBox = useCallback((box) => {
     if (!box.lat || !box.lng || !mapRef.current) return;
     
@@ -777,8 +928,8 @@ export default function Maps() {
       setSheetState('peek');
     }
     
-    mapRef.current.flyTo([box.lat, box.lng], getSafeZoom(19), { duration: 1.2 });
-  }, [isMobile, getSafeZoom]);
+    flyToWithOffset(box.lat, box.lng, 19, 1.2);
+  }, [isMobile, flyToWithOffset]);
 
   /* ============================================================
      REQUEST BOXES FROM POOL
@@ -898,7 +1049,7 @@ export default function Maps() {
   const handleAddressSelect = (result) => {
     if (result.center && mapRef.current) {
       const [lng, lat] = result.center;
-      mapRef.current.flyTo([lat, lng], getSafeZoom(17), { duration: 1.2 });
+      flyToWithOffset(lat, lng, 17, 1.2);
     }
     setAddressQuery(result.place_name);
     setAddressResults([]);
@@ -968,7 +1119,7 @@ export default function Maps() {
   const handleCombinedAddressSelect = (result) => {
     if (result.center && mapRef.current) {
       const [lng, lat] = result.center;
-      mapRef.current.flyTo([lat, lng], getSafeZoom(17), { duration: 1.2 });
+      flyToWithOffset(lat, lng, 17, 1.2);
     }
     setCombinedSearchQuery("");
     setCombinedSearchResults({ objects: [], addresses: [] });
@@ -1029,7 +1180,7 @@ export default function Maps() {
     }
     
     if (obj.lat && obj.lng && mapRef.current) {
-      mapRef.current.flyTo([obj.lat, obj.lng], getSafeZoom(17), { duration: 1.0 });
+      flyToWithOffset(obj.lat, obj.lng, 17, 1.0);
     }
   };
 
@@ -1296,7 +1447,7 @@ export default function Maps() {
         // Zur platzierten Box fliegen
         if (mapRef.current) {
           setTimeout(() => {
-            mapRef.current.flyTo([latlng.lat, latlng.lng], getSafeZoom(18), { duration: 1 });
+            flyToWithOffset(latlng.lat, latlng.lng, 18, 1);
           }, 300);
         }
       } else {
@@ -1478,7 +1629,7 @@ export default function Maps() {
                     
                     // Zur Box fliegen
                     if (mapRef.current) {
-                      mapRef.current.flyTo([latlng.lat, latlng.lng], getSafeZoom(18), { duration: 1 });
+                      flyToWithOffset(latlng.lat, latlng.lng, 18, 1);
                     }
                   },
                   (error) => {
@@ -1603,6 +1754,14 @@ export default function Maps() {
 
             <MapReadyHandler />
             <MapEventsHandler />
+
+            {/* User Location mit Orientierungs-Pfeil */}
+            {userLocation && (
+              <UserLocationMarker 
+                position={userLocation} 
+                heading={userHeading} 
+              />
+            )}
 
             {objects.filter(obj => obj.lat && obj.lng).map((obj) => (
               <ObjectMarkerComponent
@@ -2257,7 +2416,7 @@ export default function Maps() {
             if (objectId && !selectedObject) {
               const targetObj = objects.find(o => o.id === objectId);
               if (targetObj?.lat && targetObj?.lng && mapRef.current) {
-                mapRef.current.flyTo([targetObj.lat, targetObj.lng], getSafeZoom(15), { duration: 1.5 });
+                flyToWithOffset(targetObj.lat, targetObj.lng, 15, 1.5);
                 // Objekt auch selektieren
                 setSelectedObject(targetObj);
                 loadBoxes(objectId);
