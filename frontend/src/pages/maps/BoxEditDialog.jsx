@@ -733,10 +733,7 @@ export default function BoxEditDialog({
                   attributionControl={false}
                 >
                   <TileLayer 
-                    url={theme === 'dark' 
-                      ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                      : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    }
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     maxNativeZoom={17}
                     maxZoom={20}
                   />
