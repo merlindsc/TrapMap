@@ -145,11 +145,11 @@ export default function Dashboard() {
     };
   }
 
-  // 🆕 Letzte Scans aus Boxen extrahieren
+  // 🆕 Letzte Scans aus Boxen extrahieren - neueste Scans pro Objekt oben
   function extractRecentScans(boxes) {
     return boxes
       .filter(box => box.last_scan_at)
-      .sort((a, b) => new Date(b.last_scan_at) - new Date(a.last_scan_at))
+      .sort((a, b) => new Date(b.last_scan_at) - new Date(a.last_scan_at)) // Neueste zuerst
       .slice(0, 10)
       .map(box => ({
         id: `box-${box.id}`,

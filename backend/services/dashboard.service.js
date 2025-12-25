@@ -73,26 +73,43 @@ exports.getAll = async (organisation_id) => {
   const orange = statuses.filter(b => b.current_status === "orange").length;
   const red = statuses.filter(b => b.current_status === "red").length;
 
-  // Scans formatieren und nach Objekt-Name sortieren
-  const scans = (recentScans.data || [])
+  // Scans formatieren
+  const formattedScans = (recentScans.data || [])
     .map(scan => ({
       id: scan.id,
       box_name: scan.boxes?.notes || `Box ${scan.boxes?.number || "?"}`,
       box_qr_code: scan.boxes?.qr_code || null,
       object_name: scan.boxes?.objects?.name || "Unbekannt",
+      object_id: scan.boxes?.objects?.id || null,
       message: scan.notes || `Status: ${scan.status}`,
       status: scan.status,
       created_at: scan.scanned_at,
       technician_name: scan.users?.first_name
         ? `${scan.users.first_name} ${scan.users.last_name}`
         : scan.users?.email || "Unbekannt"
-    }))
-    // Sortieren nach Objekt A-Z, dann nach Datum (neueste zuerst)
-    .sort((a, b) => {
-      const objCompare = a.object_name.localeCompare(b.object_name, 'de');
-      if (objCompare !== 0) return objCompare;
-      return new Date(b.created_at) - new Date(a.created_at);
-    })
+    }));
+
+  // Gruppieren nach Objekt und neuesten Scan pro Objekt finden
+  const objectMap = new Map();
+  formattedScans.forEach(scan => {
+    const objId = scan.object_id || 'unknown';
+    if (!objectMap.has(objId)) {
+      objectMap.set(objId, {
+        object_name: scan.object_name,
+        object_id: scan.object_id,
+        newest_scan: new Date(scan.created_at),
+        scans: []
+      });
+    }
+    objectMap.get(objId).scans.push(scan);
+  });
+
+  // Objekte nach neuestem Scan sortieren, dann Scans innerhalb jedes Objekts nach Datum
+  const scans = Array.from(objectMap.values())
+    .sort((a, b) => b.newest_scan - a.newest_scan) // Objekte: neuester Scan zuerst
+    .flatMap(obj => 
+      obj.scans.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) // Scans innerhalb: neueste zuerst
+    )
     .slice(0, 20); // Limitieren auf 20
 
   return {
