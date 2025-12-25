@@ -30,13 +30,12 @@ import {
 } from "../../utils/offlineAPI";
 import { useOffline } from "../../context/OfflineContext";
 
-// Mini-Karte Icon - Box GRÜN & KLEIN
+// Mini-Karte Icon - Box GRÜN & KLEIN (ohne Rand)
 const gpsMarkerIcon = L.divIcon({
   className: 'custom-marker',
   html: `<div style="
     width: 5px; height: 5px;
     background: #22c55e;
-    border: 2px solid white;
     border-radius: 50%;
     box-shadow: 0 1px 4px rgba(0,0,0,0.5);
     z-index: 1000;

@@ -137,7 +137,6 @@ const userIcon = L.divIcon({
   html: `<div style="
     width: 15px; height: 15px; 
     background: #3b82f6; 
-    border: 3px solid white; 
     border-radius: 50%; 
     box-shadow: 0 2px 6px rgba(0,0,0,0.4);
     z-index: 100;
@@ -151,7 +150,6 @@ const boxIcon = L.divIcon({
   html: `<div style="
     width: 5px; height: 5px; 
     background: #22c55e; 
-    border: 2px solid white; 
     border-radius: 50%; 
     box-shadow: 0 1px 4px rgba(0,0,0,0.5);
     z-index: 1000;
