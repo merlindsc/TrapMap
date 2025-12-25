@@ -131,31 +131,33 @@ function formatDistance(meters) {
   return `${Math.round(meters)}m`;
 }
 
-// Custom Marker Icons - KLEIN (1-2 Meter genau)
-const boxIcon = L.divIcon({
-  className: 'custom-marker',
-  html: `<div style="
-    width: 12px; height: 12px; 
-    background: #ef4444; 
-    border: 2px solid white; 
-    border-radius: 50%; 
-    box-shadow: 0 1px 4px rgba(0,0,0,0.5);
-  "></div>`,
-  iconSize: [12, 12],
-  iconAnchor: [6, 6]
-});
-
+// Custom Marker Icons - Standort BLAU (groß), Box GRÜN (klein)
 const userIcon = L.divIcon({
   className: 'custom-marker',
   html: `<div style="
-    width: 10px; height: 10px; 
+    width: 15px; height: 15px; 
     background: #3b82f6; 
+    border: 3px solid white; 
+    border-radius: 50%; 
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    z-index: 100;
+  "></div>`,
+  iconSize: [15, 15],
+  iconAnchor: [7.5, 7.5]
+});
+
+const boxIcon = L.divIcon({
+  className: 'custom-marker',
+  html: `<div style="
+    width: 5px; height: 5px; 
+    background: #22c55e; 
     border: 2px solid white; 
     border-radius: 50%; 
     box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    z-index: 1000;
   "></div>`,
-  iconSize: [10, 10],
-  iconAnchor: [5, 5]
+  iconSize: [5, 5],
+  iconAnchor: [2.5, 2.5]
 });
 
 // Map Auto-Fit Component

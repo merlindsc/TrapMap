@@ -30,18 +30,19 @@ import {
 } from "../../utils/offlineAPI";
 import { useOffline } from "../../context/OfflineContext";
 
-// Mini-Karte Icon - KLEIN (1-2 Meter genau)
+// Mini-Karte Icon - Box GRÜN & KLEIN
 const gpsMarkerIcon = L.divIcon({
   className: 'custom-marker',
   html: `<div style="
-    width: 12px; height: 12px;
+    width: 5px; height: 5px;
     background: #22c55e;
     border: 2px solid white;
     border-radius: 50%;
     box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    z-index: 1000;
   "></div>`,
-  iconSize: [12, 12],
-  iconAnchor: [6, 6]
+  iconSize: [5, 5],
+  iconAnchor: [2.5, 2.5]
 });
 
 // Map Centerer Component
